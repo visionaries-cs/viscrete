@@ -4,9 +4,17 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { HelpCircle, Upload, Search, MapPin, Trash2 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 
 interface PreviousReport {
   id: string;
@@ -22,6 +30,12 @@ export default function UploadPage() {
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState("");
+  const [fileType, setFileType] = useState<'image' | 'video'>('image');
+
+  // Clear uploaded files when file type changes
+  useEffect(() => {
+    setUploadedFiles([]);
+  }, [fileType]);
 
   // Mock previous reports data
   const previousReports: PreviousReport[] = [
@@ -56,7 +70,7 @@ export default function UploadPage() {
   const handleFileSelect = (files: FileList | null) => {
     if (!files) return;
     const newFiles = Array.from(files).filter((file) =>
-      file.type.startsWith("image/")
+      file.type.startsWith(fileType === 'image' ? "image/" : "video/")
     );
     setUploadedFiles((prev) => [...prev, ...newFiles]);
   };
@@ -93,28 +107,21 @@ export default function UploadPage() {
       return;
     }
     if (uploadedFiles.length === 0) {
-      alert("Please upload at least one image");
+      alert(`Please upload at least one ${fileType === 'image' ? 'image' : 'video'}`);
       return;
     }
     console.log({
       constructionSiteName,
       inspectorName,
       uploadedFiles,
+      fileType,
     });
     // TODO: Handle form submission
   };
 
   return (
     <div className="min-h-screen bg-white dark:bg-[#0c0c0c]">
-      {/* Header */}
-      <header className="border-b border-gray-200 dark:border-gray-800">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <h1 className="text-xl font-medium px-9 text-black dark:text-white">
-            Welcome to Viscrete, FIRST NAME LAST NAME
-          </h1>
-
-        </div>
-      </header>
+      
 
       {/* Welcome Section */}
       <div className="container mx-auto px-4 py-6">
@@ -164,6 +171,23 @@ export default function UploadPage() {
                       className="border-gray-300 dark:border-gray-600"
                     />
                   </div>
+
+                  <div>
+                    <Label htmlFor="fileType" className="text-sm font-medium mb-2">
+                      File Type
+                    </Label>
+                    <Select defaultValue="image" onValueChange={(value: 'image' | 'video') => setFileType(value)}>
+                      <SelectTrigger id="fileType" className="border-gray-300 dark:border-gray-600">
+                        <SelectValue placeholder="Select file type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectItem value="image">Images</SelectItem>
+                          <SelectItem value="video">Videos</SelectItem>
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
                 {/* Drag and Drop Zone */}
@@ -184,16 +208,16 @@ export default function UploadPage() {
                     ref={fileInputRef}
                     type="file"
                     multiple
-                    accept="image/*"
+                    accept={fileType === 'image' ? "image/*" : "video/*"}
                     onChange={(e) => handleFileSelect(e.target.files)}
                     className="hidden"
                   />
                   <Upload className="w-10 h-10 text-gray-400 dark:text-gray-500 mx-auto mb-3" />
                   <p className="font-semibold text-black dark:text-white mb-1">
-                    Drag and Drop here
+                    Drag and Drop {fileType === 'image' ? 'images' : 'videos'} here
                   </p>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                    or click to browse
+                    or click to browse ({fileType === 'image' ? 'images only' : 'videos only'})
                   </p>
                 </div>
 
@@ -201,7 +225,7 @@ export default function UploadPage() {
                 {uploadedFiles.length > 0 && (
                   <div className="mt-4 p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded">
                     <p className="text-sm text-green-700 dark:text-green-300">
-                      {uploadedFiles.length} image(s) selected
+                      {uploadedFiles.length} {fileType === 'image' ? 'image(s)' : 'video(s)'} selected
                     </p>
                   </div>
                 )}
@@ -274,11 +298,11 @@ export default function UploadPage() {
                       )}
 
                       {/* Label Overlay */}
-                      <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-80 py-2 px-3">
-                        <p className="text-white font-medium text-sm">
+                      <div className="absolute bottom-0 left-0 right-0 bg-white/90 dark:bg-gray-800/50 py-2 px-3">
+                        <p className="text-black dark:text-white font-medium text-sm">
                           {report.title}
                         </p>
-                        <p className="text-gray-300 text-xs">{report.date}</p>
+                        <p className="text-gray-600 dark:text-gray-300 text-xs">{report.date}</p>
                       </div>
                     </div>
                   </div>
