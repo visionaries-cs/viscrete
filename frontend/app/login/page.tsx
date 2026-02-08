@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import Image from 'next/image';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
@@ -11,6 +11,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   // Hardcoded credentials
   const VALID_EMAIL = 'admin@viscrete.com';
@@ -71,14 +72,28 @@ export default function LoginPage() {
               <label htmlFor="password" className="block text-base font-medium text-foreground">
                 Password
               </label>
-              <input
-                id="password"
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-lg border border-input bg-background px-5 py-4 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              />
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full rounded-lg border border-input bg-background px-5 py-4 pr-12 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-5 h-5" />
+                  ) : (
+                    <Eye className="w-5 h-5" />
+                  )}
+                </button>
+              </div>
             </div>
 
             {/* Error Message */}
