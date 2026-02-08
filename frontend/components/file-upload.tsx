@@ -21,22 +21,35 @@ import {
 import { cn } from "@/lib/utils";
 import { HelpCircle, Trash2, Upload } from "lucide-react";
 import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 export default function FileUpload() {
+  const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [fileProgresses, setFileProgresses] = useState<Record<string, number>>(
     {}
   );
+  const [fileType, setFileType] = useState<'image' | 'video'>('image');
 
   const handleFileSelect = (files: FileList | null) => {
     if (!files) return;
 
-    const newFiles = Array.from(files);
-    setUploadedFiles((prev) => [...prev, ...newFiles]);
+    const allFiles = Array.from(files);
+    
+    // Filter files based on selected type
+    const filteredFiles = allFiles.filter(file => {
+      if (fileType === 'image') {
+        return file.type.startsWith('image/');
+      } else {
+        return file.type.startsWith('video/');
+      }
+    });
+    
+    setUploadedFiles((prev) => [...prev, ...filteredFiles]);
 
     // Simulate upload progress for each file
-    newFiles.forEach((file) => {
+    filteredFiles.forEach((file) => {
       let progress = 0;
       const interval = setInterval(() => {
         progress += Math.random() * 10;
@@ -74,14 +87,20 @@ export default function FileUpload() {
     });
   };
 
+  const handleContinue = () => {
+    if (uploadedFiles.length > 0) {
+      router.push('/upload-review');
+    }
+  };
+
   return (
     <div id="upload" className="flex flex-col items-center justify-center p-10">
       <div className="mb-8 text-center max-w-6xl">
         <h1 className="text-4xl font-bold text-foreground mb-3">
-          Upload your Images
+          Upload your Folder
         </h1>
         <p className="text-lg sm:text-xl sm:text-center text-muted-foreground max-w-3xl mx-auto">
-          Experience the power of YOLOv11 combined with traditional processing for the most accurate structural assessment available.
+          Select a folder containing {fileType}s for structural assessment using YOLOv11 and traditional processing.
         </p>
       </div>
       <Card className="w-full mx-auto max-w-6xl bg-background rounded-lg p-0 shadow-md">
@@ -93,14 +112,14 @@ export default function FileUpload() {
                   Create a new inspection job
                 </h2>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Drag and drop images to start inspection.
+                  Drag and drop to start inspection.
                 </p>
               </div>
             </div>
           </div>
 
           <div className="px-6 pb-4 mt-2">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div>
                 <Label htmlFor="projectName" className="mb-2">
                   Construction Site Name
@@ -156,6 +175,23 @@ export default function FileUpload() {
                   </SelectContent>
                 </Select>
               </div>
+
+              <div>
+                <Label htmlFor="fileType" className="mb-2">
+                  File Type
+                </Label>
+                <Select defaultValue="image" onValueChange={(value: 'image' | 'video') => setFileType(value)}>
+                  <SelectTrigger id="fileType" className="w-full">
+                    <SelectValue placeholder="Select file type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectItem value="image">Images</SelectItem>
+                      <SelectItem value="video">Videos</SelectItem>
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
 
@@ -170,7 +206,7 @@ export default function FileUpload() {
                 <Upload className="h-5 w-5 text-muted-foreground" />
               </div>
               <p className="text-sm font-medium text-foreground">
-                Upload a project image
+                Upload project folder ({fileType === 'image' ? 'Images only' : 'Videos only'})
               </p>
               <p className="text-sm text-muted-foreground mt-1">
                 or,{" "}
@@ -181,14 +217,15 @@ export default function FileUpload() {
                 >
                   click to browse
                 </label>{" "}
-                (4MB max)
+                for folder (only {fileType}s will be loaded)
               </p>
               <input
                 type="file"
                 id="fileUpload"
                 ref={fileInputRef}
                 className="hidden"
-                accept="image/*"
+                {...({ webkitdirectory: '', directory: '' } as any)}
+                multiple
                 onChange={(e) => handleFileSelect(e.target.files)}
               />
             </div>
@@ -201,23 +238,31 @@ export default function FileUpload() {
             )}
           >
             {uploadedFiles.map((file, index) => {
-              const imageUrl = URL.createObjectURL(file);
+              const fileUrl = URL.createObjectURL(file);
+              const isVideo = file.type.startsWith('video/');
 
               return (
                 <div
                   className="border border-border rounded-lg p-2 flex flex-col"
                   key={file.name + index}
                   onLoad={() => {
-                    return () => URL.revokeObjectURL(imageUrl);
+                    return () => URL.revokeObjectURL(fileUrl);
                   }}
                 >
                   <div className="flex items-center gap-2">
                     <div className="w-18 h-14 bg-muted rounded-sm flex items-center justify-center self-start row-span-2 overflow-hidden">
-                      <img
-                        src={imageUrl}
-                        alt={file.name}
-                        className="w-full h-full object-cover"
-                      />
+                      {isVideo ? (
+                        <video
+                          src={fileUrl}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <img
+                          src={fileUrl}
+                          alt={file.name}
+                          className="w-full h-full object-cover"
+                        />
+                      )}
                     </div>
 
                     <div className="flex-1 pr-1">
@@ -293,7 +338,13 @@ export default function FileUpload() {
               >
                 Cancel
               </Button>
-              <Button className="h-9 px-4 text-sm font-medium">Continue</Button>
+              <Button 
+                className="h-9 px-4 text-sm font-medium"
+                onClick={handleContinue}
+                disabled={uploadedFiles.length === 0}
+              >
+                Continue
+              </Button>
             </div>
           </div>
         </CardContent>

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react"
 import LightbulbIcon from "@mui/icons-material/Lightbulb"
 import LightbulbOutlinedIcon from "@mui/icons-material/LightbulbOutlined"
 import Image from "next/image";
+import Link from "next/link";
 
 export function Navbar() {
   const [mounted, setMounted] = useState(false)
@@ -25,7 +26,7 @@ export function Navbar() {
   return (
     <nav className="sticky top-0 md:top-0 z-50 p-2 md:p-2 w-full bg-white dark:bg-[#0c0c0c] border-b md:border-b-0 border-gray-200 dark:border-gray-800">
       <div className="flex h-14 md:h-16 items-center justify-between px-4 md:px-8 w-full">
-        <div className="flex items-center">
+        <div className="flex items-center gap-8">
           <a href="/">
           {/* Logo */}
           {theme === "dark" ? (
@@ -49,6 +50,22 @@ export function Navbar() {
           )
           }
           </a>
+          
+          {/* Navigation Links */}
+          <div className="hidden md:flex items-center gap-6">
+            <Link 
+              href="/upload-image" 
+              className="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white transition-colors"
+            >
+              Upload Image
+            </Link>
+            <Link 
+              href="/upload-review" 
+              className="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white transition-colors"
+            >
+              Upload Review
+            </Link>
+          </div>
         </div>
 
         {/* Theme Toggle */}
