@@ -28,6 +28,7 @@ interface PreviousReport {
 export default function UploadPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [jobId, setJobId] = useState("");
   const [constructionSiteName, setConstructionSiteName] = useState("");
   const [inspectorName, setInspectorName] = useState("");
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
@@ -37,6 +38,7 @@ export default function UploadPage() {
   const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
 
   // Clear uploaded files when file type changes
   useEffect(() => {
@@ -153,24 +155,8 @@ export default function UploadPage() {
       }
     }
     
-    setIsUploading(true);
+    // Just add files to state, don't upload yet
     setUploadedFiles((prev) => [...prev, ...newFiles]);
-    
-    // Simulate file upload with progress
-    for (const file of newFiles) {
-      const fileId = `${file.name}-${file.size}`;
-      
-      // Simulate upload progress
-      for (let progress = 0; progress <= 100; progress += 10) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-        setUploadProgress((prev) => ({
-          ...prev,
-          [fileId]: progress
-        }));
-      }
-    }
-    
-    setIsUploading(false);
   };
 
   const handleBrowseClick = () => {
@@ -178,7 +164,9 @@ export default function UploadPage() {
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.name === "siteName") {
+    if (e.target.name === "jobId") {
+      setJobId(e.target.value);
+    } else if (e.target.name === "siteName") {
       setConstructionSiteName(e.target.value);
     } else if (e.target.name === "inspector") {
       setInspectorName(e.target.value);
@@ -208,26 +196,85 @@ export default function UploadPage() {
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
+    setFormError(null);
+    
+    if (!jobId.trim()) {
+      setFormError("Please enter a Job ID");
+      return;
+    }
     if (!constructionSiteName.trim() || !inspectorName.trim()) {
-      alert("Please fill in all fields");
+      setFormError("Please fill in all required fields");
       return;
     }
     if (uploadedFiles.length === 0) {
-      alert(`Please upload at least one ${fileType === 'image' ? 'image' : 'video'}`);
+      setFormError(`Please upload at least one ${fileType === 'image' ? 'image' : 'video'}`);
       return;
     }
-    console.log({
-      constructionSiteName,
-      inspectorName,
-      uploadedFiles,
-      fileType,
-    });
-    // TODO: Handle form submission
     
+    // Start uploading files to backend
+    setIsUploading(true);
+    setUploadError(null);
+    
+    try {
+      for (const file of uploadedFiles) {
+        const fileId = `${file.name}-${file.size}`;
+        
+        // Create FormData for file upload
+        const formData = new FormData();
+        formData.append('job_id', jobId);
+        formData.append('file', file);
+        
+        // Simulate progress start
+        setUploadProgress((prev) => ({ ...prev, [fileId]: 0 }));
+        
+        // Upload to backend
+        const response = await fetch(`http://127.0.0.1:8000/api/upload_images`, {
+          method: 'POST',
+          body: formData,
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ detail: 'Upload failed' }));
+          throw new Error(errorData.detail || `Failed to upload ${file.name}`);
+        }
+        
+        const result = await response.json();
+        console.log(`Successfully uploaded ${file.name}:`, result);
+        
+        // Mark as 100% complete
+        setUploadProgress((prev) => ({ ...prev, [fileId]: 100 }));
+      }
+      
+      // All files uploaded successfully
+      console.log({
+        jobId,
+        constructionSiteName,
+        inspectorName,
+        uploadedFiles,
+        fileType,
+      });
+      
+      setIsUploading(false);
+      
+      // Navigate to next page
       setTimeout(() => {
-        router.push('/upload-review');
+        router.push('/upload-review/' + encodeURIComponent(jobId));
       }, 600);
+      
+    } catch (error) {
+      console.error('Upload error:', error);
+      let errorMessage = 'Unknown error';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      } else if (error && typeof error === 'object') {
+        errorMessage = JSON.stringify(error);
+      }
+      setUploadError(`Upload failed: ${errorMessage}`);
+      setIsUploading(false);
+    }
   };
 
   return (
@@ -255,6 +302,21 @@ export default function UploadPage() {
 
                 {/* Form Fields */}
                 <div className="space-y-4 mb-6">
+
+                  <div>
+                    <Label htmlFor="jobId" className="text-sm font-medium mb-2">
+                      Job ID <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="jobId"
+                      name="jobId"
+                      placeholder="Enter unique job identifier"
+                      value={jobId}
+                      onChange={handleInputChange}
+                      className="border-gray-300 dark:border-gray-600"
+                    />
+                  </div>
+
                   <div>
                     <Label htmlFor="siteName" className="text-sm font-medium mb-2">
                       Construction Site Name
@@ -300,6 +362,15 @@ export default function UploadPage() {
                     </Select>
                   </div>
                 </div>
+
+                {/* Form Error */}
+                {formError && (
+                  <div className="mb-4 p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded">
+                    <p className="text-sm text-red-700 dark:text-red-300">
+                      ⚠ {formError}
+                    </p>
+                  </div>
+                )}
 
                 {/* Drag and Drop Zone */}
                 <div
@@ -391,6 +462,7 @@ export default function UploadPage() {
                         <p className="text-sm text-green-700 dark:text-green-300">
                           ✓ {uploadedFiles.length} {fileType === 'image' ? 'image(s)' : 'video(s)'} uploaded successfully
                         </p>
+
                       </div>
                     )}
                   </div>
@@ -410,9 +482,9 @@ export default function UploadPage() {
                       Cancel
                     </Button>
                     <Button
-                      className="cursor-pointer bg-black dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                      onClick={handleContinue}
                       disabled={isUploading}
+                      onClick={handleContinue}
+                      className="cursor-pointer bg-black dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isUploading ? (
                         <>

@@ -14,8 +14,12 @@ import {
   ChevronUp,
   ChevronDown,
   Layers,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useParams } from "next/navigation";
+import { useRouter } from 'next/navigation';
 
 // Image data structure
 // GPS location (latitude/longitude) will be fetched per image from location API
@@ -32,13 +36,79 @@ interface ImageData {
 }
 
 export default function UploadReviewPage() {
+  const params = useParams();
+  const jobId = params.job_id as string;
+  
   const [filterType, setFilterType] = useState<"all" | "gps" | "no-gps">("all");
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
-  const [images, setImages] = useState<ImageData[]>([]); // Will be populated from backend API
+  const [images, setImages] = useState<ImageData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Fetch images from backend API
+  useEffect(() => {
+    const fetchImages = async () => {
+      if (!jobId) {
+        setError("No job ID provided");
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        setError(null);
+        
+        const response = await fetch(`http://127.0.0.1:8000/api/validate_images?job_id=${encodeURIComponent(jobId)}`);
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ detail: 'Failed to fetch images' }));
+          throw new Error(errorData.detail || `HTTP ${response.status}: Failed to fetch images`);
+        }
+        
+        const data = await response.json();
+        
+        // Map backend response to ImageData
+        const mappedImages: ImageData[] = data.images.map((img: any) => {
+          // Parse coordinates string "latitude, longitude" to individual values
+          let latitude: number | undefined;
+          let longitude: number | undefined;
+          let hasGPS = false;
+          
+          if (img.coordinates && typeof img.coordinates === 'string') {
+            const coords = img.coordinates.split(',').map((c: string) => parseFloat(c.trim()));
+            if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
+              latitude = coords[0];
+              longitude = coords[1];
+              hasGPS = true;
+            }
+          }
+          
+          return {
+            id: img.filename || img.image_name,
+            filename: img.filename || img.image_name,
+            size: "N/A", // Backend doesn't provide size yet
+            camera: "Unknown", // Backend doesn't provide camera info yet
+            datetime: "N/A", // Backend doesn't provide datetime yet
+            latitude,
+            longitude,
+            hasGPS,
+            thumbnail: undefined
+          };
+        });
+        
+        setImages(mappedImages);
+      } catch (err) {
+        console.error('Error fetching images:', err);
+        setError(err instanceof Error ? err.message : 'Failed to fetch images');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchImages();
+  }, [jobId]);
   
   // Stats calculated from fetched image data
-  // TODO: Fetch images from backend API
-  // TODO: Fetch GPS coordinates per image from location API
   const totalImages = images.length;
   const withGPS = images.filter((img) => img.hasGPS).length;
   const withoutGPS = images.filter((img) => !img.hasGPS).length;
@@ -63,13 +133,17 @@ export default function UploadReviewPage() {
     console.log("Batch location entry");
   };
 
+  const router = useRouter();
+
   return (
     <div className="min-h-screen bg-white dark:bg-[#0c0c0c]">
       {/* Header */}
       <header className="bg-black dark:bg-black border-b border-gray-800">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <button className="text-white hover:text-gray-300 transition-colors cursor-pointer">
+            <button className="text-white hover:text-gray-300 transition-colors cursor-pointer" onClick={() => {
+              router.push('/upload/');
+            }}>
               <ArrowLeft className="w-6 h-6" />
             </button>
             <div>
@@ -138,128 +212,176 @@ export default function UploadReviewPage() {
 
             {/* Image List - Placeholder */}
             <div className="space-y-3">
-              {images.length === 0 ? (
+              {isLoading ? (
+                <Card className="border border-gray-300 dark:border-gray-700">
+                  <CardContent className="p-4">
+                    <div className="text-center py-12">
+                      <Loader2 className="w-12 h-12 mx-auto mb-3 animate-spin text-gray-400" />
+                      <p className="font-medium text-gray-600 dark:text-gray-400">Loading images...</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">Fetching data from backend</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : error ? (
+                <Card className="border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-950">
+                  <CardContent className="p-4">
+                    <div className="text-center py-12">
+                      <AlertCircle className="w-12 h-12 mx-auto mb-3 text-red-500" />
+                      <p className="font-medium text-red-700 dark:text-red-300">Error loading images</p>
+                      <p className="text-sm text-red-600 dark:text-red-400 mt-1">{error}</p>
+                      <Button 
+                        className="mt-4 bg-red-600 hover:bg-red-700 text-white cursor-pointer"
+                        onClick={() => window.location.reload()}
+                      >
+                        Retry
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : images.length === 0 ? (
                 <Card className="border border-gray-300 dark:border-gray-700">
                   <CardContent className="p-4">
                     <div className="text-center py-12 text-gray-500 dark:text-gray-400">
                       <ImageIcon className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                      <p className="font-medium">No images uploaded yet</p>
-                      <p className="text-sm mt-1">Images will be fetched from backend API</p>
-                      <p className="text-xs mt-1">GPS location data will be fetched per image</p>
+                      <p className="font-medium">No images found</p>
+                      <p className="text-sm mt-1">No images uploaded for this job</p>
                     </div>
                   </CardContent>
                 </Card>
               ) : (
-                // TODO: Map through images array and render image cards
-                <div>Images will be displayed here</div>
+                images
+                  .filter((img) => {
+                    if (filterType === "gps") return img.hasGPS;
+                    if (filterType === "no-gps") return !img.hasGPS;
+                    return true;
+                  })
+                  .map((image) => (
+                    <Card key={image.id} className="border border-gray-300 dark:border-gray-700">
+                      <CardContent className="p-4">
+                        <div className="flex gap-4">
+                          {/* Thumbnail */}
+                          <div className="relative w-24 h-24 bg-gray-200 dark:bg-gray-800 rounded flex-shrink-0">
+                            {image.hasGPS ? (
+                              <div className="absolute top-1 left-1 bg-green-600/90 p-1 rounded">
+                                <MapPin className="w-4 h-4 text-white" />
+                              </div>
+                            ) : (
+                              <div className="absolute top-1 left-1 bg-orange-600/90 p-1 rounded">
+                                <MapPinOff className="w-4 h-4 text-white" />
+                              </div>
+                            )}
+                            <div className="w-full h-full flex items-center justify-center">
+                              <ImageIcon className="w-8 h-8 text-gray-400" />
+                            </div>
+                          </div>
+
+                          {/* Details */}
+                          <div className="flex-1">
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <h3 className="font-semibold text-black dark:text-white">
+                                  {image.filename}
+                                </h3>
+                                <p className="text-sm text-gray-600 dark:text-gray-400">
+                                  {image.size}
+                                </p>
+                              </div>
+                              <span
+                                className={`text-xs px-3 py-1 rounded font-medium ${
+                                  image.hasGPS
+                                    ? "bg-green-600 text-white"
+                                    : "bg-orange-600 text-white"
+                                }`}
+                              >
+                                {image.hasGPS ? "GPS FOUND" : "NO GPS"}
+                              </span>
+                            </div>
+
+                            <div className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-400">
+                              <div className="flex items-center gap-2">
+                                <ImageIcon className="w-4 h-4" />
+                                <span>{image.camera}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span>📅</span>
+                                <span>{image.datetime}</span>
+                              </div>
+                              {image.hasGPS && image.latitude && image.longitude && (
+                                <div className="flex items-center gap-2">
+                                  <MapPin className="w-4 h-4" />
+                                  <span>
+                                    {image.latitude.toFixed(6)}, {image.longitude.toFixed(6)}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Expandable Location Entry */}
+                        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                          <button
+                            className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white cursor-pointer"
+                            onClick={() => toggleLocationEntry(image.id)}
+                          >
+                            {expandedImage === image.id ? (
+                              <ChevronUp className="w-4 h-4" />
+                            ) : (
+                              <ChevronDown className="w-4 h-4" />
+                            )}
+                            {expandedImage === image.id ? "Hide" : "Show"} Location Entry
+                          </button>
+
+                          {expandedImage === image.id && (
+                            <div className="mt-4 space-y-4">
+                              <div>
+                                <Label htmlFor={`locationName-${image.id}`} className="text-sm mb-2">
+                                  Location Name
+                                </Label>
+                                <Input
+                                  id={`locationName-${image.id}`}
+                                  placeholder="e.g., Building A - North Wing"
+                                  className="border-gray-300 dark:border-gray-600"
+                                />
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <Label htmlFor={`latitude-${image.id}`} className="text-sm mb-2">
+                                    Latitude
+                                  </Label>
+                                  <Input
+                                    id={`latitude-${image.id}`}
+                                    placeholder="14.6752"
+                                    defaultValue={image.latitude?.toFixed(6) || ""}
+                                    className="border-gray-300 dark:border-gray-600"
+                                  />
+                                </div>
+                                <div>
+                                  <Label htmlFor={`longitude-${image.id}`} className="text-sm mb-2">
+                                    Longitude
+                                  </Label>
+                                  <Input
+                                    id={`longitude-${image.id}`}
+                                    placeholder="128.231"
+                                    defaultValue={image.longitude?.toFixed(6) || ""}
+                                    className="border-gray-300 dark:border-gray-600"
+                                  />
+                                </div>
+                              </div>
+                              <Button
+                                className="w-full bg-black text-white hover:bg-gray-800 cursor-pointer"
+                                onClick={() => handleSaveLocation(image.id)}
+                              >
+                                <MapPin className="w-4 h-4 mr-2" />
+                                Save Location
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
               )}
-            </div>
-
-            {/* Example Image Card Structure (hidden, for reference) */}
-            <div className="hidden">
-              <Card className="border border-gray-300 dark:border-gray-700">
-                <CardContent className="p-4">
-                  <div className="flex gap-4">
-                    {/* Thumbnail */}
-                    <div className="relative w-24 h-24 bg-gray-200 dark:bg-gray-800 rounded flex-shrink-0">
-                      <div className="absolute top-1 left-1 bg-black/70 p-1 rounded">
-                        <MapPin className="w-4 h-4 text-white" />
-                      </div>
-                    </div>
-
-                    {/* Details */}
-                    <div className="flex-1">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <h3 className="font-semibold text-black dark:text-white">
-                            image.jpg
-                          </h3>
-                          <p className="text-sm text-gray-600 dark:text-gray-400">
-                            4.31 MB
-                          </p>
-                        </div>
-                        <span className="bg-black text-white text-xs px-3 py-1 rounded font-medium">
-                          GPS FOUND
-                        </span>
-                      </div>
-
-                      <div className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-400">
-                        <div className="flex items-center gap-2">
-                          <ImageIcon className="w-4 h-4" />
-                          <span>Canon EOS R5</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span>📅</span>
-                          <span>February 3, 2026, 6:40 PM</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <MapPin className="w-4 h-4" />
-                          <span>14.5995, 120.2675</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Expandable Location Entry */}
-                  <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                    <button
-                      className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white cursor-pointer"
-                      onClick={() => toggleLocationEntry("1")}
-                    >
-                      {expandedImage === "1" ? (
-                        <ChevronUp className="w-4 h-4" />
-                      ) : (
-                        <ChevronDown className="w-4 h-4" />
-                      )}
-                      Hide Location Entry
-                    </button>
-
-                    {expandedImage === "1" && (
-                      <div className="mt-4 space-y-4">
-                        <div>
-                          <Label htmlFor="locationName" className="text-sm mb-2">
-                            Location Name
-                          </Label>
-                          <Input
-                            id="locationName"
-                            placeholder="e.g., Building A - North Wing"
-                            className="border-gray-300 dark:border-gray-600"
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <Label htmlFor="latitude" className="text-sm mb-2">
-                              Latitude
-                            </Label>
-                            <Input
-                              id="latitude"
-                              placeholder="14.6752"
-                              className="border-gray-300 dark:border-gray-600"
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="longitude" className="text-sm mb-2">
-                              Longitude
-                            </Label>
-                            <Input
-                              id="longitude"
-                              placeholder="128.231"
-                              className="border-gray-300 dark:border-gray-600"
-                            />
-                          </div>
-                        </div>
-                        <Button
-                          className="w-full bg-black text-white hover:bg-gray-800 cursor-pointer"
-                          onClick={() => handleSaveLocation("1")}
-                        >
-                          <MapPin className="w-4 h-4 mr-2" />
-                          Save Location
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
             </div>
           </div>
 
