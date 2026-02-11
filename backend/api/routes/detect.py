@@ -56,6 +56,11 @@ async def detect_defects(job_id: str = Query(..., description="Job ID to process
             "success": True,
             "job_id": job_id,
             "total_images": len(results),
+            "total_defect_count": sum([r["total_defects"] for r in results]),
+            "total_defect_counts": {
+                defect_type: sum(r["defect_counts"].get(defect_type, 0) for r in results)
+                for defect_type in {"cracks", "spalling", "peeling", "algae", "stain"}
+            },
             "results": results
         }
     except Exception as e:

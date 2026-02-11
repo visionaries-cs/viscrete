@@ -74,14 +74,21 @@ export default function ResultPage() {
                 const data = await response.json();
                 setResult(data);
                 console.log('API Response:', data);
+
+                // TODO: Update state with actual results from API
+                // setTotalDefectCount, setCracksCount, setSpallingCount, setPeelingCount, setAlgaeCount, setStainCount
+
+                // Set Total Count of Defects
+                 
+                setTotalDefectCount(data.total_defect_count);
+                
             } catch (error) {
                 console.error('Error fetching results:', error);
             };
         }
         
-        // TODO: Update state with actual results from API
-        // setTotalDefectCount, setCracksCount, setSpallingCount, setPeelingCount, setAlgaeCount, setStainCount
         
+
         fetchResults();
     }, [jobId]);
 
@@ -208,8 +215,8 @@ export default function ResultPage() {
                     <div className='grid grid-cols-2 gap-3 mb-6'>
                         {/* Total Defects */}
                         <div className='bg-blue-950/30 border border-blue-900/50 rounded-lg p-4'>
-                            <div className='text-blue-400 text-3xl font-bold mb-1'>0</div>
-                            <div className='text-blue-300 text-sm'>Total Defects</div>
+                            <div className='text-blue-400 text-3xl font-bold mb-1'>{totalDefectCount ? totalDefectCount : 0}</div>
+                            <div className='text-blue-300 text-sm' >Total Defects</div>
                         </div>
 
                         {/* Cracks */}
