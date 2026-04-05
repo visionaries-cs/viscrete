@@ -1,5 +1,33 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
+// ─── Jobs ─────────────────────────────────────────────────────────────────────
+
+export interface JobResponse {
+  job_id: string;
+  input_type: string;
+  status: string;
+  created_at?: string;
+}
+
+/**
+ * Create a new inspection job container.
+ * POST /api/v1/jobs
+ */
+export async function createJob(inputType: string = 'image'): Promise<JobResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/jobs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ input_type: inputType }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: 'Failed to create job' }));
+    throw new Error(errorData.detail || `HTTP ${response.status}: Failed to create job`);
+  }
+
+  return response.json();
+}
+
 // ─── Upload ───────────────────────────────────────────────────────────────────
 
 /**
