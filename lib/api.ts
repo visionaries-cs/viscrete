@@ -10,7 +10,7 @@ export async function uploadImage(jobId: string, file: File): Promise<unknown> {
   formData.append('job_id', jobId);
   formData.append('file', file);
 
-  const response = await fetch(`${API_BASE_URL}/api/upload_images`, {
+  const response = await fetch(`${API_BASE_URL}/api/v1/upload_images`, {
     method: 'POST',
     body: formData,
   });
@@ -40,7 +40,7 @@ export interface ValidateImagesResponse {
  */
 export async function validateImages(jobId: string): Promise<ValidateImagesResponse> {
   const response = await fetch(
-    `${API_BASE_URL}/api/validate_images?job_id=${encodeURIComponent(jobId)}`
+    `${API_BASE_URL}/api/v1/validate_images?job_id=${encodeURIComponent(jobId)}`
   );
 
   if (!response.ok) {
@@ -91,7 +91,7 @@ export interface DetectResponse {
  */
 export async function detectJob(jobId: string): Promise<DetectResponse> {
   const response = await fetch(
-    `${API_BASE_URL}/api/detect?job_id=${encodeURIComponent(jobId)}`
+    `${API_BASE_URL}/api/v1/detect?job_id=${encodeURIComponent(jobId)}`
   );
 
   if (!response.ok) {
@@ -108,7 +108,7 @@ export async function detectJob(jobId: string): Promise<DetectResponse> {
  */
 export async function getResultImageUrl(jobId: string, imageName: string): Promise<string> {
   const response = await fetch(
-    `${API_BASE_URL}/api/get_image?job_id=${encodeURIComponent(jobId)}&image_name=${encodeURIComponent(imageName)}`
+    `${API_BASE_URL}/api/v1/get_image?job_id=${encodeURIComponent(jobId)}&image_name=${encodeURIComponent(imageName)}`
   );
 
   if (!response.ok) {
