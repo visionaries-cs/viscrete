@@ -3,14 +3,14 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 // ─── Upload ───────────────────────────────────────────────────────────────────
 
 /**
- * Upload a single image file for a given job.
+ * Validate uploaded files for a given job (blur check + GPS extraction).
+ * POST /api/v1/jobs/{job_id}/validate
  */
 export async function uploadImage(jobId: string, file: File): Promise<unknown> {
   const formData = new FormData();
-  formData.append('job_id', jobId);
-  formData.append('file', file);
+  formData.append('files', file);
 
-  const response = await fetch(`${API_BASE_URL}/api/v1/upload_images`, {
+  const response = await fetch(`${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/validate`, {
     method: 'POST',
     body: formData,
   });
@@ -36,11 +36,12 @@ export interface ValidateImagesResponse {
 }
 
 /**
- * Fetch and validate images for a given job, including GPS metadata.
+ * Fetch validated images and GPS metadata for a given job.
+ * GET /api/v1/jobs/{job_id}
  */
 export async function validateImages(jobId: string): Promise<ValidateImagesResponse> {
   const response = await fetch(
-    `${API_BASE_URL}/api/v1/validate_images?job_id=${encodeURIComponent(jobId)}`
+    `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}`
   );
 
   if (!response.ok) {
@@ -87,16 +88,35 @@ export interface DetectResponse {
 }
 
 /**
- * Run defect detection for a job and return full results.
+ * Run YOLOv11 defect detection inference for a job.
+ * POST /api/v1/jobs/{job_id}/detect
  */
 export async function detectJob(jobId: string): Promise<DetectResponse> {
   const response = await fetch(
-    `${API_BASE_URL}/api/v1/detect?job_id=${encodeURIComponent(jobId)}`
+    `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/detect`,
+    { method: 'POST' }
   );
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ detail: 'Failed to fetch images' }));
-    throw new Error(errorData.detail || `HTTP ${response.status}: Failed to fetch images`);
+    const errorData = await response.json().catch(() => ({ detail: 'Failed to run detection' }));
+    throw new Error(errorData.detail || `HTTP ${response.status}: Failed to run detection`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Retrieve cached YOLOv11 detection results for a job.
+ * GET /api/v1/jobs/{job_id}/detect
+ */
+export async function getDetectResults(jobId: string): Promise<DetectResponse> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/detect`
+  );
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: 'Failed to fetch detection results' }));
+    throw new Error(errorData.detail || `HTTP ${response.status}: Failed to fetch detection results`);
   }
 
   return response.json();
@@ -105,10 +125,11 @@ export async function detectJob(jobId: string): Promise<DetectResponse> {
 /**
  * Fetch a single result image as a blob URL.
  * Remember to call `URL.revokeObjectURL` when done.
+ * GET /api/v1/jobs/{job_id}/detect (image variant — adjust path if backend exposes a dedicated image endpoint)
  */
 export async function getResultImageUrl(jobId: string, imageName: string): Promise<string> {
   const response = await fetch(
-    `${API_BASE_URL}/api/v1/get_image?job_id=${encodeURIComponent(jobId)}&image_name=${encodeURIComponent(imageName)}`
+    `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/image?image_name=${encodeURIComponent(imageName)}`
   );
 
   if (!response.ok) {
