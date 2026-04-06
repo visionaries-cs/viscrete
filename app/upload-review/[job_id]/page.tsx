@@ -20,6 +20,7 @@ import {
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { useRouter } from 'next/navigation';
+import { validateImages } from "@/lib/api";
 
 // Image data structure
 // GPS location (latitude/longitude) will be fetched per image from location API
@@ -57,15 +58,8 @@ export default function UploadReviewPage() {
       try {
         setIsLoading(true);
         setError(null);
-        
-        const response = await fetch(`http://127.0.0.1:8000/api/validate_images?job_id=${encodeURIComponent(jobId)}`);
-        
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ detail: 'Failed to fetch images' }));
-          throw new Error(errorData.detail || `HTTP ${response.status}: Failed to fetch images`);
-        }
-        
-        const data = await response.json();
+
+        const data = await validateImages(jobId);
         
         // Map backend response to ImageData
         const mappedImages: ImageData[] = data.images.map((img: any) => {

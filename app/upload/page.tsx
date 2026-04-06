@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { createJob, uploadImage } from "@/lib/api";
 import { HelpCircle, Upload, Search, MapPin, Trash2, Loader2 } from "lucide-react";
 import { useRef, useState, useEffect } from "react";
 import { useRouter } from 'next/navigation';
@@ -27,7 +28,7 @@ interface PreviousReport {
 export default function UploadPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [jobId, setJobId] = useState("");
+  const [jobId, setJobId] = useState<string | null>(null);
   const [constructionSiteName, setConstructionSiteName] = useState("");
   const [inspectorName, setInspectorName] = useState("");
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
@@ -163,9 +164,7 @@ export default function UploadPage() {
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.name === "jobId") {
-      setJobId(e.target.value);
-    } else if (e.target.name === "siteName") {
+    if (e.target.name === "siteName") {
       setConstructionSiteName(e.target.value);
     } else if (e.target.name === "inspector") {
       setInspectorName(e.target.value);
@@ -197,11 +196,7 @@ export default function UploadPage() {
 
   const handleContinue = async () => {
     setFormError(null);
-    
-    if (!jobId.trim()) {
-      setFormError("Please enter a Job ID");
-      return;
-    }
+
     if (!constructionSiteName.trim() || !inspectorName.trim()) {
       setFormError("Please fill in all required fields");
       return;
@@ -210,57 +205,35 @@ export default function UploadPage() {
       setFormError(`Please upload at least one ${fileType === 'image' ? 'image' : 'video'}`);
       return;
     }
-    
-    // Start uploading files to backend
+
     setIsUploading(true);
     setUploadError(null);
-    
+
     try {
+      // Step 1: Create a new job on the backend
+      const job = await createJob(fileType);
+      const createdJobId = job.job_id;
+      setJobId(createdJobId);
+      console.log('Job created:', createdJobId);
+
+      // Step 2: Upload (validate) each file under the new job
       for (const file of uploadedFiles) {
         const fileId = `${file.name}-${file.size}`;
-        
-        // Create FormData for file upload
-        const formData = new FormData();
-        formData.append('job_id', jobId);
-        formData.append('file', file);
-        
-        // Simulate progress start
         setUploadProgress((prev) => ({ ...prev, [fileId]: 0 }));
-        
-        // Upload to backend
-        const response = await fetch(`http://127.0.0.1:8000/api/upload_images`, {
-          method: 'POST',
-          body: formData,
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ detail: 'Upload failed' }));
-          throw new Error(errorData.detail || `Failed to upload ${file.name}`);
-        }
-        
-        const result = await response.json();
+
+        const result = await uploadImage(createdJobId, file);
         console.log(`Successfully uploaded ${file.name}:`, result);
-        
-        // Mark as 100% complete
+
         setUploadProgress((prev) => ({ ...prev, [fileId]: 100 }));
       }
-      
-      // All files uploaded successfully
-      console.log({
-        jobId,
-        constructionSiteName,
-        inspectorName,
-        uploadedFiles,
-        fileType,
-      });
-      
+
       setIsUploading(false);
-      
-      // Navigate to next page
+
+      // Step 3: Navigate to review page with the backend-generated job ID
       setTimeout(() => {
-        router.push('/upload-review/' + encodeURIComponent(jobId));
+        router.push('/upload-review/' + encodeURIComponent(createdJobId));
       }, 600);
-      
+
     } catch (error) {
       console.error('Upload error:', error);
       let errorMessage = 'Unknown error';
@@ -301,19 +274,6 @@ export default function UploadPage() {
                 {/* Form Fields */}
                 <div className="space-y-4 mb-6">
 
-                  <div>
-                    <Label htmlFor="jobId" className="text-sm font-medium mb-2">
-                      Job ID <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      id="jobId"
-                      name="jobId"
-                      placeholder="Enter unique job identifier"
-                      value={jobId}
-                      onChange={handleInputChange}
-                      className="border-gray-300 dark:border-gray-600"
-                    />
-                  </div>
 
                   <div>
                     <Label htmlFor="siteName" className="text-sm font-medium mb-2">

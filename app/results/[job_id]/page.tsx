@@ -11,6 +11,7 @@ import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 // COMPONENTS
 import { Button } from '@/components/ui/button';
 import { ArrowRight } from 'lucide-react';
+import { detectJob, getResultImageUrl } from '@/lib/api';
 import { ArrowLeft } from 'lucide-react';
 import { Download } from 'lucide-react';
 import { Grid3x3 } from 'lucide-react';
@@ -92,25 +93,13 @@ export default function ResultPage() {
 
     // Fetch results from API
     useEffect(() => {
-        const fetchResults = async () => {
+            const fetchResults = async () => {
             try {
-                const response = await fetch(`http://127.0.0.1:8000/api/detect?job_id=${encodeURIComponent(jobId)}`);
-
-                
-                 if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({ detail: 'Failed to fetch images' }));
-                    throw new Error(errorData.detail || `HTTP ${response.status}: Failed to fetch images`);
-                 };
-
-                const data = await response.json();
+                const data = await detectJob(jobId);
                 setResults(data.results);
                 console.log('API Response:', data);
 
-                // TODO: Update state with actual results from API
-                // setTotalDefectCount, setCracksCount, setSpallingCount, setPeelingCount, setAlgaeCount, setStainCount
-
                 // Set Total Count of Defects
-                 
                 setTotalDefectCount(data.total_defect_count);
                 setCracksCount(data.total_defect_counts.cracks);
                 setSpallingCount(data.total_defect_counts.spalling);
@@ -134,20 +123,15 @@ export default function ResultPage() {
                 console.log('Bounding Box Coordinates:', coordinatesMap);
 
                 // Get Images
-                const imagesURLs = data.results.map((result: Result) => result.filename);
+                const imagesURLs = data.results.map((result: any) => result.filename);
                 setResultImageFilenames(imagesURLs);
-                const imagesDataAPI = `http://127.0.0.1:8000/api/get_image?job_id=${encodeURIComponent(jobId)}&image_name=`;
 
                 // iterate each images urls
                 const validImages: string[] = [];
                 for (const imageURL of imagesURLs) {
                     try {
-                        const imgResponse = await fetch(`${imagesDataAPI}${encodeURIComponent(imageURL)}`);
-                        if (!imgResponse.ok) {
-                            throw new Error(`HTTP ${imgResponse.status}: Failed to fetch image`);
-                        }
-                        const blob = await imgResponse.blob();
-                        validImages.push(URL.createObjectURL(blob));
+                        const objectUrl = await getResultImageUrl(jobId, imageURL);
+                        validImages.push(objectUrl);
                     } catch (imgError) {
                         console.error('Error fetching image:', imgError);
                     }
