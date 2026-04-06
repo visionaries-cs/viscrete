@@ -1,530 +1,665 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { createJob, uploadImage } from "@/lib/api";
-import { HelpCircle, Upload, Search, MapPin, Trash2, Loader2 } from "lucide-react";
-import { useRef, useState, useEffect } from "react";
-import { useRouter } from 'next/navigation';
+import {
+  createJob,
+  validateFiles,
+  listJobs,
+  type JobStatusResponse,
+  type ValidationResult,
+} from "@/lib/api";
+import {
+  Upload,
+  Loader2,
+  CheckCircle2,
+  XCircle,
+  MapPin,
+  ChevronLeft,
+  ChevronRight,
+  ArrowRight,
+  Trash2,
+  FileImage,
+  FileVideo,
+  Clock,
+  AlertCircle,
+} from "lucide-react";
 
-interface PreviousReport {
-  id: string;
-  title: string;
-  date: string;
-  imageUrl?: string;
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return (bytes / Math.pow(k, i)).toFixed(1) + " " + sizes[i];
 }
+
+function formatDate(iso?: string): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("en-PH", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function routeForJob(job: JobStatusResponse): string {
+  const s = job.status;
+  if (["preprocessing", "preprocessed"].includes(s))
+    return `/preprocess/${job.job_id}`;
+  if (["detecting", "detected"].includes(s))
+    return `/detect/${job.job_id}`;
+  if (["reporting", "completed"].includes(s))
+    return `/report/${job.job_id}`;
+  return `/upload`; // created / validating / validated / failed
+}
+
+const STATUS_COLORS: Record<string, string> = {
+  created: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
+  validating: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
+  validated: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
+  failed: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300",
+  preprocessing: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300",
+  preprocessed: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300",
+  detecting: "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300",
+  detected: "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300",
+  reporting: "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300",
+  completed: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300",
+};
+
+const JOBS_PER_PAGE = 5;
+
+// ─── Component ───────────────────────────────────────────────────────────────
 
 export default function UploadPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [jobId, setJobId] = useState<string | null>(null);
-  const [constructionSiteName, setConstructionSiteName] = useState("");
+
+  // ── Form state
+  const [siteName, setSiteName] = useState("");
   const [inspectorName, setInspectorName] = useState("");
-  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [mediaType, setMediaType] = useState<"image" | "video">("image");
+
+  // ── File state
+  const [files, setFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
-  const [searchKeyword, setSearchKeyword] = useState("");
-  const [fileType, setFileType] = useState<'image' | 'video'>('image');
-  const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
+
+  // ── Upload / validation state
   const [isUploading, setIsUploading] = useState(false);
+  const [validationResults, setValidationResults] = useState<ValidationResult[] | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [formError, setFormError] = useState<string | null>(null);
+  const [canProceed, setCanProceed] = useState(false);
+  const [jobId, setJobId] = useState<string | null>(null);
 
-  // Clear uploaded files when file type changes
+  // ── Validation filters
+  const [gpsFilter, setGpsFilter] = useState<"all" | "with" | "without">("all");
+  const [blurFilter, setBlurFilter] = useState<"all" | "sharp" | "blurry">("all");
+
+  // ── Previous jobs
+  const [jobs, setJobs] = useState<JobStatusResponse[]>([]);
+  const [jobsPage, setJobsPage] = useState(1);
+  const [jobsLoading, setJobsLoading] = useState(true);
+  const [jobsError, setJobsError] = useState<string | null>(null);
+
+  // ── Toast
+  const [toast, setToast] = useState<{ msg: string; type: "error" | "warn" } | null>(null);
+
+  // Reset files when media type changes
   useEffect(() => {
-    setUploadedFiles([]);
-    setUploadProgress({});
-    setIsUploading(false);
+    setFiles([]);
+    setValidationResults(null);
+    setCanProceed(false);
     setUploadError(null);
-  }, [fileType]);
+  }, [mediaType]);
 
-  // UPLOAD CONSTRAINTS
-  const MAX_IMAGES = 100;
-  const MAX_TOTAL_IMAGE_SIZE = 300 * 1024 * 1024; // 300 MB
-  const MAX_VIDEO_SIZE = 200 * 1024 * 1024; // 200 MB
-  const MAX_VIDEO_DURATION = 60; // 60 seconds
+  // Load previous jobs on mount
+  useEffect(() => {
+    loadJobs();
+  }, []);
 
-  const getVideoDuration = (file: File): Promise<number> => {
-    return new Promise((resolve, reject) => {
-      const video = document.createElement('video');
-      video.preload = 'metadata';
-      
-      video.onloadedmetadata = () => {
-        window.URL.revokeObjectURL(video.src);
-        resolve(video.duration);
-      };
-      
-      video.onerror = () => {
-        reject(new Error('Failed to load video metadata'));
-      };
-      
-      video.src = URL.createObjectURL(file);
-    });
-  };
+  async function loadJobs() {
+    setJobsLoading(true);
+    setJobsError(null);
+    try {
+      const data = await listJobs();
+      // newest first
+      setJobs(data.sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? "")));
+    } catch (e: unknown) {
+      setJobsError(e instanceof Error ? e.message : "Failed to load jobs");
+    } finally {
+      setJobsLoading(false);
+    }
+  }
 
-  // Mock previous reports data
-  const previousReports: PreviousReport[] = [
-    { id: "1", title: "First Inspection", date: "January 2, 2025" },
-    { id: "2", title: "First Inspection", date: "January 2, 2025" },
-    { id: "3", title: "First Inspection", date: "January 2, 2025" },
-    { id: "4", title: "First Inspection", date: "February 1, 2025" },
-    { id: "5", title: "First Inspection", date: "February 1, 2025" },
-    { id: "6", title: "First Inspection", date: "February 2, 2025" },
-  ];
+  function showToast(msg: string, type: "error" | "warn" = "error") {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 4000);
+  }
 
-  const handleDragEnter = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-  };
-
+  // ── Drag handlers
+  const handleDragEnter = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); };
+  const handleDragLeave = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(false); };
+  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); };
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    handleFileSelect(e.dataTransfer.files);
+    addFiles(e.dataTransfer.files);
   };
 
-  const handleFileSelect = async (files: FileList | null) => {
-    if (!files) return;
-    setUploadError(null);
-    
-    const newFiles = Array.from(files).filter((file) =>
-      file.type.startsWith(fileType === 'image' ? "image/" : "video/")
-    );
-    
-    if (newFiles.length === 0) return;
-    
-    // Validate based on file type
-    if (fileType === 'image') {
-      // Check image count limit
-      const totalImages = uploadedFiles.length + newFiles.length;
-      if (totalImages > MAX_IMAGES) {
-        setUploadError(`Maximum ${MAX_IMAGES} images allowed. You are trying to upload ${totalImages} images.`);
-        return;
+  const IMAGE_TYPES = ["image/jpeg", "image/png", "image/bmp", "image/tiff"];
+  const VIDEO_TYPES = ["video/mp4", "video/avi", "video/quicktime", "video/x-msvideo"];
+  const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+  const MAX_VIDEO_BYTES = 500 * 1024 * 1024;
+
+  function addFiles(fileList: FileList | null) {
+    if (!fileList) return;
+    const allowed = mediaType === "image" ? IMAGE_TYPES : VIDEO_TYPES;
+    const maxSize = mediaType === "image" ? MAX_IMAGE_BYTES : MAX_VIDEO_BYTES;
+
+    const valid: File[] = [];
+    for (const f of Array.from(fileList)) {
+      if (!allowed.includes(f.type)) {
+        showToast(`${f.name}: unsupported type`, "warn");
+        continue;
       }
-      
-      // Check total size limit
-      const currentTotalSize = uploadedFiles.reduce((sum, file) => sum + file.size, 0);
-      const newTotalSize = newFiles.reduce((sum, file) => sum + file.size, 0);
-      const totalSize = currentTotalSize + newTotalSize;
-      
-      if (totalSize > MAX_TOTAL_IMAGE_SIZE) {
-        const totalSizeMB = (totalSize / (1024 * 1024)).toFixed(2);
-        setUploadError(`Total image size cannot exceed 300 MB. Current total would be ${totalSizeMB} MB.`);
-        return;
+      if (f.size > maxSize) {
+        showToast(`${f.name} exceeds ${formatBytes(maxSize)} limit`, "warn");
+        continue;
       }
-    } else if (fileType === 'video') {
-      // Check individual video file sizes and durations
-      for (const file of newFiles) {
-        // Check file size
-        if (file.size > MAX_VIDEO_SIZE) {
-          const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
-          setUploadError(`Video "${file.name}" is ${fileSizeMB} MB. Maximum video size is 200 MB.`);
-          return;
-        }
-        
-        // Check video duration
-        try {
-          const duration = await getVideoDuration(file);
-          if (duration > MAX_VIDEO_DURATION) {
-            setUploadError(`Video "${file.name}" is ${Math.round(duration)} seconds. Maximum duration is 60 seconds.`);
-            return;
-          }
-        } catch (error) {
-          setUploadError(`Failed to validate video "${file.name}". Please try again.`);
-          return;
-        }
-      }
+      valid.push(f);
     }
-    
-    // Just add files to state, don't upload yet
-    setUploadedFiles((prev) => [...prev, ...newFiles]);
-  };
-
-  const handleBrowseClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.name === "siteName") {
-      setConstructionSiteName(e.target.value);
-    } else if (e.target.name === "inspector") {
-      setInspectorName(e.target.value);
-    }
-  };
-
-  const handleDeleteFile = (indexToDelete: number) => {
-    const fileToDelete = uploadedFiles[indexToDelete];
-    const fileId = `${fileToDelete.name}-${fileToDelete.size}`;
-    
-    setUploadedFiles((prev) =>
-      prev.filter((_, index) => index !== indexToDelete)
-    );
-    
-    setUploadProgress((prev) => {
-      const updated = { ...prev };
-      delete updated[fileId];
-      return updated;
+    setFiles(prev => {
+      const existing = new Set(prev.map(x => x.name + x.size));
+      return [...prev, ...valid.filter(f => !existing.has(f.name + f.size))];
     });
-  };
+    setValidationResults(null);
+    setCanProceed(false);
+  }
 
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return "0 Bytes";
-    const k = 1024;
-    const sizes = ["Bytes", "KB", "MB", "GB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
-  };
+  function removeFile(idx: number) {
+    setFiles(prev => prev.filter((_, i) => i !== idx));
+    setValidationResults(null);
+    setCanProceed(false);
+  }
 
-  const handleContinue = async () => {
-    setFormError(null);
+  const canUpload =
+    siteName.trim().length > 0 &&
+    inspectorName.trim().length > 0 &&
+    files.length > 0 &&
+    !isUploading;
 
-    if (!constructionSiteName.trim() || !inspectorName.trim()) {
-      setFormError("Please fill in all required fields");
-      return;
-    }
-    if (uploadedFiles.length === 0) {
-      setFormError(`Please upload at least one ${fileType === 'image' ? 'image' : 'video'}`);
-      return;
-    }
-
-    setIsUploading(true);
+  async function handleUpload() {
     setUploadError(null);
-
+    setIsUploading(true);
+    setValidationResults(null);
     try {
-      // Step 1: Create a new job on the backend
-      const job = await createJob(fileType);
-      const createdJobId = job.job_id;
-      setJobId(createdJobId);
-      console.log('Job created:', createdJobId);
-
-      // Step 2: Upload (validate) each file under the new job
-      for (const file of uploadedFiles) {
-        const fileId = `${file.name}-${file.size}`;
-        setUploadProgress((prev) => ({ ...prev, [fileId]: 0 }));
-
-        const result = await uploadImage(createdJobId, file);
-        console.log(`Successfully uploaded ${file.name}:`, result);
-
-        setUploadProgress((prev) => ({ ...prev, [fileId]: 100 }));
+      const job = await createJob(mediaType);
+      setJobId(job.job_id);
+      const results = await validateFiles(job.job_id, files);
+      setValidationResults(results);
+      const hasValid = results.some(r => r.is_valid);
+      setCanProceed(hasValid);
+      if (!hasValid) setUploadError("All files failed validation. Please upload different files.");
+      // Refresh previous jobs list
+      loadJobs();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Unknown error";
+      if (msg.toLowerCase().includes("unavailable") || msg.toLowerCase().includes("fetch")) {
+        showToast("Backend unavailable — is the server running?");
+      } else {
+        setUploadError(msg);
       }
-
-      setIsUploading(false);
-
-      // Step 3: Navigate to review page with the backend-generated job ID
-      setTimeout(() => {
-        router.push('/upload-review/' + encodeURIComponent(createdJobId));
-      }, 600);
-
-    } catch (error) {
-      console.error('Upload error:', error);
-      let errorMessage = 'Unknown error';
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      } else if (typeof error === 'string') {
-        errorMessage = error;
-      } else if (error && typeof error === 'object') {
-        errorMessage = JSON.stringify(error);
-      }
-      setUploadError(`Upload failed: ${errorMessage}`);
+    } finally {
       setIsUploading(false);
     }
-  };
+  }
+
+  function handleProceed() {
+    if (jobId) router.push(`/preprocess/${encodeURIComponent(jobId)}`);
+  }
+
+  // ── Filter validation results
+  const filteredResults = (validationResults ?? []).filter(r => {
+    const hasGps = r.gps != null;
+    if (gpsFilter === "with" && !hasGps) return false;
+    if (gpsFilter === "without" && hasGps) return false;
+    if (blurFilter === "sharp" && r.is_blurry) return false;
+    if (blurFilter === "blurry" && !r.is_blurry) return false;
+    return true;
+  });
+
+  // ── Pagination
+  const totalPages = Math.max(1, Math.ceil(jobs.length / JOBS_PER_PAGE));
+  const pagedJobs = jobs.slice((jobsPage - 1) * JOBS_PER_PAGE, jobsPage * JOBS_PER_PAGE);
+
+  const validCount = validationResults?.filter(r => r.is_valid).length ?? 0;
+  const invalidCount = (validationResults?.length ?? 0) - validCount;
 
   return (
-    <div className="min-h-screen bg-white dark:bg-[#0c0c0c]">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#0a0a0a]">
+      {/* Toast */}
+      {toast && (
+        <div className={cn(
+          "fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-sm font-medium transition-all",
+          toast.type === "error"
+            ? "bg-red-600 text-white"
+            : "bg-amber-500 text-black"
+        )}>
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          {toast.msg}
+        </div>
+      )}
 
-      {/* Welcome Section */}
-      <div className="container mx-auto px-4 py-6">
-        
-
-        {/* Main Content - Two Column Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left Column - Create New Inspection */}
-          <div className="lg:col-span-1">
-            <Card className="border border-gray-300 dark:border-gray-700">
-              <CardContent className="p-6">
-                <div className="mb-6">
-                  <h2 className="text-lg font-semibold text-black dark:text-white mb-1">
-                    Create a new inspection job
-                  </h2>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Drag and drop images to start inspection.
-                  </p>
-                </div>
-
-                {/* Form Fields */}
-                <div className="space-y-4 mb-6">
-
-
-                  <div>
-                    <Label htmlFor="siteName" className="text-sm font-medium mb-2">
-                      Construction Site Name
-                    </Label>
-                    <Input
-                      id="siteName"
-                      name="siteName"
-                      placeholder=""
-                      value={constructionSiteName}
-                      onChange={handleInputChange}
-                      className="border-gray-300 dark:border-gray-600"
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="inspector" className="text-sm font-medium mb-2">
-                      Inspector / Structural Engineer
-                    </Label>
-                    <Input
-                      id="inspector"
-                      name="inspector"
-                      placeholder=""
-                      value={inspectorName}
-                      onChange={handleInputChange}
-                      className="border-gray-300 dark:border-gray-600"
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="fileType" className="text-sm font-medium mb-2">
-                      File Type
-                    </Label>
-                    <Select defaultValue="image" onValueChange={(value: 'image' | 'video') => setFileType(value)}>
-                      <SelectTrigger id="fileType" className="border-gray-300 dark:border-gray-600">
-                        <SelectValue placeholder="Select file type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                          <SelectItem value="image">Images</SelectItem>
-                          <SelectItem value="video">Videos</SelectItem>
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                {/* Form Error */}
-                {formError && (
-                  <div className="mb-4 p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded">
-                    <p className="text-sm text-red-700 dark:text-red-300">
-                      ⚠ {formError}
-                    </p>
-                  </div>
-                )}
-
-                {/* Drag and Drop Zone */}
-                <div
-                  onDragEnter={handleDragEnter}
-                  onDragLeave={handleDragLeave}
-                  onDragOver={handleDragOver}
-                  onDrop={handleDrop}
-                  onClick={handleBrowseClick}
-                  className={cn(
-                    "border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors",
-                    isDragging
-                      ? "border-blue-500 bg-blue-50 dark:bg-blue-950"
-                      : "border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900"
-                  )}
-                >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    accept={fileType === 'image' ? "image/*" : "video/*"}
-                    onChange={(e) => handleFileSelect(e.target.files)}
-                    className="hidden"
-                  />
-                  <Upload className="w-10 h-10 text-gray-400 dark:text-gray-500 mx-auto mb-3" />
-                  <p className="font-semibold text-black dark:text-white mb-1">
-                    Drag and Drop {fileType === 'image' ? 'images' : 'videos'} here
-                  </p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    or click to browse ({fileType === 'image' ? 'images only' : 'videos only'})
-                  </p>
-                  {fileType === 'image' ? (
-                    <p className="text-xs text-gray-500 dark:text-gray-500 mt-2">
-                      Max {MAX_IMAGES} images, 300 MB total
-                    </p>
-                  ) : (
-                    <p className="text-xs text-gray-500 dark:text-gray-500 mt-2">
-                      Max 1 min/video, 200 MB each
-                    </p>
-                  )}
-                </div>
-
-                {/* Upload Error */}
-                {uploadError && (
-                  <div className="mt-4 p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded">
-                    <p className="text-sm text-red-700 dark:text-red-300">
-                      ⚠ {uploadError}
-                    </p>
-                  </div>
-                )}
-
-                {/* Upload Status */}
-                {uploadedFiles.length > 0 && (
-                  <div className="mt-4 space-y-3">
-                    {isUploading ? (
-                      <div className="p-4 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded">
-                        <div className="flex items-center gap-2 mb-3">
-                          <Loader2 className="w-4 h-4 animate-spin text-blue-600 dark:text-blue-400" />
-                          <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
-                            Uploading {fileType === 'image' ? 'images' : 'videos'}...
-                          </p>
-                        </div>
-                        <div className="space-y-2">
-                          {uploadedFiles.map((file, index) => {
-                            const fileId = `${file.name}-${file.size}`;
-                            const progress = uploadProgress[fileId] || 0;
-                            return (
-                              <div key={index} className="space-y-1">
-                                <div className="flex justify-between items-center text-xs">
-                                  <span className="text-blue-700 dark:text-blue-300 truncate max-w-[200px]">
-                                    {file.name}
-                                  </span>
-                                  <span className="text-blue-600 dark:text-blue-400 font-medium">
-                                    {progress}%
-                                  </span>
-                                </div>
-                                <div className="w-full bg-blue-100 dark:bg-blue-900 rounded-full h-1.5">
-                                  <div
-                                    className="bg-blue-600 dark:bg-blue-400 h-1.5 rounded-full transition-all duration-300"
-                                    style={{ width: `${progress}%` }}
-                                  />
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded">
-                        <p className="text-sm text-green-700 dark:text-green-300">
-                          ✓ {uploadedFiles.length} {fileType === 'image' ? 'image(s)' : 'video(s)'} uploaded successfully
-                        </p>
-
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Footer Buttons */}
-                <div className="flex items-center justify-between mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-                  <button className="flex items-center gap-1 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-sm">
-                    <HelpCircle className="w-4 h-4" />
-                    need help?
-                  </button>
-                  <div className="flex gap-3">
-                    <Button
-                      variant="outline"
-                      className="cursor-pointer border-gray-300 dark:border-gray-600"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      disabled={isUploading}
-                      onClick={handleContinue}
-                      className="cursor-pointer bg-black dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isUploading ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Uploading...
-                        </>
-                      ) : (
-                        'Continue'
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+      {/* Header */}
+      <header className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#111]">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+            <FileImage className="w-4 h-4 text-white" />
           </div>
+          <div>
+            <h1 className="text-base font-bold text-gray-900 dark:text-white tracking-wide">VISCRETE</h1>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Concrete Defect Detection System</p>
+          </div>
+        </div>
+      </header>
 
-          {/* Right Column - Previous Reports */}
-          <div className="lg:col-span-2">
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-black dark:text-white">
-                  Your Previous Report
-                </h2>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <Input  
+      <main className="max-w-7xl mx-auto px-6 py-8">
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">New Inspection Job</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Fill in job details, upload files, and validate before preprocessing.</p>
+        </div>
+
+        {/* Two-column layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+          {/* ── LEFT COLUMN ─────────────────────────────────────────── */}
+          <div className="space-y-6">
+
+            {/* Job Details Card */}
+            <div className="bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm">
+              <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">Job Details</h3>
+
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="siteName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    Site Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="siteName"
                     type="text"
-                    placeholder="Enter Keyword"
-                    value={searchKeyword}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchKeyword(e.target.value)}
-                    className="pl-10 border-gray-300 dark:border-gray-600 w-full sm:w-48"
+                    placeholder="e.g. Magsaysay Bridge"
+                    value={siteName}
+                    onChange={e => setSiteName(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                   />
                 </div>
-              </div>
 
-              {/* Reports Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {previousReports.map((report) => (
-                  <div
-                    key={report.id}
-                    className="group cursor-pointer overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-500 transition-all"
-                  >
-                    {/* Image Placeholder */}
-                    <div className="w-full aspect-square bg-gray-200 dark:bg-neutral-900 relative overflow-hidden">
-                      {report.imageUrl ? (
-                        <img
-                          src={report.imageUrl}
-                          alt={report.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                <div>
+                  <label htmlFor="inspectorName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    Inspector Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="inspectorName"
+                    type="text"
+                    placeholder="e.g. Juan dela Cruz"
+                    value={inspectorName}
+                    onChange={e => setInspectorName(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    Media Type <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex gap-3">
+                    {(["image", "video"] as const).map(t => (
+                      <label key={t} className={cn(
+                        "flex-1 flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 cursor-pointer text-sm font-medium transition",
+                        mediaType === t
+                          ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300"
+                          : "border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600"
+                      )}>
+                        <input
+                          type="radio"
+                          name="mediaType"
+                          value={t}
+                          checked={mediaType === t}
+                          onChange={() => setMediaType(t)}
+                          className="sr-only"
                         />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <span className="text-gray-400 dark:text-gray-500 text-sm">
-                            No image
-                          </span>
-                        </div>
-                      )}
-
-                      {/* Label Overlay */}
-                      <div className="absolute bottom-0 left-0 right-0 bg-white/90 dark:bg-gray-800/50 py-2 px-3">
-                        <p className="text-black dark:text-white font-medium text-sm">
-                          {report.title}
-                        </p>
-                        <p className="text-gray-600 dark:text-gray-300 text-xs">{report.date}</p>
-                      </div>
-                    </div>
+                        {t === "image" ? <FileImage className="w-4 h-4" /> : <FileVideo className="w-4 h-4" />}
+                        {t === "image" ? "Images" : "Videos"}
+                      </label>
+                    ))}
                   </div>
-                ))}
+                </div>
               </div>
             </div>
+
+            {/* Upload Area Card */}
+            <div className="bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm">
+              <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">Upload Files</h3>
+
+              {/* Drop Zone */}
+              <div
+                onDragEnter={handleDragEnter}
+                onDragLeave={handleDragLeave}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={cn(
+                  "border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all",
+                  isDragging
+                    ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30"
+                    : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 bg-gray-50 dark:bg-gray-900/50"
+                )}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept={mediaType === "image" ? ".jpg,.jpeg,.png,.bmp,.tiff" : ".mp4,.avi,.mov"}
+                  onChange={e => addFiles(e.target.files)}
+                  className="hidden"
+                />
+                <Upload className={cn("w-10 h-10 mx-auto mb-3", isDragging ? "text-blue-500" : "text-gray-400")} />
+                <p className="font-semibold text-gray-700 dark:text-gray-200 mb-1">
+                  Drop {mediaType === "image" ? "images" : "videos"} here
+                </p>
+                <p className="text-sm text-gray-400 mb-2">or click to browse</p>
+                <p className="text-xs text-gray-400">
+                  {mediaType === "image"
+                    ? "JPG, PNG, BMP, TIFF — max 20 MB each"
+                    : "MP4, AVI, MOV — max 500 MB each"}
+                </p>
+              </div>
+
+              {/* File list */}
+              {files.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  {files.map((f, i) => (
+                    <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-sm">
+                      {mediaType === "image" ? <FileImage className="w-4 h-4 text-blue-400 shrink-0" /> : <FileVideo className="w-4 h-4 text-purple-400 shrink-0" />}
+                      <span className="flex-1 truncate text-gray-700 dark:text-gray-300">{f.name}</span>
+                      <span className="text-gray-400 text-xs shrink-0">{formatBytes(f.size)}</span>
+                      <button
+                        onClick={e => { e.stopPropagation(); removeFile(i); }}
+                        className="text-gray-400 hover:text-red-500 transition shrink-0"
+                        aria-label="Remove file"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Upload error */}
+              {uploadError && (
+                <div className="mt-4 flex items-start gap-2 p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300">
+                  <XCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                  {uploadError}
+                </div>
+              )}
+
+              {/* Upload + Proceed buttons */}
+              <div className="mt-5 flex gap-3">
+                <button
+                  id="btn-upload"
+                  onClick={handleUpload}
+                  disabled={!canUpload}
+                  className={cn(
+                    "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition",
+                    canUpload
+                      ? "bg-blue-600 hover:bg-blue-700 text-white"
+                      : "bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed"
+                  )}
+                >
+                  {isUploading ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Validating…</>
+                  ) : (
+                    <><Upload className="w-4 h-4" /> Upload & Validate</>
+                  )}
+                </button>
+
+                {canProceed && (
+                  <button
+                    id="btn-proceed-preprocessing"
+                    onClick={handleProceed}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition"
+                  >
+                    Proceed to Preprocessing
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* ── Previous Jobs ──────────────────────────────────────── */}
+            <div className="bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Previous Jobs</h3>
+                <button onClick={loadJobs} className="text-xs text-blue-500 hover:underline">Refresh</button>
+              </div>
+
+              {jobsLoading ? (
+                <div className="flex items-center gap-2 text-gray-400 text-sm py-4">
+                  <Loader2 className="w-4 h-4 animate-spin" /> Loading…
+                </div>
+              ) : jobsError ? (
+                <p className="text-sm text-red-500">{jobsError}</p>
+              ) : jobs.length === 0 ? (
+                <p className="text-sm text-gray-400">No previous jobs found.</p>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    {pagedJobs.map(job => (
+                      <button
+                        key={job.job_id}
+                        onClick={() => router.push(routeForJob(job))}
+                        className="w-full text-left flex items-center gap-3 px-3 py-3 rounded-xl border border-gray-100 dark:border-gray-800 hover:border-blue-300 dark:hover:border-blue-700 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 transition group"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                              {job.site_name ?? `Job ${job.job_id.slice(0, 8)}`}
+                            </span>
+                            <span className={cn(
+                              "px-2 py-0.5 rounded text-[11px] font-semibold shrink-0",
+                              STATUS_COLORS[job.status] ?? "bg-gray-100 text-gray-600"
+                            )}>
+                              {job.status}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 text-xs text-gray-400">
+                            <span className="flex items-center gap-1">
+                              {job.input_type === "image" ? <FileImage className="w-3 h-3" /> : <FileVideo className="w-3 h-3" />}
+                              {job.input_type}
+                            </span>
+                            {job.file_count != null && (
+                              <span>{job.file_count} file{job.file_count !== 1 ? "s" : ""}</span>
+                            )}
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {formatDate(job.created_at)}
+                            </span>
+                          </div>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-blue-500 transition shrink-0" />
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Pagination */}
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
+                      <button
+                        onClick={() => setJobsPage(p => Math.max(1, p - 1))}
+                        disabled={jobsPage === 1}
+                        className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                      >
+                        <ChevronLeft className="w-4 h-4" /> Previous
+                      </button>
+                      <span className="text-xs text-gray-400">Page {jobsPage} of {totalPages}</span>
+                      <button
+                        onClick={() => setJobsPage(p => Math.min(totalPages, p + 1))}
+                        disabled={jobsPage === totalPages}
+                        className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                      >
+                        Next <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
+
+          {/* ── RIGHT COLUMN — Validation Results ──────────────────── */}
+          <div>
+            {!validationResults && !isUploading ? (
+              <div className="h-full flex flex-col items-center justify-center text-center py-24 text-gray-400">
+                <div className="w-16 h-16 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
+                  <CheckCircle2 className="w-8 h-8 text-gray-300" />
+                </div>
+                <p className="font-medium text-gray-500 dark:text-gray-400">Validation results will appear here</p>
+                <p className="text-sm mt-1 text-gray-400">Fill the form, add files, and click Upload & Validate</p>
+              </div>
+            ) : isUploading ? (
+              <div className="h-full flex flex-col items-center justify-center text-center py-24 gap-4">
+                <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
+                <p className="text-gray-500 dark:text-gray-400 font-medium">Validating files…</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Filters + Summary */}
+                <div className="bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800 p-4 shadow-sm">
+                  <div className="flex flex-wrap gap-4 mb-4">
+                    {/* GPS filter */}
+                    <div>
+                      <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mr-2">GPS</span>
+                      {(["all", "with", "without"] as const).map(opt => (
+                        <button
+                          key={opt}
+                          onClick={() => setGpsFilter(opt)}
+                          className={cn(
+                            "mr-1 px-2.5 py-1 rounded-full text-xs font-medium transition",
+                            gpsFilter === opt
+                              ? "bg-blue-600 text-white"
+                              : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+                          )}
+                        >
+                          {opt === "all" ? "All" : opt === "with" ? "With GPS" : "Without GPS"}
+                        </button>
+                      ))}
+                    </div>
+                    {/* Blur filter */}
+                    <div>
+                      <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mr-2">Blur</span>
+                      {(["all", "sharp", "blurry"] as const).map(opt => (
+                        <button
+                          key={opt}
+                          onClick={() => setBlurFilter(opt)}
+                          className={cn(
+                            "mr-1 px-2.5 py-1 rounded-full text-xs font-medium transition",
+                            blurFilter === opt
+                              ? "bg-blue-600 text-white"
+                              : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+                          )}
+                        >
+                          {opt === "all" ? "All" : opt.charAt(0).toUpperCase() + opt.slice(1)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Summary */}
+                  <div className="text-sm text-gray-600 dark:text-gray-300 flex flex-wrap gap-3">
+                    <span className="font-medium">{validationResults!.length} files uploaded</span>
+                    <span className="text-gray-300 dark:text-gray-600">•</span>
+                    <span className="text-emerald-600 dark:text-emerald-400 font-medium">{validCount} valid</span>
+                    <span className="text-gray-300 dark:text-gray-600">•</span>
+                    <span className="text-red-500 dark:text-red-400 font-medium">{invalidCount} invalid</span>
+                  </div>
+                </div>
+
+                {/* File cards */}
+                {filteredResults.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-8">No files match the current filters.</p>
+                ) : (
+                  filteredResults.map((r, i) => (
+                    <FileResultCard key={i} result={r} />
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+// ─── File Result Card ─────────────────────────────────────────────────────────
+
+function FileResultCard({ result }: { result: ValidationResult }) {
+  return (
+    <div className={cn(
+      "bg-white dark:bg-[#161616] rounded-2xl border shadow-sm p-4 transition",
+      result.is_valid
+        ? "border-emerald-200 dark:border-emerald-900"
+        : "border-red-200 dark:border-red-900"
+    )}>
+      <div className="flex items-start justify-between gap-2 mb-3">
+        <span className="text-sm font-medium text-gray-800 dark:text-gray-100 truncate flex-1">
+          {result.filename}
+        </span>
+        <span className={cn(
+          "flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold shrink-0",
+          result.is_valid
+            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+            : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
+        )}>
+          {result.is_valid ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+          {result.is_valid ? "Valid" : "Invalid"}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 text-xs text-gray-600 dark:text-gray-400">
+        <div>
+          <span className="text-gray-400 dark:text-gray-500">Laplacian Score</span>
+          <p className="font-medium text-gray-800 dark:text-gray-200">
+            {result.laplacian_score.toFixed(1)}
+            <span className="ml-1 text-gray-400 font-normal">(threshold: {result.blur_threshold.toFixed(1)})</span>
+          </p>
+        </div>
+        <div>
+          <span className="text-gray-400 dark:text-gray-500">Sharpness</span>
+          <p className={cn("font-medium", result.is_blurry ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400")}>
+            {result.is_blurry ? "Blurry" : "Sharp"}
+          </p>
+        </div>
+        <div className="col-span-2">
+          <span className="text-gray-400 dark:text-gray-500">GPS</span>
+          <p className="font-medium text-gray-800 dark:text-gray-200 flex items-center gap-1">
+            {result.gps
+              ? <><MapPin className="w-3 h-3 text-blue-400" />{result.gps.lat.toFixed(4)}, {result.gps.lng.toFixed(4)}</>
+              : "—"}
+          </p>
         </div>
       </div>
 
-      {/* Footer */}
-      <footer className="border-t border-gray-200 dark:border-gray-800 mt-12">
-        <div className="container mx-auto px-4 py-4">
-          <p className="text-xs text-gray-600 dark:text-gray-400">
-            © Viscrete 2026
-          </p>
+      {!result.is_valid && result.reason && (
+        <div className="mt-3 flex items-center gap-2 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 px-3 py-2 rounded-lg">
+          <XCircle className="w-3.5 h-3.5 shrink-0" />
+          {result.reason}
         </div>
-      </footer>
+      )}
     </div>
   );
 }
