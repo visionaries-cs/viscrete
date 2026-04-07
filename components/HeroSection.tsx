@@ -15,7 +15,7 @@ const HeroSection = () => {
   };
 
   const handleStart = () => {
-    router.push("/login");
+    router.push("/upload");
   };
 
   return (
@@ -43,7 +43,9 @@ const HeroSection = () => {
 
           {/* Headline */}
           <h1 className="text-6xl md:text-8xl font-bold tracking-tight">
-            <span className="bg-gradient-to-r from-[#2ca75d] to-[#0da6f2] bg-clip-text text-transparent">viscrete</span>
+            <span className="bg-gradient-to-r from-[#2ca75d] to-[#0da6f2] bg-clip-text text-transparent">
+              viscrete
+            </span>
           </h1>
 
           {/* Subheadline */}
@@ -60,11 +62,19 @@ const HeroSection = () => {
 
           {/* CTAs */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
-            <Button size="lg" className="cursor-pointer gap-2 text-base bg-[#e5ac0c] hover:bg-[#e5ac0c]/90 text-black font-semibold" onClick={handleStart}>
+            <Button
+              size="lg"
+              className="cursor-pointer gap-2 text-base bg-[#e5ac0c] hover:bg-[#e5ac0c]/90 text-black font-semibold"
+              onClick={handleStart}
+            >
               Start Inspection
               <ArrowRight className="w-4 h-4" />
             </Button>
-            <Button size="lg" className="cursor-pointer gap-2 text-base border border-[#0da6f2] bg-transparent text-[#0da6f2] hover:bg-[#0da6f2]/10" onClick={() => scrollToSection("technology")}>
+            <Button
+              size="lg"
+              className="cursor-pointer gap-2 text-base border border-[#0da6f2] bg-transparent text-[#0da6f2] hover:bg-[#0da6f2]/10"
+              onClick={() => scrollToSection("technology")}
+            >
               <Play className="w-4 h-4" />
               See How It Works
             </Button>
