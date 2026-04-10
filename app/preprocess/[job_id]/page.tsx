@@ -588,7 +588,7 @@ export default function PreprocessPage() {
                 <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">
                   Before / After Comparison
                   <span className="ml-2 text-gray-400 font-normal normal-case text-xs">
-                    Drag the slider to compare
+                    Toggle between original and processed images to see the effect of preprocessing
                   </span>
                 </h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
