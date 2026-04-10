@@ -74,7 +74,7 @@ export default function DetectPage() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const job = await res.json();
         if (REDIRECT_STATUSES.has(job.status)) {
-          router.replace(`/report/${encodeURIComponent(job_id)}`);
+          router.replace(`/results/${encodeURIComponent(job_id)}`);
           return;
         }
       } catch {
@@ -109,7 +109,7 @@ export default function DetectPage() {
     setIsGenerating(true);
     try {
       await generateReport(job_id);
-      router.push(`/report/${encodeURIComponent(job_id)}`);
+      router.push(`/results/${encodeURIComponent(job_id)}`);
     } catch (e: unknown) {
       setReportError(e instanceof Error ? e.message : "Failed to generate report");
       setIsGenerating(false);

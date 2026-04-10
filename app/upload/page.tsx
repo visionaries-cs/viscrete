@@ -51,10 +51,8 @@ function routeForJob(job: JobStatusResponse): string {
   const s = job.status;
   if (["preprocessing", "preprocessed"].includes(s))
     return `/preprocess/${job.job_id}`;
-  if (["detecting", "detected"].includes(s))
-    return `/detect/${job.job_id}`;
-  if (["reporting", "completed"].includes(s))
-    return `/report/${job.job_id}`;
+  if (["detecting", "detected", "reporting", "completed"].includes(s))
+    return `/results/${job.job_id}`;
   return `/upload`; // created / validating / validated / failed
 }
 
