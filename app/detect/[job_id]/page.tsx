@@ -9,7 +9,7 @@ import {
   type Detection,
 } from "@/lib/api";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://viscrete-core.shares.zrok.io";
 
 // Actual API shape (api.ts DetectResponse is outdated — flat, not per-file array)
 interface DetectResponse {
@@ -62,7 +62,7 @@ export default function DetectPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
 
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://viscrete-core.shares.zrok.io";
 
   const REDIRECT_STATUSES = new Set(["detected", "reporting", "completed"]);
 

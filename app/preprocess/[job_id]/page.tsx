@@ -90,7 +90,7 @@ const ALREADY_PREPROCESSED = new Set([
   "preprocessed", "detecting", "detected", "reporting", "completed",
 ]);
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://viscrete-core.shares.zrok.io";
 
 // ─── Before/After toggle ──────────────────────────────────────────────────────
 
