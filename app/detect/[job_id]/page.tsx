@@ -77,7 +77,8 @@ export default function DetectPage() {
       setHasRun(true);
     } catch (e: unknown) {
       if (e instanceof Error && e.message.includes("409")) {
-        setError("This step has already been completed.");
+        router.replace(`/report/${encodeURIComponent(job_id)}`);
+        return;
       } else if (e instanceof Error && e.message.includes("404")) {
         setError("Job not found.");
       } else {
