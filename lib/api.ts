@@ -110,6 +110,8 @@ export interface ReportResponse {
   annotated_filenames: string[];
 }
 
+
+
 // ─── Jobs ─────────────────────────────────────────────────────────────────────
 
 /** GET /api/v1/jobs — list all non-deleted jobs newest first */

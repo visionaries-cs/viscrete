@@ -6,18 +6,25 @@ import { cn } from "@/lib/utils";
 import {
   detectJob,
   generateReport,
-  getAnnotatedImageUrl,
-  type DetectResponse,
   type Detection,
 } from "@/lib/api";
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+// Actual API shape (api.ts DetectResponse is outdated — flat, not per-file array)
+interface DetectResponse {
+  job_id: string;
+  file_id: string;
+  total_defects: number;
+  detections: Detection[];
+  annotated_paths: string[];
+}
 import {
   ArrowLeft,
   Loader2,
   AlertCircle,
   FileText,
   AlertTriangle,
-  ChevronDown,
-  ChevronUp,
   ImageIcon,
 } from "lucide-react";
 
@@ -65,7 +72,7 @@ export default function DetectPage() {
     setHasRun(false);
     setError(null);
     try {
-      const data = await detectJob(job_id);
+      const data = await detectJob(job_id) as unknown as DetectResponse;
       setResult(data);
       setHasRun(true);
     } catch (e: unknown) {
@@ -93,19 +100,14 @@ export default function DetectPage() {
     }
   }
 
-  // Flatten all detections
-  const allDetections: (Detection & { filename: string })[] =
-    result?.results.flatMap(r =>
-      r.detections.map(d => ({ ...d, filename: r.filename }))
-    ) ?? [];
+  const allDetections: Detection[] = result?.detections ?? [];
 
-  const totalDefects = result?.total_defect_count ?? 0;
+  const totalDefects = result?.total_defects ?? 0;
   const lowCount = countSeverity(allDetections, "Low");
   const midCount = countSeverity(allDetections, "Medium");
   const highCount = countSeverity(allDetections, "High");
 
-  // Annotated filenames — from result.results or result.annotated_paths
-  const annotatedFilenames: string[] = result?.results.map(r => r.filename) ?? [];
+  const annotatedPaths: string[] = result?.annotated_paths ?? [];
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#0a0a0a]">
@@ -188,18 +190,17 @@ export default function DetectPage() {
               <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">
                 Annotated Images
               </h2>
-              {annotatedFilenames.length === 0 ? (
+              {annotatedPaths.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-gray-400 bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800">
                   <ImageIcon className="w-10 h-10 mb-3" />
                   <p>No annotated images available</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {annotatedFilenames.map(filename => (
+                  {annotatedPaths.map(path => (
                     <AnnotatedImageCard
-                      key={filename}
-                      jobId={job_id}
-                      filename={filename}
+                      key={path}
+                      path={path}
                     />
                   ))}
                 </div>
@@ -236,7 +237,6 @@ export default function DetectPage() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-gray-100 dark:border-gray-800">
-                          <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">File</th>
                           <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Defect Type</th>
                           <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Confidence</th>
                           <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Severity</th>
@@ -250,7 +250,6 @@ export default function DetectPage() {
                             key={i}
                             className="border-b border-gray-50 dark:border-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-900/50 transition"
                           >
-                            <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs truncate max-w-[120px]">{d.filename}</td>
                             <td className="px-4 py-3">
                               <span className="text-gray-800 dark:text-gray-200 font-medium capitalize">{d.defect_type}</span>
                             </td>
@@ -294,24 +293,22 @@ export default function DetectPage() {
 
 // ─── Annotated Image Card ─────────────────────────────────────────────────────
 
-function AnnotatedImageCard({ jobId, filename }: { jobId: string; filename: string }) {
-  const [expanded, setExpanded] = useState(false);
-  const src = getAnnotatedImageUrl(jobId, filename);
+function AnnotatedImageCard({ path }: { path: string }) {
+  const src = `${API_BASE_URL}/static/${path}`;
+  const label = path.split("/").pop() ?? path;
 
   return (
     <div className="bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
-      {/* Image */}
       <div className="aspect-video bg-gray-100 dark:bg-gray-900 relative overflow-hidden">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={src}
-          alt={filename}
+          alt={label}
           className="w-full h-full object-cover"
         />
       </div>
-      {/* Footer */}
-      <div className="px-3 py-2.5 flex items-center justify-between">
-        <span className="text-xs text-gray-600 dark:text-gray-400 truncate flex-1 font-medium">{filename}</span>
+      <div className="px-3 py-2.5">
+        <span className="text-xs text-gray-600 dark:text-gray-400 truncate block font-medium">{label}</span>
       </div>
     </div>
   );
