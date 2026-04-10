@@ -12,6 +12,8 @@ import {
   ArrowRight,
   AlertCircle,
   Clock,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -289,8 +291,11 @@ export default function PreprocessPage() {
   const [isComplete, setIsComplete] = useState(false);
   const [result, setResult] = useState<PreprocessResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [clusterOpen, setClusterOpen] = useState(true);
 
   const hasStarted = useRef(false);
+
+  const CACHE_KEY = `preprocess_result_${job_id}`;
 
   // ── Fetch job status on mount ────────────────────────────────────────────
   useEffect(() => {
@@ -309,7 +314,25 @@ export default function PreprocessPage() {
         setJobMeta(data);
         setSteps(pipelineSteps);
         setStepStates(pipelineSteps.map(() => alreadyDone ? "completed" : "pending"));
-        if (alreadyDone) setIsComplete(true);
+        if (alreadyDone) {
+          setIsComplete(true);
+          // Restore cached preprocess result (cluster info + step details)
+          try {
+            const cached = localStorage.getItem(`preprocess_result_${job_id}`);
+            if (cached) {
+              const parsed: PreprocessResult = JSON.parse(cached);
+              setResult(parsed);
+              if (parsed.pipeline_steps?.length) {
+                setStepDetails(parsed.pipeline_steps);
+                setStepStates(parsed.pipeline_steps.map(s =>
+                  s.status === "completed" ? "completed" : "failed"
+                ));
+              }
+            }
+          } catch {
+            // ignore stale/corrupt cache
+          }
+        }
       } catch (e) {
         setMetaError(e instanceof Error ? e.message : "Failed to load job");
       }
@@ -368,6 +391,8 @@ export default function PreprocessPage() {
 
       setResult(data);
       setIsComplete(true);
+      // Persist so cluster info survives page refresh
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch { /* quota */ }
     } catch (e: unknown) {
       clearInterval(interval);
       const msg = e instanceof Error ? e.message : "Preprocessing failed";
@@ -490,17 +515,70 @@ export default function PreprocessPage() {
         {/* ── Section 2: Cluster Info + Before/After ─────────────── */}
         {isComplete && (
           <>
-            {/* Cluster Cards — only available when pipeline just ran */}
+            {/* Cluster Cards + Step Timing — collapsible, survives refresh via localStorage */}
             {result && result.cluster_info.length > 0 && (
-              <div>
-                <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">
-                  Cluster Summary ({result.cluster_info.length} cluster{result.cluster_info.length !== 1 ? "s" : ""})
-                </h2>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                  {result.cluster_info.map(c => (
-                    <ClusterCard key={c.cluster_id} info={c} />
-                  ))}
-                </div>
+              <div className="bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
+                {/* Toggle header */}
+                <button
+                  onClick={() => setClusterOpen(o => !o)}
+                  className="w-full flex items-center justify-between px-6 py-4 hover:bg-gray-50 dark:hover:bg-[#1a1a1a] transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Cluster Summary
+                    </h2>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                      {result.cluster_info.length} cluster{result.cluster_info.length !== 1 ? "s" : ""}
+                    </span>
+                    {result.pipeline_steps?.length > 0 && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400">
+                        {result.pipeline_steps.reduce((s, p) => s + p.duration_sec, 0).toFixed(2)}s total
+                      </span>
+                    )}
+                  </div>
+                  {clusterOpen
+                    ? <ChevronUp className="w-4 h-4 text-gray-400" />
+                    : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                </button>
+
+                {/* Collapsible body */}
+                {clusterOpen && (
+                  <div className="px-6 pb-6 space-y-4 border-t border-gray-100 dark:border-gray-800 pt-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                      {result.cluster_info.map(c => (
+                        <ClusterCard key={c.cluster_id} info={c} />
+                      ))}
+                    </div>
+
+                    {/* Per-step timing table */}
+                    {result.pipeline_steps?.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">
+                          Step Timing
+                        </p>
+                        <div className="rounded-xl overflow-hidden border border-gray-100 dark:border-gray-800">
+                          {result.pipeline_steps.map((s, i) => (
+                            <div
+                              key={s.step}
+                              className={cn(
+                                "flex items-center gap-3 px-4 py-2.5 text-xs",
+                                i % 2 === 0 ? "bg-gray-50 dark:bg-[#111]" : "bg-white dark:bg-[#161616]"
+                              )}
+                            >
+                              {s.status === "completed"
+                                ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                                : <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />}
+                              <span className="flex-1 text-gray-700 dark:text-gray-300 font-medium">{s.name}</span>
+                              <span className="flex items-center gap-1 text-gray-400 shrink-0">
+                                <Clock className="w-3 h-3" />{s.duration_sec.toFixed(2)}s
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
