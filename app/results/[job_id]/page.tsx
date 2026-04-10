@@ -6,9 +6,7 @@ import { cn } from "@/lib/utils";
 import {
   detectJob,
   generateReport,
-  getAnnotatedImageUrl,
   type DetectResponse,
-  type DetectionResult,
   type Detection,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -99,13 +97,19 @@ export default function ResultPage() {
   const [reportError, setReportError] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
 
-  // Derived counts
-  const totalDefectCount = detectData?.total_defect_count ?? 0;
-  const cracksCount = detectData?.total_defect_counts?.cracks ?? 0;
-  const spallingCount = detectData?.total_defect_counts?.spalling ?? 0;
-  const peelingCount = detectData?.total_defect_counts?.peeling ?? 0;
-  const algaeCount = detectData?.total_defect_counts?.algae ?? 0;
-  const stainCount = detectData?.total_defect_counts?.staining ?? 0;
+  // The actual API response is flat (api.ts types are outdated):
+  // { job_id, file_id, total_defects, detections[], annotated_paths[] }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const flatData = detectData as any;
+  const flatDetections: Detection[] = flatData?.detections ?? [];
+
+  // Derived counts — use flat detections since total_defect_counts may not exist
+  const totalDefectCount: number = flatData?.total_defects ?? flatData?.total_defect_count ?? 0;
+  const cracksCount   = flatDetections.filter(d => d.defect_type === 'cracks').length;
+  const spallingCount = flatDetections.filter(d => d.defect_type === 'spalling').length;
+  const peelingCount  = flatDetections.filter(d => d.defect_type === 'peeling').length;
+  const algaeCount    = flatDetections.filter(d => d.defect_type === 'algae').length;
+  const stainCount    = flatDetections.filter(d => d.defect_type === 'staining').length;
 
   // Image carousel state
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -118,6 +122,17 @@ export default function ResultPage() {
   const [showBoundingBoxes, setShowBoundingBoxes] = useState(true);
   const [showLabels, setShowLabels] = useState(true);
   const [showColorOverlay, setShowColorOverlay] = useState(false);
+
+  // Per-class visibility
+  const allDefectClasses = ['cracks', 'spalling', 'peeling', 'algae', 'staining'] as const;
+  type DefectClass = typeof allDefectClasses[number];
+  const [visibleDefects, setVisibleDefects] = useState<Set<DefectClass>>(new Set(allDefectClasses));
+  const toggleDefectClass = (cls: DefectClass) =>
+    setVisibleDefects(prev => {
+      const next = new Set(prev);
+      next.has(cls) ? next.delete(cls) : next.add(cls);
+      return next;
+    });
 
   // Project info from job status
   const [projectName, setProjectName] = useState("—");
@@ -169,9 +184,8 @@ export default function ResultPage() {
       const data = await getDetectResults(jobId);
       setDetectData(data);
       setHasRun(true);
-    } catch {
-      // If GET fails, fall through to POST (re-run detection)
-      runDetection();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to load detection results");
     } finally {
       setIsRunning(false);
     }
@@ -236,9 +250,9 @@ export default function ResultPage() {
 
   // ── Image carousel ──────────────────────────────────────────────────────────
 
-  const results: DetectionResult[] = detectData?.results ?? [];
-  const annotatedPaths: string[] = detectData?.annotated_paths ?? [];
-  const totalImages = results.length;
+  // annotated_paths is the authoritative list of images from the flat API response
+  const annotatedPaths: string[] = flatData?.annotated_paths ?? [];
+  const totalImages = annotatedPaths.length;
 
   const goToPrevious = () => setCurrentImageIndex(prev => (prev === 0 ? totalImages - 1 : prev - 1));
   const goToNext = () => setCurrentImageIndex(prev => (prev === totalImages - 1 ? 0 : prev + 1));
@@ -253,6 +267,20 @@ export default function ResultPage() {
       naturalHeight: image.naturalHeight,
     });
   };
+
+  // Derive processed image path from annotated path:
+  // e.g. "uuid/annotated/file_annotated.jpg" → "uuid/processed/file.jpg"
+  const currentAnnotatedPath = annotatedPaths[currentImageIndex];
+  const currentImageSrc = currentAnnotatedPath
+    ? `${API_BASE_URL}/static/${currentAnnotatedPath
+        .replace('/annotated/', '/processed/')
+        .replace(/_annotated(\.[^.]+)$/, '$1')}`
+    : null;
+
+  // Reset dimensions when the displayed image changes so stale overlays don't show
+  useEffect(() => {
+    setImageDimensions({ width: 0, height: 0, naturalWidth: 0, naturalHeight: 0 });
+  }, [currentImageSrc]);
 
   useEffect(() => {
     const updateDimensions = () => {
@@ -269,18 +297,31 @@ export default function ResultPage() {
     return () => window.removeEventListener("resize", updateDimensions);
   }, []);
 
-  const getCurrentDetections = (): Detection[] => {
-    if (results.length === 0) return [];
-    return results[currentImageIndex]?.detections ?? [];
-  };
+  // API is flat — all detections belong to the job, not per-image
+  // Filter by per-class visibility toggle
+  const getCurrentDetections = (): Detection[] =>
+    flatDetections.filter(d => visibleDefects.has(d.defect_type as DefectClass));
 
-  const currentAnnotatedPath = annotatedPaths[currentImageIndex];
-  const currentImageSrc = currentAnnotatedPath
-    ? `${API_BASE_URL}/static/${currentAnnotatedPath}`
-    : null;
+  // ── Compute actual rendered image rect inside the object-contain box ─────────
+  // With object-contain, the img CSS box may be larger than the rendered content.
+  // We need the rendered rect to position overlays correctly.
+  const { width: cssW, height: cssH, naturalWidth, naturalHeight } = imageDimensions;
+  const hasValidDimensions = cssW > 0 && cssH > 0 && naturalWidth > 0 && naturalHeight > 0;
+  const naturalAspect = hasValidDimensions ? naturalWidth / naturalHeight : 1;
+  const cssAspect = hasValidDimensions ? cssW / cssH : 1;
+  const renderedW = hasValidDimensions
+    ? (naturalAspect > cssAspect ? cssW : cssH * naturalAspect)
+    : 0;
+  const renderedH = hasValidDimensions
+    ? (naturalAspect > cssAspect ? cssW / naturalAspect : cssH)
+    : 0;
+  const offsetX = (cssW - renderedW) / 2;
+  const offsetY = (cssH - renderedH) / 2;
+  const scaleX = renderedW > 0 ? renderedW / naturalWidth : 0;
+  const scaleY = renderedH > 0 ? renderedH / naturalHeight : 0;
 
   // ── All detections (flat) for the defect table ──────────────────────────────
-  const allDetections: Detection[] = results.flatMap(r => r.detections);
+  const allDetections: Detection[] = flatDetections;
 
   // ── Severity counts ─────────────────────────────────────────────────────────
   const lowCount = allDetections.filter(d => d.severity === "Low").length;
@@ -381,10 +422,11 @@ export default function ResultPage() {
       {hasRun && detectData && (
         <div className="flex flex-1">
           {/* Main Image Viewer */}
-          <div className="flex-1 bg-gray-900 relative flex flex-col">
+          <div className="flex-1 bg-gray-900 flex flex-col">
             {/* Overlay Controls */}
-            <div className="absolute top-6 left-1/2 transform -translate-x-1/2 z-10">
-              <div className="bg-gray-950/90 backdrop-blur-sm border border-gray-700 rounded-lg px-6 py-3">
+            <div className="flex justify-center pt-6 px-8">
+              <div className="bg-gray-950/90 backdrop-blur-sm border border-gray-700 rounded-lg px-6 py-3 flex flex-col gap-3">
+                {/* Row 1 — overlay type toggles */}
                 <div className="flex items-center gap-6">
                   <span className="text-gray-400 text-sm uppercase tracking-wider">Overlays</span>
 
@@ -421,78 +463,111 @@ export default function ResultPage() {
                     <Layers className="w-5 h-5" />
                   </button>
                 </div>
+
+                {/* Row 2 — per-class toggles */}
+                <div className="flex items-center gap-2 border-t border-gray-700 pt-3">
+                  <span className="text-gray-500 text-xs uppercase tracking-wider mr-2">Classes</span>
+                  {allDefectClasses.map(cls => {
+                    const active = visibleDefects.has(cls);
+                    const dot: Record<string, string> = {
+                      cracks: 'bg-red-500', spalling: 'bg-yellow-500',
+                      peeling: 'bg-orange-500', algae: 'bg-green-500', staining: 'bg-purple-500',
+                    };
+                    return (
+                      <button
+                        key={cls}
+                        onClick={() => toggleDefectClass(cls)}
+                        className={cn(
+                          'flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all cursor-pointer',
+                          active
+                            ? 'bg-gray-800 border-gray-500 text-white'
+                            : 'bg-transparent border-gray-700 text-gray-500',
+                        )}
+                      >
+                        <span className={cn('w-2 h-2 rounded-full', dot[cls], !active && 'opacity-40')} />
+                        {cls.charAt(0).toUpperCase() + cls.slice(1)}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
             {/* Image Carousel */}
-            <div className="flex-1 flex flex-col items-center justify-center p-8">
-              <div className="w-full flex-1 bg-gray-800/30 border-2 border-dashed border-gray-700/50 rounded-lg flex items-center justify-center mb-4 relative">
+            <div className="flex-1 flex flex-col p-8 min-h-0">
+              <div className="bg-gray-800/30 border-2 border-dashed border-gray-700/50 rounded-lg mb-4 p-8" style={{ height: '480px' }}>
                 {!currentImageSrc ? (
-                  <div className="text-center">
-                    <ImageIcon className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                  <div className="w-full h-full flex flex-col items-center justify-center">
+                    <ImageIcon className="w-16 h-16 text-gray-600 mb-4" />
                     <p className="text-gray-500 text-lg">No image loaded</p>
                     <p className="text-gray-600 text-sm mt-2">Detection results will appear here</p>
                   </div>
                 ) : (
-                  <div ref={containerRef} className="relative inline-block">
+                  <div className="relative w-full h-full overflow-hidden">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       ref={imageRef}
+                      key={currentImageSrc}
                       src={currentImageSrc}
                       alt={`Detection Result ${currentImageIndex + 1}`}
-                      className="max-w-full max-h-full object-contain"
+                      className="w-full h-full object-contain"
                       onLoad={handleImageLoad}
                     />
-                    {/* Bounding Box Overlays */}
-                    {imageDimensions.width > 0 && getCurrentDetections().map((detection, index) => {
-                      const { bounding_box, defect_type, confidence } = detection;
-                      const { x1, y1, x2, y2 } = bounding_box;
+                    {/* Overlay container — positioned at the actual rendered image rect */}
+                    {hasValidDimensions && (
+                      <div
+                        ref={containerRef}
+                        className="absolute overflow-hidden pointer-events-none"
+                        style={{ left: offsetX, top: offsetY, width: renderedW, height: renderedH }}
+                      >
+                        {getCurrentDetections().map((detection, index) => {
+                          const { bounding_box, defect_type, confidence } = detection;
+                          const { x1, y1, x2, y2 } = bounding_box;
 
-                      const scaleX = imageDimensions.width / imageDimensions.naturalWidth;
-                      const scaleY = imageDimensions.height / imageDimensions.naturalHeight;
+                          const left = x1 * scaleX;
+                          const top = y1 * scaleY;
+                          const width = (x2 - x1) * scaleX;
+                          const height = (y2 - y1) * scaleY;
+                          const labelAbove = top > 30;
 
-                      const left = x1 * scaleX;
-                      const top = y1 * scaleY;
-                      const width = (x2 - x1) * scaleX;
-                      const height = (y2 - y1) * scaleY;
-                      const labelAbove = top > 30;
-
-                      return (
-                        <div key={index}>
-                          <div
-                            className={cn(
-                              "absolute pointer-events-none",
-                              showBoundingBoxes ? `border-2 ${defectBorderColor[defect_type] ?? 'border-white'}` : '',
-                              showColorOverlay ? (defectBgColor[defect_type] ?? 'bg-white/20') : '',
-                            )}
-                            style={{ left: `${left}px`, top: `${top}px`, width: `${width}px`, height: `${height}px` }}
-                          />
-                          {showLabels && (
-                            <div
-                              className={cn(
-                                "absolute pointer-events-none px-2 py-1 text-xs text-white whitespace-nowrap",
-                                defectLabelBg[defect_type] ?? 'bg-white',
+                          return (
+                            <div key={index}>
+                              <div
+                                className={cn(
+                                  "absolute pointer-events-none",
+                                  showBoundingBoxes ? `border-2 ${defectBorderColor[defect_type] ?? 'border-white'}` : '',
+                                  showColorOverlay ? (defectBgColor[defect_type] ?? 'bg-white/20') : '',
+                                )}
+                                style={{ left, top, width, height }}
+                              />
+                              {showLabels && (
+                                <div
+                                  className={cn(
+                                    "absolute pointer-events-none px-2 py-1 text-xs text-white whitespace-nowrap",
+                                    defectLabelBg[defect_type] ?? 'bg-white',
+                                  )}
+                                  style={{
+                                    left,
+                                    [labelAbove ? 'bottom' : 'top']: labelAbove
+                                      ? renderedH - top + 4
+                                      : top + height + 4,
+                                  }}
+                                >
+                                  {defect_type.charAt(0).toUpperCase() + defect_type.slice(1)} • {Math.round(confidence * 100)}%
+                                </div>
                               )}
-                              style={{
-                                left: `${left}px`,
-                                [labelAbove ? 'bottom' : 'top']: labelAbove
-                                  ? `${imageDimensions.height - top + 4}px`
-                                  : `${top + height + 4}px`,
-                              }}
-                            >
-                              {defect_type.charAt(0).toUpperCase() + defect_type.slice(1)} • {Math.round(confidence * 100)}%
                             </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
 
               {/* Carousel Controls */}
               {totalImages > 0 && (
-                <div className="flex items-center gap-4">
+                <div className="flex items-center justify-center gap-4">
                   <Button
                     onClick={goToPrevious}
                     variant="outline"
@@ -521,7 +596,7 @@ export default function ResultPage() {
 
               {/* Defect Table */}
               {allDetections.length > 0 && (
-                <div className="w-full mt-6">
+                <div className="w-full mt-auto pt-10">
                   <div className="flex items-center gap-4 mb-3">
                     <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Defect Summary</h2>
                     <div className="flex items-center gap-2 text-sm">
