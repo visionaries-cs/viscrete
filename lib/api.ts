@@ -119,11 +119,19 @@ export async function listJobs(): Promise<JobStatusResponse[]> {
 }
 
 /** POST /api/v1/jobs — create a new job */
-export async function createJob(inputType: string = 'image'): Promise<JobStatusResponse> {
+export async function createJob(
+  inputType: 'image' | 'video',
+  siteName: string,
+  inspectorName: string,
+): Promise<JobStatusResponse> {
   const res = await fetch(`${API_BASE_URL}/api/v1/jobs`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ input_type: inputType }),
+    body: JSON.stringify({
+      input_type: inputType,
+      site_location: siteName,
+      inspector_name: inspectorName,
+    }),
   });
   return handleResponse<JobStatusResponse>(res);
 }
@@ -178,19 +186,19 @@ export async function getDetectResults(jobId: string): Promise<DetectResponse> {
 
 // ─── Static files ─────────────────────────────────────────────────────────────
 
-/** Build URL for original image: GET /static/jobs/{job_id}/original/{filename} */
+/** Build URL for original image: GET /static/{job_id}/original/{filename} */
 export function getOriginalImageUrl(jobId: string, filename: string): string {
-  return `${API_BASE_URL}/static/jobs/${encodeURIComponent(jobId)}/original/${encodeURIComponent(filename)}`;
+  return `${API_BASE_URL}/static/${encodeURIComponent(jobId)}/original/${encodeURIComponent(filename)}`;
 }
 
-/** Build URL for processed image: GET /static/jobs/{job_id}/processed/{filename} */
+/** Build URL for processed image: GET /static/{job_id}/processed/{filename} */
 export function getProcessedImageUrl(jobId: string, filename: string): string {
-  return `${API_BASE_URL}/static/jobs/${encodeURIComponent(jobId)}/processed/${encodeURIComponent(filename)}`;
+  return `${API_BASE_URL}/static/${encodeURIComponent(jobId)}/processed/${encodeURIComponent(filename)}`;
 }
 
-/** Build URL for annotated image: GET /static/jobs/{job_id}/annotated/{filename} */
+/** Build URL for annotated image: GET /static/{job_id}/annotated/{filename} */
 export function getAnnotatedImageUrl(jobId: string, filename: string): string {
-  return `${API_BASE_URL}/static/jobs/${encodeURIComponent(jobId)}/annotated/${encodeURIComponent(filename)}`;
+  return `${API_BASE_URL}/static/${encodeURIComponent(jobId)}/annotated/${encodeURIComponent(filename)}`;
 }
 
 /** @deprecated — use getAnnotatedImageUrl instead */

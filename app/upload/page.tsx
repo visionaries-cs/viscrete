@@ -197,7 +197,7 @@ export default function UploadPage() {
     setIsUploading(true);
     setValidationResults(null);
     try {
-      const job = await createJob(mediaType);
+      const job = await createJob(mediaType, siteName.trim(), inspectorName.trim());
       setJobId(job.job_id);
       const results = await validateFiles(job.job_id, files);
       setValidationResults(results);

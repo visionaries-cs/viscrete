@@ -3,120 +3,158 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import {
-  preprocessJob,
-  getOriginalImageUrl,
-  getProcessedImageUrl,
-  type PreprocessResponse,
-  type ClusterInfo,
-} from "@/lib/api";
+import { preprocessJob } from "@/lib/api";
 import {
   CheckCircle2,
   XCircle,
   Loader2,
   ArrowLeft,
   ArrowRight,
-  ChevronLeft,
-  ChevronRight,
-  Play,
   AlertCircle,
+  Clock,
 } from "lucide-react";
 
-// ─── Stepper config ───────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-const STEPS = [
+interface FileStatusItem {
+  file_id: string;
+  filename: string;
+  status: string;
+  laplacian_score: number | null;
+  original_path: string | null;
+  processed_path: string | null;
+}
+
+interface JobStatus {
+  job_id: string;
+  status: string;
+  input_type: "image" | "video";
+  file_count: number;
+  files: FileStatusItem[];
+}
+
+interface PipelineStep {
+  step: number;
+  name: string;
+  status: "completed" | "failed";
+  duration_sec: number;
+  detail: string;
+}
+
+interface ClaheParams {
+  clip_limit: number;
+  tile_grid_size: [number, number];
+  source: string;
+}
+
+interface ClusterInfo {
+  cluster_id: number;
+  representative_file_id: string;
+  member_count: number;
+  clahe_params: ClaheParams;
+}
+
+interface PreprocessResult {
+  job_id: string;
+  status: string;
+  pipeline_type: "image" | "video";
+  total_processed: number;
+  pipeline_steps: PipelineStep[];
+  cluster_info: ClusterInfo[];
+}
+
+// ─── Pipeline step definitions ─────────────────────────────────────────────
+
+const IMAGE_STEPS = [
   "Feature Extraction",
-  "K-Means Clustering",
-  "IMOCS",
-  "CLAHE",
+  "Clustering",
+  "IMOCS Optimization",
+  "CLAHE Enhancement",
   "Bilateral Filter",
+];
+
+const VIDEO_STEPS = [
+  "Frame Sampling",
+  "Median Frame Construction",
+  "IMOCS Optimization",
+  "Frame Processing",
+  "Save Output",
 ];
 
 type StepState = "pending" | "active" | "completed" | "failed";
 
-// ─── Before/After slider ──────────────────────────────────────────────────────
+// Statuses that mean preprocessing already ran — no need to re-run
+const ALREADY_PREPROCESSED = new Set([
+  "preprocessed", "detecting", "detected", "reporting", "completed",
+]);
 
-function BeforeAfterSlider({ original, processed, label }: {
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+// ─── Before/After toggle ──────────────────────────────────────────────────────
+
+function BeforeAfterToggle({ original, processed, label }: {
   original: string;
   processed: string;
   label: string;
 }) {
-  const [sliderPos, setSliderPos] = useState(50); // 0-100
-  const [dragging, setDragging] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  function calcPos(clientX: number) {
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
-    setSliderPos((x / rect.width) * 100);
-  }
-
-  const onMouseMove = (e: MouseEvent) => { if (dragging) calcPos(e.clientX); };
-  const onMouseUp = () => setDragging(false);
-  const onTouchMove = (e: TouchEvent) => { if (dragging) calcPos(e.touches[0].clientX); };
-
-  useEffect(() => {
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
-    window.addEventListener("touchmove", onTouchMove, { passive: true });
-    window.addEventListener("touchend", onMouseUp);
-    return () => {
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
-      window.removeEventListener("touchmove", onTouchMove);
-      window.removeEventListener("touchend", onMouseUp);
-    };
-  }, [dragging]);
+  const [showProcessed, setShowProcessed] = useState(false);
 
   return (
     <div className="rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
-      <div className="px-3 py-2 bg-gray-50 dark:bg-gray-900 text-xs font-medium text-gray-600 dark:text-gray-400 truncate">
-        {label}
+      {/* Header with filename + toggle */}
+      <div className="px-3 py-2 bg-gray-50 dark:bg-gray-900 flex items-center justify-between gap-2">
+        <span className="text-xs font-medium text-gray-600 dark:text-gray-400 truncate">{label}</span>
+        <div className="flex items-center gap-1 shrink-0 bg-gray-200 dark:bg-gray-700 rounded-lg p-0.5">
+          <button
+            onClick={() => setShowProcessed(false)}
+            className={cn(
+              "px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all",
+              !showProcessed
+                ? "bg-white dark:bg-gray-900 text-gray-800 dark:text-white shadow-sm"
+                : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+            )}
+          >
+            Original
+          </button>
+          <button
+            onClick={() => setShowProcessed(true)}
+            className={cn(
+              "px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all",
+              showProcessed
+                ? "bg-white dark:bg-gray-900 text-gray-800 dark:text-white shadow-sm"
+                : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+            )}
+          >
+            Processed
+          </button>
+        </div>
       </div>
-      <div
-        ref={containerRef}
-        className="relative select-none cursor-col-resize overflow-hidden"
-        style={{ aspectRatio: "16/9" }}
-        onMouseDown={e => { e.preventDefault(); setDragging(true); calcPos(e.clientX); }}
-        onTouchStart={e => { setDragging(true); calcPos(e.touches[0].clientX); }}
-      >
-        {/* Processed (full background) */}
+
+      {/* Image */}
+      <div className="relative overflow-hidden bg-black" style={{ aspectRatio: "16/9" }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={original}
+          alt="Original"
+          className={cn(
+            "absolute inset-0 w-full h-full object-contain transition-opacity duration-300",
+            showProcessed ? "opacity-0" : "opacity-100"
+          )}
+          draggable={false}
+        />
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={processed}
           alt="Processed"
-          className="absolute inset-0 w-full h-full object-cover"
+          className={cn(
+            "absolute inset-0 w-full h-full object-contain transition-opacity duration-300",
+            showProcessed ? "opacity-100" : "opacity-0"
+          )}
           draggable={false}
         />
-        {/* Original (clipped left) */}
-        <div
-          className="absolute inset-0 overflow-hidden"
-          style={{ width: `${sliderPos}%` }}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={original}
-            alt="Original"
-            className="absolute inset-0 w-full h-full object-cover"
-            draggable={false}
-          />
+        <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/60 text-white text-[10px] font-semibold">
+          {showProcessed ? "PROCESSED" : "ORIGINAL"}
         </div>
-        {/* Divider line */}
-        <div
-          className="absolute top-0 bottom-0 w-0.5 bg-white shadow-lg"
-          style={{ left: `${sliderPos}%` }}
-        >
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-white shadow-md flex items-center justify-center">
-            <div className="flex gap-0.5">
-              <ChevronLeft className="w-3 h-3 text-gray-600" />
-              <ChevronRight className="w-3 h-3 text-gray-600" />
-            </div>
-          </div>
-        </div>
-        {/* Labels */}
-        <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/60 text-white text-[10px] font-semibold">ORIGINAL</div>
-        <div className="absolute top-2 right-2 px-2 py-0.5 rounded bg-black/60 text-white text-[10px] font-semibold">PROCESSED</div>
       </div>
     </div>
   );
@@ -131,11 +169,11 @@ function ClusterCard({ info }: { info: ClusterInfo }) {
         <span className="text-sm font-bold text-gray-800 dark:text-white">Cluster {info.cluster_id}</span>
         <span className={cn(
           "px-2 py-0.5 rounded-full text-[11px] font-semibold",
-          info.source === "IMOCS"
+          info.clahe_params.source === "imocs" || info.clahe_params.source === "imocs_video_median"
             ? "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300"
             : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
         )}>
-          {info.source}
+          {info.clahe_params.source === "imocs_video_median" ? "IMOCS Video" : info.clahe_params.source.toUpperCase()}
         </span>
       </div>
       <div className="grid grid-cols-2 gap-2 text-xs text-gray-500 dark:text-gray-400">
@@ -145,13 +183,88 @@ function ClusterCard({ info }: { info: ClusterInfo }) {
         </div>
         <div>
           <p className="text-gray-400 dark:text-gray-500">CLAHE Clip</p>
-          <p className="font-medium text-gray-700 dark:text-gray-300">{info.clahe_clip_limit.toFixed(1)}</p>
+          <p className="font-medium text-gray-700 dark:text-gray-300">{info.clahe_params.clip_limit.toFixed(2)}</p>
         </div>
         <div className="col-span-2">
           <p className="text-gray-400 dark:text-gray-500">Tile Grid</p>
-          <p className="font-medium text-gray-700 dark:text-gray-300">{info.tile_grid_size[0]} × {info.tile_grid_size[1]}</p>
+          <p className="font-medium text-gray-700 dark:text-gray-300">
+            {info.clahe_params.tile_grid_size[0]} × {info.clahe_params.tile_grid_size[1]}
+          </p>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Step node ────────────────────────────────────────────────────────────────
+
+function StepNode({
+  label,
+  index,
+  state,
+  detail,
+  duration,
+  isLast,
+  prevCompleted,
+}: {
+  label: string;
+  index: number;
+  state: StepState;
+  detail?: string;
+  duration?: number;
+  isLast: boolean;
+  prevCompleted: boolean;
+}) {
+  return (
+    <div className="flex items-start min-w-0">
+      <div className="flex flex-col items-center gap-1.5 px-1">
+        {/* Circle */}
+        <div className={cn(
+          "w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-500",
+          state === "pending" && "border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-800",
+          state === "active" && "border-blue-500 bg-blue-50 dark:bg-blue-950/30 shadow-lg shadow-blue-500/20",
+          state === "completed" && "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30",
+          state === "failed" && "border-red-500 bg-red-50 dark:bg-red-950/30",
+        )}>
+          {state === "pending" && <span className="text-xs font-bold text-gray-400">{index + 1}</span>}
+          {state === "active" && <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />}
+          {state === "completed" && <CheckCircle2 className="w-5 h-5 text-emerald-500" />}
+          {state === "failed" && <XCircle className="w-5 h-5 text-red-500" />}
+        </div>
+
+        {/* Label */}
+        <span className={cn(
+          "text-[11px] font-medium text-center w-20 leading-tight",
+          state === "pending" && "text-gray-400",
+          state === "active" && "text-blue-600 dark:text-blue-400",
+          state === "completed" && "text-emerald-600 dark:text-emerald-400",
+          state === "failed" && "text-red-500",
+        )}>
+          {label}
+        </span>
+
+        {/* Duration */}
+        {state === "completed" && duration != null && (
+          <span className="flex items-center gap-0.5 text-[10px] text-gray-400">
+            <Clock className="w-2.5 h-2.5" />{duration.toFixed(2)}s
+          </span>
+        )}
+
+        {/* Detail */}
+        {(state === "completed" || state === "failed") && detail && (
+          <span className="text-[10px] text-gray-400 dark:text-gray-500 text-center w-24 leading-tight">
+            {detail}
+          </span>
+        )}
+      </div>
+
+      {/* Connector */}
+      {!isLast && (
+        <div className={cn(
+          "flex-shrink-0 h-0.5 w-8 mt-5 transition-colors duration-500",
+          prevCompleted ? "bg-emerald-400" : "bg-gray-200 dark:bg-gray-700"
+        )} />
+      )}
     </div>
   );
 }
@@ -162,53 +275,102 @@ export default function PreprocessPage() {
   const { job_id } = useParams<{ job_id: string }>();
   const router = useRouter();
 
-  const [stepStates, setStepStates] = useState<StepState[]>(STEPS.map(() => "pending"));
+  // Job metadata (fetched on mount)
+  const [jobMeta, setJobMeta] = useState<JobStatus | null>(null);
+  const [metaError, setMetaError] = useState<string | null>(null);
+
+  // Pipeline steps (labels change once we know input_type)
+  const [steps, setSteps] = useState<string[]>(IMAGE_STEPS);
+  const [stepStates, setStepStates] = useState<StepState[]>(IMAGE_STEPS.map(() => "pending"));
+  // Real step data from API response (populated after completion)
+  const [stepDetails, setStepDetails] = useState<PipelineStep[]>([]);
+
   const [isRunning, setIsRunning] = useState(false);
-  const [hasStarted, setHasStarted] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
-  const [preprocessResult, setPreprocessResult] = useState<PreprocessResponse | null>(null);
+  const [result, setResult] = useState<PreprocessResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Start automatically on mount
-  useEffect(() => {
-    if (!isRunning && !hasStarted) {
-      runPreprocessing();
-    }
-  }, []);
+  const hasStarted = useRef(false);
 
-  async function runPreprocessing() {
+  // ── Fetch job status on mount ────────────────────────────────────────────
+  useEffect(() => {
+    async function fetchJob() {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(job_id)}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data: JobStatus = await res.json();
+
+        const pipelineSteps = data.input_type === "video" ? VIDEO_STEPS : IMAGE_STEPS;
+        const alreadyDone = ALREADY_PREPROCESSED.has(data.status);
+
+        // Set ref BEFORE setJobMeta so the auto-start effect sees it as guarded
+        if (alreadyDone) hasStarted.current = true;
+
+        setJobMeta(data);
+        setSteps(pipelineSteps);
+        setStepStates(pipelineSteps.map(() => alreadyDone ? "completed" : "pending"));
+        if (alreadyDone) setIsComplete(true);
+      } catch (e) {
+        setMetaError(e instanceof Error ? e.message : "Failed to load job");
+      }
+    }
+    fetchJob();
+  }, [job_id]);
+
+  // ── Auto-start once job metadata is loaded (only for validated jobs) ─────
+  useEffect(() => {
+    if (jobMeta && !hasStarted.current && !ALREADY_PREPROCESSED.has(jobMeta.status)) {
+      runPreprocessing(jobMeta.input_type);
+    }
+  }, [jobMeta]);
+
+  async function runPreprocessing(inputType?: "image" | "video") {
+    if (hasStarted.current) return;
+    hasStarted.current = true;
+
+    const pipelineSteps = (inputType ?? jobMeta?.input_type) === "video" ? VIDEO_STEPS : IMAGE_STEPS;
+    setSteps(pipelineSteps);
+    setStepStates(pipelineSteps.map(() => "pending"));
     setIsRunning(true);
-    setHasStarted(true);
     setError(null);
     setIsComplete(false);
-    setStepStates(STEPS.map(() => "pending"));
+    setStepDetails([]);
 
-    // Simulate step progression while the request is in-flight
-    const stepDelay = 1800; // ms per step
-    let currentStep = 0;
+    // Simulate step advancement while request is in-flight
+    // Steps advance every 1.5s — purely visual until response arrives
+    const STEP_INTERVAL_MS = 1500;
+    let simIdx = 0;
     const interval = setInterval(() => {
-      if (currentStep < STEPS.length) {
-        const idx = currentStep;
+      if (simIdx < pipelineSteps.length) {
+        const idx = simIdx;
         setStepStates(prev => {
           const next = [...prev];
           if (idx > 0) next[idx - 1] = "completed";
           next[idx] = "active";
           return next;
         });
-        currentStep++;
+        simIdx++;
       }
-    }, stepDelay);
+    }, STEP_INTERVAL_MS);
 
     try {
-      const result = await preprocessJob(job_id);
+      // Cast through unknown because api.ts PreprocessResponse type is outdated
+      const data = await preprocessJob(job_id) as unknown as PreprocessResult;
       clearInterval(interval);
-      setStepStates(STEPS.map(() => "completed"));
-      setPreprocessResult(result);
+
+      // Replace simulated states with real step outcomes from the API
+      if (data.pipeline_steps?.length) {
+        setStepDetails(data.pipeline_steps);
+        setStepStates(data.pipeline_steps.map(s => s.status === "completed" ? "completed" : "failed"));
+      } else {
+        setStepStates(pipelineSteps.map(() => "completed"));
+      }
+
+      setResult(data);
       setIsComplete(true);
     } catch (e: unknown) {
       clearInterval(interval);
       const msg = e instanceof Error ? e.message : "Preprocessing failed";
-      // Mark the current active step as failed
       setStepStates(prev => {
         const next = [...prev];
         const activeIdx = next.findIndex(s => s === "active");
@@ -221,7 +383,19 @@ export default function PreprocessPage() {
     }
   }
 
-  const filenames = preprocessResult?.filenames ?? [];
+  // Build before/after image entries.
+  // FastAPI is mounted at app/database/jobs → URL: /static/{job_id}/{subfolder}/{file_id}.{ext}
+  const imageFiles = jobMeta?.files
+    .filter(f => f.status !== "invalid")
+    .map(f => {
+      const ext = f.filename.split(".").pop() ?? "jpg";
+      const storedName = `${f.file_id}.${ext}`;
+      return {
+        label: f.filename,
+        original: `${API_BASE_URL}/static/${encodeURIComponent(job_id)}/original/${storedName}`,
+        processed: `${API_BASE_URL}/static/${encodeURIComponent(job_id)}/processed/${storedName}`,
+      };
+    }) ?? [];
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#0a0a0a]">
@@ -239,76 +413,58 @@ export default function PreprocessPage() {
             <h1 className="text-base font-bold text-gray-900 dark:text-white">Preprocessing Pipeline</h1>
             <p className="text-xs text-gray-400 font-mono">Job: {job_id}</p>
           </div>
+          {jobMeta && (
+            <span className="ml-auto text-xs px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 font-medium capitalize">
+              {jobMeta.input_type} pipeline
+            </span>
+          )}
         </div>
       </header>
 
       <main className="max-w-6xl mx-auto px-6 py-8 space-y-8">
 
+        {/* Meta error */}
+        {metaError && (
+          <div className="flex items-center gap-2 p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl text-sm text-amber-700 dark:text-amber-300">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            Could not load job info: {metaError}. Attempting preprocessing anyway…
+          </div>
+        )}
+
         {/* ── Section 1: Progress Stepper ───────────────────────────── */}
         <div className="bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm">
-          <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-6">Pipeline Progress</h2>
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              Pipeline Progress
+            </h2>
+            {result && (
+              <span className="text-xs text-gray-400">
+                {result.total_processed} file{result.total_processed !== 1 ? "s" : ""} processed
+              </span>
+            )}
+          </div>
 
           {/* Stepper */}
           <div className="flex items-start gap-0 overflow-x-auto pb-2">
-            {STEPS.map((step, i) => {
-              const state = stepStates[i];
+            {steps.map((label, i) => {
+              const real = stepDetails.find(s => s.step === i + 1);
               return (
-                <div key={i} className="flex items-center min-w-0">
-                  {/* Step node */}
-                  <div className="flex flex-col items-center gap-2 px-1">
-                    <div className={cn(
-                      "w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all",
-                      state === "pending" && "border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-800",
-                      state === "active" && "border-blue-500 bg-blue-50 dark:bg-blue-950/30 shadow-lg shadow-blue-500/20",
-                      state === "completed" && "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30",
-                      state === "failed" && "border-red-500 bg-red-50 dark:bg-red-950/30",
-                    )}>
-                      {state === "pending" && (
-                        <span className="text-xs font-bold text-gray-400">{i + 1}</span>
-                      )}
-                      {state === "active" && (
-                        <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
-                      )}
-                      {state === "completed" && (
-                        <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-                      )}
-                      {state === "failed" && (
-                        <XCircle className="w-5 h-5 text-red-500" />
-                      )}
-                    </div>
-                    <span className={cn(
-                      "text-[11px] font-medium text-center w-20 leading-tight",
-                      state === "pending" && "text-gray-400",
-                      state === "active" && "text-blue-600 dark:text-blue-400",
-                      state === "completed" && "text-emerald-600 dark:text-emerald-400",
-                      state === "failed" && "text-red-500",
-                    )}>{step}</span>
-                  </div>
-                  {/* Connector */}
-                  {i < STEPS.length - 1 && (
-                    <div className={cn(
-                      "flex-shrink-0 h-0.5 w-8 mt-[-18px] transition-colors",
-                      stepStates[i] === "completed" ? "bg-emerald-400" : "bg-gray-200 dark:bg-gray-700"
-                    )} />
-                  )}
-                </div>
+                <StepNode
+                  key={i}
+                  label={real?.name ?? label}
+                  index={i}
+                  state={stepStates[i]}
+                  detail={real?.detail}
+                  duration={real?.duration_sec}
+                  isLast={i === steps.length - 1}
+                  prevCompleted={i > 0 && stepStates[i - 1] === "completed"}
+                />
               );
             })}
           </div>
 
-          {/* Run button */}
-          {!hasStarted && (
-            <button
-              id="btn-run-preprocessing"
-              onClick={runPreprocessing}
-              className="mt-6 flex items-center gap-2 px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition"
-            >
-              <Play className="w-4 h-4" /> Run Preprocessing
-            </button>
-          )}
-
           {isRunning && (
-            <div className="mt-4 flex items-center gap-2 text-sm text-blue-500">
+            <div className="mt-5 flex items-center gap-2 text-sm text-blue-500">
               <Loader2 className="w-4 h-4 animate-spin" />
               Processing… please wait
             </div>
@@ -319,7 +475,10 @@ export default function PreprocessPage() {
               <AlertCircle className="w-4 h-4 shrink-0" />
               {error}
               <button
-                onClick={runPreprocessing}
+                onClick={() => {
+                  hasStarted.current = false;
+                  runPreprocessing(jobMeta?.input_type);
+                }}
                 className="ml-auto text-xs underline hover:no-underline"
               >
                 Retry
@@ -329,16 +488,16 @@ export default function PreprocessPage() {
         </div>
 
         {/* ── Section 2: Cluster Info + Before/After ─────────────── */}
-        {isComplete && preprocessResult && (
+        {isComplete && (
           <>
-            {/* Cluster Cards */}
-            {preprocessResult.cluster_info.length > 0 && (
+            {/* Cluster Cards — only available when pipeline just ran */}
+            {result && result.cluster_info.length > 0 && (
               <div>
                 <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">
-                  Cluster Summary ({preprocessResult.cluster_info.length} cluster{preprocessResult.cluster_info.length !== 1 ? "s" : ""})
+                  Cluster Summary ({result.cluster_info.length} cluster{result.cluster_info.length !== 1 ? "s" : ""})
                 </h2>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                  {preprocessResult.cluster_info.map(c => (
+                  {result.cluster_info.map(c => (
                     <ClusterCard key={c.cluster_id} info={c} />
                   ))}
                 </div>
@@ -346,7 +505,7 @@ export default function PreprocessPage() {
             )}
 
             {/* Before / After Comparisons */}
-            {filenames.length > 0 && (
+            {imageFiles.length > 0 && (
               <div>
                 <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">
                   Before / After Comparison
@@ -355,12 +514,12 @@ export default function PreprocessPage() {
                   </span>
                 </h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {filenames.map(filename => (
-                    <BeforeAfterSlider
-                      key={filename}
-                      label={filename}
-                      original={getOriginalImageUrl(job_id, filename)}
-                      processed={getProcessedImageUrl(job_id, filename)}
+                  {imageFiles.map(({ label, original, processed }) => (
+                    <BeforeAfterToggle
+                      key={label}
+                      label={label}
+                      original={original}
+                      processed={processed}
                     />
                   ))}
                 </div>
