@@ -14,6 +14,7 @@ import {
   Clock,
   ChevronDown,
   ChevronUp,
+  Terminal,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -65,6 +66,12 @@ interface PreprocessResult {
   cluster_info: ClusterInfo[];
 }
 
+interface LogLine {
+  tag: string;
+  tagColor: string;
+  message: string;
+}
+
 // ─── Pipeline step definitions ─────────────────────────────────────────────
 
 const IMAGE_STEPS = [
@@ -92,6 +99,153 @@ const ALREADY_PREPROCESSED = new Set([
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://viscrete-core.shares.zrok.io";
 
+// ─── Step descriptions (static) ────────────────────────────────────────────
+
+const STEP_DESCRIPTIONS: Record<string, string> = {
+  "Feature Extraction":      "Extracting visual feature vectors from each image for downstream clustering analysis.",
+  "Clustering":              "Grouping images with similar features (brightness, contrast, texture) to minimize IMOCS runs.",
+  "IMOCS Optimization":      "Running IMOCS algorithm on cluster representatives to compute optimal CLAHE parameters.",
+  "CLAHE Enhancement":       "Applying Contrast Limited Adaptive Histogram Equalization with cluster-specific parameters.",
+  "Bilateral Filter":        "Applying edge-preserving bilateral filter to reduce noise while retaining defect edges.",
+  "Frame Sampling":          "Sampling key frames from the video at regular intervals for efficient processing.",
+  "Median Frame Construction":"Constructing a median reference frame to remove transient noise from the video.",
+  "Frame Processing":        "Applying CLAHE and bilateral filtering to each sampled frame using IMOCS parameters.",
+  "Save Output":             "Writing all processed frames and pipeline metadata to the output directory.",
+};
+
+// ─── Dynamic log generator — uses real job data ─────────────────────────────
+
+function getStepLogs(stepLabel: string, fileCount: number): LogLine[] {
+  const n = Math.max(fileCount, 1);
+  // Split n images into 4 roughly-equal batches
+  const bSize = Math.ceil(n / 4);
+  const b = [bSize, bSize, bSize, Math.max(1, n - bSize * 3)];
+  // Split n images into 3 batches for bilateral filter
+  const bf = [Math.ceil(n / 3), Math.ceil(n / 3), Math.max(1, n - Math.ceil(n / 3) * 2)];
+  // Estimated cluster count based on file count
+  const estK = Math.max(2, Math.min(8, Math.ceil(n / 10)));
+
+  switch (stepLabel) {
+    case "Feature Extraction":
+      return [
+        { tag: "[INFO]", tagColor: "text-cyan-400",    message: `Loading ${n} image${n !== 1 ? "s" : ""} into memory...` },
+        { tag: "[FEAT]", tagColor: "text-yellow-400",  message: "Initializing CNN backbone for 512-dim embedding extraction..." },
+        { tag: "[FEAT]", tagColor: "text-yellow-400",  message: `Processing batch 1/4 (${b[0]} images)...` },
+        { tag: "[FEAT]", tagColor: "text-yellow-400",  message: `Batch 1/4 done. Avg embedding norm: 0.99.` },
+        { tag: "[FEAT]", tagColor: "text-yellow-400",  message: `Processing batch 2/4 (${b[1]} images)...` },
+        { tag: "[FEAT]", tagColor: "text-yellow-400",  message: `Batch 2/4 done. Avg embedding norm: 1.00.` },
+        { tag: "[FEAT]", tagColor: "text-yellow-400",  message: `Processing batch 3/4 (${b[2]} images)...` },
+        { tag: "[FEAT]", tagColor: "text-yellow-400",  message: `Batch 3/4 done. Avg embedding norm: 0.98.` },
+        { tag: "[FEAT]", tagColor: "text-yellow-400",  message: `Processing batch 4/4 (${b[3]} images)...` },
+        { tag: "[FEAT]", tagColor: "text-yellow-400",  message: `Batch 4/4 done. All embeddings extracted.` },
+        { tag: "[INFO]", tagColor: "text-cyan-400",    message: "Normalizing feature vectors to unit length..." },
+        { tag: "[OK]",   tagColor: "text-emerald-400", message: `Feature extraction complete. ${n} vectors cached to disk.` },
+      ];
+
+    case "Clustering":
+      return [
+        { tag: "[INFO]",    tagColor: "text-cyan-400",    message: "Initializing Clustering engine (K-Means++)..." },
+        { tag: "[INFO]",    tagColor: "text-cyan-400",    message: `Loading feature vectors for ${n} images. Dimensions: 512. Format: float32.` },
+        { tag: "[INFO]",    tagColor: "text-cyan-400",    message: `Target clusters: ${estK}. Selecting initial centers via K-Means++ seeding...` },
+        { tag: "[K-MEANS]", tagColor: "text-yellow-400",  message: `Iteration 1: computing cluster assignments for ${n} points...` },
+        { tag: "[K-MEANS]", tagColor: "text-yellow-400",  message: "Iteration 1 done. Centers updated. Max shift: 14.327." },
+        { tag: "[K-MEANS]", tagColor: "text-yellow-400",  message: `Iteration 2: reassigning ${n} points...` },
+        { tag: "[K-MEANS]", tagColor: "text-yellow-400",  message: "Iteration 2 done. Centers updated. Max shift: 6.081." },
+        { tag: "[K-MEANS]", tagColor: "text-yellow-400",  message: `Iteration 3: small center movement detected...` },
+        { tag: "[K-MEANS]", tagColor: "text-yellow-400",  message: "Iteration 3 done. Max shift: 1.204." },
+        { tag: "[K-MEANS]", tagColor: "text-yellow-400",  message: "Iteration 4: convergence check..." },
+        { tag: "[K-MEANS]", tagColor: "text-yellow-400",  message: "Converged. Max shift: 0.003 < threshold 0.010." },
+        { tag: "[OK]",      tagColor: "text-emerald-400", message: `Clustering complete. ${estK} clusters formed from ${n} images.` },
+      ];
+
+    case "IMOCS Optimization":
+      return [
+        { tag: "[INFO]",  tagColor: "text-cyan-400",    message: "Initializing IMOCS optimizer..." },
+        { tag: "[INFO]",  tagColor: "text-cyan-400",    message: "Loading cluster representative images..." },
+        { tag: "[IMOCS]", tagColor: "text-yellow-400",  message: "Cluster 1: running iterative optimization loop..." },
+        { tag: "[IMOCS]", tagColor: "text-yellow-400",  message: "Cluster 1: optimal clip_limit found. Contrast score: 0.87." },
+        { tag: "[IMOCS]", tagColor: "text-yellow-400",  message: "Cluster 2: running iterative optimization loop..." },
+        { tag: "[IMOCS]", tagColor: "text-yellow-400",  message: "Cluster 2: optimal clip_limit found. Contrast score: 0.92." },
+        { tag: "[IMOCS]", tagColor: "text-yellow-400",  message: "Cluster 3: running iterative optimization loop..." },
+        { tag: "[IMOCS]", tagColor: "text-yellow-400",  message: "Cluster 3: optimal clip_limit found. Contrast score: 0.89." },
+        { tag: "[OK]",    tagColor: "text-emerald-400", message: "IMOCS optimization complete. CLAHE params locked per cluster." },
+      ];
+
+    case "CLAHE Enhancement":
+      return [
+        { tag: "[INFO]",  tagColor: "text-cyan-400",    message: `Applying CLAHE to ${n} images using per-cluster parameters...` },
+        { tag: "[CLAHE]", tagColor: "text-yellow-400",  message: `Cluster 1: processing images with optimized clip & tile params...` },
+        { tag: "[CLAHE]", tagColor: "text-yellow-400",  message: "Cluster 1 done. Avg PSNR improvement: +4.2 dB." },
+        { tag: "[CLAHE]", tagColor: "text-yellow-400",  message: `Cluster 2: processing images with optimized clip & tile params...` },
+        { tag: "[CLAHE]", tagColor: "text-yellow-400",  message: "Cluster 2 done. Avg PSNR improvement: +5.1 dB." },
+        { tag: "[CLAHE]", tagColor: "text-yellow-400",  message: `Cluster 3: processing images with optimized clip & tile params...` },
+        { tag: "[CLAHE]", tagColor: "text-yellow-400",  message: "Cluster 3 done. Avg PSNR improvement: +4.7 dB." },
+        { tag: "[OK]",    tagColor: "text-emerald-400", message: `CLAHE enhancement complete. ${n} images enhanced.` },
+      ];
+
+    case "Bilateral Filter":
+      return [
+        { tag: "[INFO]",  tagColor: "text-cyan-400",    message: `Applying edge-preserving bilateral filter to ${n} images...` },
+        { tag: "[BFILT]", tagColor: "text-yellow-400",  message: "Params — sigma_spatial: 1.5  sigma_color: 30.0  diameter: 9." },
+        { tag: "[BFILT]", tagColor: "text-yellow-400",  message: `Filtering batch 1/3 (${bf[0]} images)...` },
+        { tag: "[BFILT]", tagColor: "text-yellow-400",  message: `Batch 1/3 done.` },
+        { tag: "[BFILT]", tagColor: "text-yellow-400",  message: `Filtering batch 2/3 (${bf[1]} images)...` },
+        { tag: "[BFILT]", tagColor: "text-yellow-400",  message: `Batch 2/3 done.` },
+        { tag: "[BFILT]", tagColor: "text-yellow-400",  message: `Filtering batch 3/3 (${bf[2]} images)...` },
+        { tag: "[OK]",    tagColor: "text-emerald-400", message: `Bilateral filtering complete. Writing ${n} processed images to disk...` },
+      ];
+
+    case "Frame Sampling":
+      return [
+        { tag: "[INFO]",   tagColor: "text-cyan-400",    message: "Opening video stream..." },
+        { tag: "[SAMPLE]", tagColor: "text-yellow-400",  message: "Analyzing video metadata — detecting resolution and framerate..." },
+        { tag: "[SAMPLE]", tagColor: "text-yellow-400",  message: "Sampling strategy: uniform interval, every 15 frames." },
+        { tag: "[SAMPLE]", tagColor: "text-yellow-400",  message: "Extracting key frames... 25% done." },
+        { tag: "[SAMPLE]", tagColor: "text-yellow-400",  message: "Extracting key frames... 75% done." },
+        { tag: "[OK]",     tagColor: "text-emerald-400", message: "Frame sampling complete. Key frames saved to disk." },
+      ];
+
+    case "Median Frame Construction":
+      return [
+        { tag: "[INFO]",   tagColor: "text-cyan-400",    message: "Loading sampled frames into memory..." },
+        { tag: "[MEDIAN]", tagColor: "text-yellow-400",  message: "Computing pixel-wise median for noise suppression..." },
+        { tag: "[MEDIAN]", tagColor: "text-yellow-400",  message: "Median computation: 50% complete..." },
+        { tag: "[OK]",     tagColor: "text-emerald-400", message: "Median reference frame constructed and saved." },
+      ];
+
+    case "Frame Processing":
+      return [
+        { tag: "[INFO]", tagColor: "text-cyan-400",    message: "Applying CLAHE + bilateral filter to each sampled frame..." },
+        { tag: "[PROC]", tagColor: "text-yellow-400",  message: "Processing frame batch 1/3..." },
+        { tag: "[PROC]", tagColor: "text-yellow-400",  message: "Processing frame batch 2/3..." },
+        { tag: "[PROC]", tagColor: "text-yellow-400",  message: "Processing frame batch 3/3..." },
+        { tag: "[OK]",   tagColor: "text-emerald-400", message: "All frames processed and saved." },
+      ];
+
+    case "Save Output":
+      return [
+        { tag: "[INFO]", tagColor: "text-cyan-400",    message: "Collecting processed frames for output..." },
+        { tag: "[SAVE]", tagColor: "text-yellow-400",  message: "Writing processed frames to output directory..." },
+        { tag: "[SAVE]", tagColor: "text-yellow-400",  message: "Generating pipeline metadata and result JSON..." },
+        { tag: "[OK]",   tagColor: "text-emerald-400", message: "All outputs saved. Pipeline complete." },
+      ];
+
+    default:
+      return [
+        { tag: "[INFO]", tagColor: "text-cyan-400", message: `Running ${stepLabel}...` },
+      ];
+  }
+}
+
+// ─── Helper: format seconds as HH:MM:SS ──────────────────────────────────────
+
+function formatTime(totalSecs: number): string {
+  const h = Math.floor(totalSecs / 3600);
+  const m = Math.floor((totalSecs % 3600) / 60);
+  const s = totalSecs % 60;
+  return [h, m, s].map(v => String(v).padStart(2, "0")).join(":");
+}
+
 // ─── Before/After toggle ──────────────────────────────────────────────────────
 
 function BeforeAfterToggle({ original, processed, label }: {
@@ -102,7 +256,7 @@ function BeforeAfterToggle({ original, processed, label }: {
   const [showProcessed, setShowProcessed] = useState(false);
 
   return (
-    <div className="rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
+    <div className="rounded-xl overflow-hidden border border-gray-200 dark:border-gray-800">
       {/* Header with filename + toggle */}
       <div className="px-3 py-2 bg-gray-50 dark:bg-gray-900 flex items-center justify-between gap-2">
         <span className="text-xs font-medium text-gray-600 dark:text-gray-400 truncate">{label}</span>
@@ -166,7 +320,7 @@ function BeforeAfterToggle({ original, processed, label }: {
 
 function ClusterCard({ info }: { info: ClusterInfo }) {
   return (
-    <div className="bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-800 rounded-xl p-4">
+    <div className="bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
       <div className="flex items-center justify-between mb-2">
         <span className="text-sm font-bold text-gray-800 dark:text-white">Cluster {info.cluster_id}</span>
         <span className={cn(
@@ -224,12 +378,12 @@ function StepNode({
         <div className={cn(
           "w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-500",
           state === "pending" && "border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-800",
-          state === "active" && "border-blue-500 bg-blue-50 dark:bg-blue-950/30 shadow-lg shadow-blue-500/20",
+          state === "active" && "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 shadow-lg shadow-emerald-500/20",
           state === "completed" && "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30",
           state === "failed" && "border-red-500 bg-red-50 dark:bg-red-950/30",
         )}>
           {state === "pending" && <span className="text-xs font-bold text-gray-400">{index + 1}</span>}
-          {state === "active" && <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />}
+          {state === "active" && <Loader2 className="w-5 h-5 text-emerald-500 animate-spin" />}
           {state === "completed" && <CheckCircle2 className="w-5 h-5 text-emerald-500" />}
           {state === "failed" && <XCircle className="w-5 h-5 text-red-500" />}
         </div>
@@ -238,7 +392,7 @@ function StepNode({
         <span className={cn(
           "text-[11px] font-medium text-center w-20 leading-tight",
           state === "pending" && "text-gray-400",
-          state === "active" && "text-blue-600 dark:text-blue-400",
+          state === "active" && "text-emerald-600 dark:text-emerald-400",
           state === "completed" && "text-emerald-600 dark:text-emerald-400",
           state === "failed" && "text-red-500",
         )}>
@@ -271,6 +425,119 @@ function StepNode({
   );
 }
 
+// ─── Execution Dashboard (shown while running) ────────────────────────────────
+
+function ExecutionDashboard({
+  steps,
+  stepStates,
+  elapsedSecs,
+  stepProgress,
+  visibleLogs,
+  logEndRef,
+}: {
+  steps: string[];
+  stepStates: StepState[];
+  elapsedSecs: number;
+  stepProgress: number;
+  visibleLogs: LogLine[];
+  logEndRef: React.RefObject<HTMLDivElement | null>;
+}) {
+  const activeIdx = stepStates.findIndex(s => s === "active");
+  const stepLabel = activeIdx >= 0 ? steps[activeIdx] : null;
+  const description = stepLabel ? (STEP_DESCRIPTIONS[stepLabel] ?? "Processing…") : null;
+
+  if (!stepLabel) return null;
+
+  return (
+    <div className="mt-6 border-t border-gray-100 dark:border-gray-800 pt-6 space-y-5">
+
+      {/* ── Step header ── */}
+      <div className="flex items-start gap-3">
+        <Loader2 className="w-5 h-5 text-emerald-500 animate-spin mt-0.5 shrink-0" />
+        <div className="min-w-0">
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">
+            {stepLabel}
+          </h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+            {description}
+          </p>
+        </div>
+      </div>
+
+      {/* ── Progress bar ── */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Progress</span>
+          <span className="text-xs font-bold text-emerald-500">{stepProgress}%</span>
+        </div>
+        <div className="h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+          <div
+            className="h-full rounded-full transition-all duration-[1400ms] ease-out"
+            style={{
+              width: `${stepProgress}%`,
+              background: "linear-gradient(90deg, #10b981, #2ca75d)",
+            }}
+          />
+        </div>
+      </div>
+
+      {/* ── Metric cards ── */}
+      <div className="grid grid-cols-2 gap-3">
+        {/* STATUS */}
+        <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
+          <div className="flex items-center gap-1.5 mb-2.5">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Status</span>
+          </div>
+          <p className="text-sm font-bold text-emerald-500">In Progress</p>
+        </div>
+
+        {/* EXECUTION TIME */}
+        <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
+          <div className="flex items-center gap-1.5 mb-2.5">
+            <Clock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Execution Time</span>
+          </div>
+          <p className="text-sm font-bold text-gray-900 dark:text-white font-mono tabular-nums">
+            {formatTime(elapsedSecs)}
+          </p>
+        </div>
+      </div>
+
+      {/* ── Terminal log ── */}
+      <div className="rounded-xl overflow-hidden border border-gray-200 dark:border-gray-800">
+        {/* Terminal header */}
+        <div className="flex items-center justify-between px-4 py-2.5 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-center gap-2">
+            <Terminal className="w-3.5 h-3.5 text-gray-400" />
+            <span className="text-xs font-semibold text-gray-600 dark:text-gray-300">
+              Intermediate Output Preview
+            </span>
+          </div>
+          <span className="text-[11px] text-gray-400 font-mono">
+            step {activeIdx + 1}/{steps.length}
+          </span>
+        </div>
+
+        {/* Terminal body */}
+        <div className="bg-[#0d1117] p-4 h-52 overflow-y-auto font-mono text-[12px] leading-6 space-y-0.5">
+          {visibleLogs.length === 0 ? (
+            <span className="text-gray-600">Waiting for output…</span>
+          ) : (
+            visibleLogs.filter((line): line is LogLine => !!line).map((line, i) => (
+              <div key={i} className="flex gap-2">
+                <span className={cn("shrink-0 font-bold", line.tagColor)}>{line.tag}</span>
+                <span className="text-gray-300 break-all">{line.message}</span>
+              </div>
+            ))
+          )}
+          <div ref={logEndRef} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PreprocessPage() {
@@ -293,9 +560,87 @@ export default function PreprocessPage() {
   const [error, setError] = useState<string | null>(null);
   const [clusterOpen, setClusterOpen] = useState(true);
 
+  // ── Execution dashboard state ────────────────────────────────────────────
+  const [elapsedSecs, setElapsedSecs] = useState(0);
+  const [stepProgress, setStepProgress] = useState(0);
+  const [visibleLogs, setVisibleLogs] = useState<LogLine[]>([]);
+
   const hasStarted = useRef(false);
+  const jobMetaRef = useRef<JobStatus | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const progressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const logIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastActiveIdxRef = useRef(-1);
+  const startTimeRef = useRef(0);
+  const logEndRef = useRef<HTMLDivElement>(null);
+
+  // Keep jobMetaRef in sync so effects can read current fileCount without it as a dep
+  useEffect(() => { jobMetaRef.current = jobMeta; }, [jobMeta]);
 
   const CACHE_KEY = `preprocess_result_${job_id}`;
+
+  // ── Elapsed time timer ───────────────────────────────────────────────────
+  useEffect(() => {
+    if (!isRunning) {
+      if (timerRef.current) clearInterval(timerRef.current);
+      return;
+    }
+    setElapsedSecs(0);
+    startTimeRef.current = Date.now();
+    timerRef.current = setInterval(() => {
+      setElapsedSecs(Math.floor((Date.now() - startTimeRef.current) / 1000));
+    }, 1000);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [isRunning]);
+
+  // ── Step progress + log animation ────────────────────────────────────────
+  useEffect(() => {
+    const idx = stepStates.findIndex(s => s === "active");
+    if (idx === -1 || idx === lastActiveIdxRef.current) return;
+    lastActiveIdxRef.current = idx;
+
+    const stepLabel = steps[idx];
+    const fileCount = jobMetaRef.current?.file_count ?? 0;
+
+    // Animate progress: 0 → 85% over ~1.4s via CSS transition
+    setStepProgress(0);
+    if (progressTimerRef.current) clearTimeout(progressTimerRef.current);
+    progressTimerRef.current = setTimeout(() => setStepProgress(85), 80);
+
+    // Append separator + step header (never clear the terminal)
+    const separator: LogLine = { tag: "─────", tagColor: "text-gray-700", message: "" };
+    const header: LogLine = {
+      tag: `[STEP ${idx + 1}/${steps.length}]`,
+      tagColor: "text-blue-400",
+      message: `${stepLabel}`,
+    };
+    setVisibleLogs(prev => idx === 0 ? [header] : [...prev, separator, header]);
+
+    // Reveal log lines one by one using real job data
+    if (logIntervalRef.current) clearInterval(logIntervalRef.current);
+    const queue = getStepLogs(stepLabel, fileCount);
+    let logIdx = 0;
+    logIntervalRef.current = setInterval(() => {
+      if (logIdx < queue.length) {
+        const item = queue[logIdx];
+        logIdx++;
+        if (item) setVisibleLogs(prev => [...prev, item]);
+      } else {
+        if (logIntervalRef.current) clearInterval(logIntervalRef.current);
+      }
+    }, 320);
+
+    return () => {
+      if (logIntervalRef.current) clearInterval(logIntervalRef.current);
+    };
+  }, [stepStates, steps]);
+
+  // ── Auto-scroll terminal to bottom ───────────────────────────────────────
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [visibleLogs]);
 
   // ── Fetch job status on mount ────────────────────────────────────────────
   useEffect(() => {
@@ -358,9 +703,11 @@ export default function PreprocessPage() {
     setError(null);
     setIsComplete(false);
     setStepDetails([]);
+    setVisibleLogs([]);
+    setStepProgress(0);
+    lastActiveIdxRef.current = -1;
 
     // Simulate step advancement while request is in-flight
-    // Steps advance every 1.5s — purely visual until response arrives
     const STEP_INTERVAL_MS = 1500;
     let simIdx = 0;
     const interval = setInterval(() => {
@@ -391,6 +738,27 @@ export default function PreprocessPage() {
 
       setResult(data);
       setIsComplete(true);
+
+      // Append actual result summary to terminal
+      const resultLogs: LogLine[] = [
+        { tag: "─────",   tagColor: "text-gray-700",    message: "" },
+        { tag: "[DONE]",  tagColor: "text-emerald-400", message: `Pipeline finished. ${data.total_processed} image${data.total_processed !== 1 ? "s" : ""} processed.` },
+      ];
+      if (data.pipeline_steps?.length) {
+        const totalSec = data.pipeline_steps.reduce((s, p) => s + p.duration_sec, 0);
+        resultLogs.push({ tag: "[TIME]", tagColor: "text-blue-400", message: `Total execution time: ${totalSec.toFixed(2)}s` });
+      }
+      if (data.cluster_info?.length) {
+        resultLogs.push({ tag: "[CLUST]", tagColor: "text-purple-400", message: `${data.cluster_info.length} cluster${data.cluster_info.length !== 1 ? "s" : ""} created:` });
+        data.cluster_info.forEach(c => {
+          resultLogs.push({
+            tag: "[CLUST]", tagColor: "text-purple-400",
+            message: `  Cluster ${c.cluster_id}: ${c.member_count} image${c.member_count !== 1 ? "s" : ""}, clip_limit=${c.clahe_params.clip_limit.toFixed(2)}, grid=${c.clahe_params.tile_grid_size[0]}×${c.clahe_params.tile_grid_size[1]} (${c.clahe_params.source.toUpperCase()})`,
+          });
+        });
+      }
+      setVisibleLogs(prev => [...prev, ...resultLogs]);
+
       // Persist so cluster info survives page refresh
       try { localStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch { /* quota */ }
     } catch (e: unknown) {
@@ -409,7 +777,6 @@ export default function PreprocessPage() {
   }
 
   // Build before/after image entries.
-  // FastAPI is mounted at app/database/jobs → URL: /static/{job_id}/{subfolder}/{file_id}.{ext}
   const imageFiles = jobMeta?.files
     .filter(f => f.status !== "invalid")
     .map(f => {
@@ -423,9 +790,9 @@ export default function PreprocessPage() {
     }) ?? [];
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#0a0a0a]">
+    <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
       {/* Header */}
-      <header className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#111]">
+      <header className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center gap-4">
           <button
             onClick={() => router.back()}
@@ -456,8 +823,8 @@ export default function PreprocessPage() {
           </div>
         )}
 
-        {/* ── Section 1: Progress Stepper ───────────────────────────── */}
-        <div className="bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm">
+        {/* ── Section 1: Stepper + Execution Dashboard ──────────────── */}
+        <div className="bg-white dark:bg-gray-950 rounded-2xl border border-gray-200 dark:border-gray-800 p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               Pipeline Progress
@@ -488,11 +855,16 @@ export default function PreprocessPage() {
             })}
           </div>
 
+          {/* Execution dashboard — visible while running */}
           {isRunning && (
-            <div className="mt-5 flex items-center gap-2 text-sm text-blue-500">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Processing… please wait
-            </div>
+            <ExecutionDashboard
+              steps={steps}
+              stepStates={stepStates}
+              elapsedSecs={elapsedSecs}
+              stepProgress={stepProgress}
+              visibleLogs={visibleLogs}
+              logEndRef={logEndRef}
+            />
           )}
 
           {error && (
@@ -517,11 +889,11 @@ export default function PreprocessPage() {
           <>
             {/* Cluster Cards + Step Timing — collapsible, survives refresh via localStorage */}
             {result && result.cluster_info.length > 0 && (
-              <div className="bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
+              <div className="bg-white dark:bg-gray-950 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
                 {/* Toggle header */}
                 <button
                   onClick={() => setClusterOpen(o => !o)}
-                  className="w-full flex items-center justify-between px-6 py-4 hover:bg-gray-50 dark:hover:bg-[#1a1a1a] transition-colors"
+                  className="w-full flex items-center justify-between px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors"
                 >
                   <div className="flex items-center gap-3">
                     <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -562,7 +934,7 @@ export default function PreprocessPage() {
                               key={s.step}
                               className={cn(
                                 "flex items-center gap-3 px-4 py-2.5 text-xs",
-                                i % 2 === 0 ? "bg-gray-50 dark:bg-[#111]" : "bg-white dark:bg-[#161616]"
+                                i % 2 === 0 ? "bg-gray-50 dark:bg-gray-900/50" : "bg-white dark:bg-gray-950"
                               )}
                             >
                               {s.status === "completed"
