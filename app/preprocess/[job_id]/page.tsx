@@ -26,7 +26,6 @@ interface FileStatusItem {
   laplacian_score: number | null;
   original_path: string | null;
   processed_path: string | null;
-  cii_score?: number | null;
 }
 
 interface JobStatus {
@@ -58,6 +57,13 @@ interface ClusterInfo {
   clahe_params: ClaheParams;
 }
 
+interface CiiScoreEntry {
+  file_id: string;
+  cii_score: number;
+  original_contrast: number;
+  processed_contrast: number;
+}
+
 interface PreprocessResult {
   job_id: string;
   status: string;
@@ -65,6 +71,7 @@ interface PreprocessResult {
   total_processed: number;
   pipeline_steps: PipelineStep[];
   cluster_info: ClusterInfo[];
+  cii_scores?: CiiScoreEntry[];
 }
 
 interface LogLine {
@@ -249,13 +256,18 @@ function formatTime(totalSecs: number): string {
 
 // ─── Before/After toggle ──────────────────────────────────────────────────────
 
-function BeforeAfterToggle({ original, processed, label, ciiScore }: {
+function BeforeAfterToggle({ original, processed, label, ciiScore, originalContrast, processedContrast }: {
   original: string;
   processed: string;
   label: string;
   ciiScore?: number | null;
+  originalContrast?: number | null;
+  processedContrast?: number | null;
 }) {
   const [showProcessed, setShowProcessed] = useState(false);
+
+  // Active contrast value changes with the toggle
+  const activeContrast = showProcessed ? processedContrast : originalContrast;
 
   return (
     <div className="rounded-xl overflow-hidden border border-gray-200 dark:border-gray-800">
@@ -263,13 +275,21 @@ function BeforeAfterToggle({ original, processed, label, ciiScore }: {
       <div className="px-3 py-2 bg-gray-50 dark:bg-gray-900 flex items-center justify-between gap-2">
         <span className="text-xs font-medium text-gray-600 dark:text-gray-400 truncate min-w-0">{label}</span>
         <div className="flex items-center gap-2 shrink-0">
-          {/* CII score badge */}
+          {/* CII badge — always visible once data is loaded */}
           {ciiScore != null && (
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
+            <div
+              className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800"
+              title={`Contrast Improvement Index\nOriginal contrast: ${originalContrast?.toFixed(6) ?? "—"}\nProcessed contrast: ${processedContrast?.toFixed(6) ?? "—"}`}
+            >
               <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wide">CII</span>
               <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 font-mono tabular-nums">
-                {ciiScore.toFixed(3)}
+                {ciiScore.toFixed(2)}
               </span>
+              {activeContrast != null && (
+                <span className="text-[10px] text-emerald-500/70 dark:text-emerald-500/60 font-mono tabular-nums">
+                  ({activeContrast.toFixed(4)})
+                </span>
+              )}
             </div>
           )}
           {/* Toggle */}
@@ -790,17 +810,23 @@ export default function PreprocessPage() {
     }
   }
 
-  // Build before/after image entries.
+  // Build before/after image entries, joining CII scores from the preprocess result.
+  const ciiByFileId = new Map(
+    (result?.cii_scores ?? []).map(e => [e.file_id, e])
+  );
   const imageFiles = jobMeta?.files
     .filter(f => f.status !== "invalid")
     .map(f => {
       const ext = f.filename.split(".").pop() ?? "jpg";
       const storedName = `${f.file_id}.${ext}`;
+      const cii = ciiByFileId.get(f.file_id) ?? null;
       return {
         label: f.filename,
         original: `${API_BASE_URL}/static/${encodeURIComponent(job_id)}/original/${storedName}`,
         processed: `${API_BASE_URL}/static/${encodeURIComponent(job_id)}/processed/${storedName}`,
-        ciiScore: f.cii_score ?? null,
+        ciiScore: cii?.cii_score ?? null,
+        originalContrast: cii?.original_contrast ?? null,
+        processedContrast: cii?.processed_contrast ?? null,
       };
     }) ?? [];
 
@@ -979,13 +1005,15 @@ export default function PreprocessPage() {
                   </span>
                 </h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {imageFiles.map(({ label, original, processed, ciiScore }) => (
+                  {imageFiles.map(({ label, original, processed, ciiScore, originalContrast, processedContrast }) => (
                     <BeforeAfterToggle
                       key={label}
                       label={label}
                       original={original}
                       processed={processed}
                       ciiScore={ciiScore}
+                      originalContrast={originalContrast}
+                      processedContrast={processedContrast}
                     />
                   ))}
                 </div>
