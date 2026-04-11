@@ -26,6 +26,7 @@ interface FileStatusItem {
   laplacian_score: number | null;
   original_path: string | null;
   processed_path: string | null;
+  cii_score?: number | null;
 }
 
 interface JobStatus {
@@ -248,41 +249,54 @@ function formatTime(totalSecs: number): string {
 
 // ─── Before/After toggle ──────────────────────────────────────────────────────
 
-function BeforeAfterToggle({ original, processed, label }: {
+function BeforeAfterToggle({ original, processed, label, ciiScore }: {
   original: string;
   processed: string;
   label: string;
+  ciiScore?: number | null;
 }) {
   const [showProcessed, setShowProcessed] = useState(false);
 
   return (
     <div className="rounded-xl overflow-hidden border border-gray-200 dark:border-gray-800">
-      {/* Header with filename + toggle */}
+      {/* Header with filename + toggle + CII */}
       <div className="px-3 py-2 bg-gray-50 dark:bg-gray-900 flex items-center justify-between gap-2">
-        <span className="text-xs font-medium text-gray-600 dark:text-gray-400 truncate">{label}</span>
-        <div className="flex items-center gap-1 shrink-0 bg-gray-200 dark:bg-gray-700 rounded-lg p-0.5">
-          <button
-            onClick={() => setShowProcessed(false)}
-            className={cn(
-              "px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all",
-              !showProcessed
-                ? "bg-white dark:bg-gray-900 text-gray-800 dark:text-white shadow-sm"
-                : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-            )}
-          >
-            Original
-          </button>
-          <button
-            onClick={() => setShowProcessed(true)}
-            className={cn(
-              "px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all",
-              showProcessed
-                ? "bg-white dark:bg-gray-900 text-gray-800 dark:text-white shadow-sm"
-                : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-            )}
-          >
-            Processed
-          </button>
+        <span className="text-xs font-medium text-gray-600 dark:text-gray-400 truncate min-w-0">{label}</span>
+        <div className="flex items-center gap-2 shrink-0">
+          {/* CII score badge */}
+          {ciiScore != null && (
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
+              <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wide">CII</span>
+              <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 font-mono tabular-nums">
+                {ciiScore.toFixed(3)}
+              </span>
+            </div>
+          )}
+          {/* Toggle */}
+          <div className="flex items-center gap-1 bg-gray-200 dark:bg-gray-700 rounded-lg p-0.5">
+            <button
+              onClick={() => setShowProcessed(false)}
+              className={cn(
+                "px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all",
+                !showProcessed
+                  ? "bg-white dark:bg-gray-900 text-gray-800 dark:text-white shadow-sm"
+                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+              )}
+            >
+              Original
+            </button>
+            <button
+              onClick={() => setShowProcessed(true)}
+              className={cn(
+                "px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all",
+                showProcessed
+                  ? "bg-white dark:bg-gray-900 text-gray-800 dark:text-white shadow-sm"
+                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+              )}
+            >
+              Processed
+            </button>
+          </div>
         </div>
       </div>
 
@@ -786,6 +800,7 @@ export default function PreprocessPage() {
         label: f.filename,
         original: `${API_BASE_URL}/static/${encodeURIComponent(job_id)}/original/${storedName}`,
         processed: `${API_BASE_URL}/static/${encodeURIComponent(job_id)}/processed/${storedName}`,
+        ciiScore: f.cii_score ?? null,
       };
     }) ?? [];
 
@@ -964,12 +979,13 @@ export default function PreprocessPage() {
                   </span>
                 </h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {imageFiles.map(({ label, original, processed }) => (
+                  {imageFiles.map(({ label, original, processed, ciiScore }) => (
                     <BeforeAfterToggle
                       key={label}
                       label={label}
                       original={original}
                       processed={processed}
+                      ciiScore={ciiScore}
                     />
                   ))}
                 </div>
