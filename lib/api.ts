@@ -120,6 +120,14 @@ export async function listJobs(): Promise<JobStatusResponse[]> {
   return handleResponse<JobStatusResponse[]>(res);
 }
 
+/** DELETE /api/v1/jobs/{job_id} — soft-delete job and remove files from disk */
+export async function deleteJob(jobId: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}`, {
+    method: 'DELETE',
+  });
+  await handleResponse<unknown>(res);
+}
+
 /** POST /api/v1/jobs — create a new job */
 export async function createJob(
   inputType: 'image' | 'video',

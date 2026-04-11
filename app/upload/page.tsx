@@ -7,6 +7,7 @@ import {
   createJob,
   validateFiles,
   listJobs,
+  deleteJob,
   type JobStatusResponse,
   type ValidationResult,
 } from "@/lib/api";
@@ -102,6 +103,9 @@ export default function UploadPage() {
   const [jobsPage, setJobsPage] = useState(1);
   const [jobsLoading, setJobsLoading] = useState(true);
   const [jobsError, setJobsError] = useState<string | null>(null);
+  const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
+  const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
+  const [isBatchDeleting, setIsBatchDeleting] = useState(false);
 
   // ── Toast
   const [toast, setToast] = useState<{ msg: string; type: "error" | "warn" } | null>(null);
@@ -131,6 +135,55 @@ export default function UploadPage() {
     } finally {
       setJobsLoading(false);
     }
+  }
+
+  async function handleDeleteJob(e: React.MouseEvent, jobId: string) {
+    e.stopPropagation();
+    setDeletingJobId(jobId);
+    try {
+      await deleteJob(jobId);
+      setJobs(prev => prev.filter(j => j.job_id !== jobId));
+      // Clamp page if needed after removal
+      setJobsPage(prev => {
+        const remaining = jobs.length - 1;
+        const maxPage = Math.max(1, Math.ceil(remaining / JOBS_PER_PAGE));
+        return Math.min(prev, maxPage);
+      });
+    } catch (e: unknown) {
+      showToast(e instanceof Error ? e.message : "Failed to delete job");
+    } finally {
+      setDeletingJobId(null);
+    }
+  }
+
+  function toggleSelectJob(e: React.MouseEvent, jobId: string) {
+    e.stopPropagation();
+    setSelectedJobIds(prev => {
+      const next = new Set(prev);
+      next.has(jobId) ? next.delete(jobId) : next.add(jobId);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedJobIds.size === jobs.length) {
+      setSelectedJobIds(new Set());
+    } else {
+      setSelectedJobIds(new Set(jobs.map(j => j.job_id)));
+    }
+  }
+
+  async function handleBatchDelete() {
+    if (selectedJobIds.size === 0) return;
+    setIsBatchDeleting(true);
+    const ids = Array.from(selectedJobIds);
+    const results = await Promise.allSettled(ids.map(id => deleteJob(id)));
+    const failed = results.filter(r => r.status === "rejected").length;
+    if (failed > 0) showToast(`${failed} job${failed > 1 ? "s" : ""} could not be deleted`);
+    setJobs(prev => prev.filter(j => !selectedJobIds.has(j.job_id)));
+    setSelectedJobIds(new Set());
+    setJobsPage(1);
+    setIsBatchDeleting(false);
   }
 
   function showToast(msg: string, type: "error" | "warn" = "error") {
@@ -442,7 +495,20 @@ export default function UploadPage() {
             <div className="bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Previous Jobs</h3>
-                <button onClick={loadJobs} className="text-xs text-blue-500 hover:underline">Refresh</button>
+                <div className="flex items-center gap-3">
+                  {selectedJobIds.size > 0 && (
+                    <button
+                      onClick={handleBatchDelete}
+                      disabled={isBatchDeleting}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-600 hover:bg-red-700 text-white transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      {isBatchDeleting
+                        ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Deleting…</>
+                        : <><Trash2 className="w-3.5 h-3.5" /> Delete {selectedJobIds.size} selected</>}
+                    </button>
+                  )}
+                  <button onClick={loadJobs} className="text-xs text-blue-500 hover:underline">Refresh</button>
+                </div>
               </div>
 
               {jobsLoading ? (
@@ -455,42 +521,89 @@ export default function UploadPage() {
                 <p className="text-sm text-gray-400">No previous jobs found.</p>
               ) : (
                 <>
+                  {/* Select-all row */}
+                  <div className="flex items-center gap-2 mb-2 px-1">
+                    <input
+                      type="checkbox"
+                      checked={selectedJobIds.size === jobs.length && jobs.length > 0}
+                      ref={el => { if (el) el.indeterminate = selectedJobIds.size > 0 && selectedJobIds.size < jobs.length; }}
+                      onChange={toggleSelectAll}
+                      className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
+                      aria-label="Select all jobs"
+                    />
+                    <span className="text-xs text-gray-400">
+                      {selectedJobIds.size > 0 ? `${selectedJobIds.size} of ${jobs.length} selected` : `Select all (${jobs.length})`}
+                    </span>
+                  </div>
+
                   <div className="space-y-2">
-                    {pagedJobs.map(job => (
-                      <button
-                        key={job.job_id}
-                        onClick={() => router.push(routeForJob(job))}
-                        className="w-full text-left flex items-center gap-3 px-3 py-3 rounded-xl border border-gray-100 dark:border-gray-800 hover:border-blue-300 dark:hover:border-blue-700 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 transition group"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                              {job.site_name ?? `Job ${job.job_id.slice(0, 8)}`}
-                            </span>
-                            <span className={cn(
-                              "px-2 py-0.5 rounded text-[11px] font-semibold shrink-0",
-                              STATUS_COLORS[job.status] ?? "bg-gray-100 text-gray-600"
-                            )}>
-                              {job.status}
-                            </span>
+                    {pagedJobs.map(job => {
+                      const isSelected = selectedJobIds.has(job.job_id);
+                      return (
+                        <div
+                          key={job.job_id}
+                          onClick={() => router.push(routeForJob(job))}
+                          className={cn(
+                            "w-full flex items-center gap-3 px-3 py-3 rounded-xl border transition group cursor-pointer",
+                            isSelected
+                              ? "border-blue-400 dark:border-blue-600 bg-blue-50/60 dark:bg-blue-950/30"
+                              : "border-gray-100 dark:border-gray-800 hover:border-blue-300 dark:hover:border-blue-700 hover:bg-blue-50/50 dark:hover:bg-blue-950/20"
+                          )}
+                        >
+                          {/* Checkbox */}
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {}}
+                            onClick={e => toggleSelectJob(e, job.job_id)}
+                            className="w-4 h-4 rounded accent-blue-600 cursor-pointer shrink-0"
+                            aria-label={`Select job ${job.job_id}`}
+                          />
+
+                          {/* Job info */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                {job.site_name ?? `Job ${job.job_id.slice(0, 8)}`}
+                              </span>
+                              <span className={cn(
+                                "px-2 py-0.5 rounded text-[11px] font-semibold shrink-0",
+                                STATUS_COLORS[job.status] ?? "bg-gray-100 text-gray-600"
+                              )}>
+                                {job.status}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3 text-xs text-gray-400">
+                              <span className="flex items-center gap-1">
+                                {job.input_type === "image" ? <FileImage className="w-3 h-3" /> : <FileVideo className="w-3 h-3" />}
+                                {job.input_type}
+                              </span>
+                              {job.file_count != null && (
+                                <span>{job.file_count} file{job.file_count !== 1 ? "s" : ""}</span>
+                              )}
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                {formatDate(job.created_at)}
+                              </span>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-3 text-xs text-gray-400">
-                            <span className="flex items-center gap-1">
-                              {job.input_type === "image" ? <FileImage className="w-3 h-3" /> : <FileVideo className="w-3 h-3" />}
-                              {job.input_type}
-                            </span>
-                            {job.file_count != null && (
-                              <span>{job.file_count} file{job.file_count !== 1 ? "s" : ""}</span>
-                            )}
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
-                              {formatDate(job.created_at)}
-                            </span>
-                          </div>
+
+                          <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-blue-500 transition shrink-0" />
+
+                          {/* Individual delete */}
+                          <button
+                            onClick={e => handleDeleteJob(e, job.job_id)}
+                            disabled={deletingJobId === job.job_id || isBatchDeleting}
+                            className="ml-1 p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition shrink-0 disabled:opacity-40 cursor-pointer"
+                            aria-label="Delete job"
+                          >
+                            {deletingJobId === job.job_id
+                              ? <Loader2 className="w-4 h-4 animate-spin" />
+                              : <Trash2 className="w-4 h-4" />}
+                          </button>
                         </div>
-                        <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-blue-500 transition shrink-0" />
-                      </button>
-                    ))}
+                      );
+                    })}
                   </div>
 
                   {/* Pagination */}

@@ -29,6 +29,7 @@ import {
   Layers,
   ImageIcon,
   FileText,
+  FileImage,
 } from "lucide-react";
 import SettingsIcon from '@mui/icons-material/Settings';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
@@ -333,35 +334,38 @@ export default function ResultPage() {
   return (
     <div className="flex flex-col min-h-screen overflow-hidden">
       {/* HEADER */}
-      <header className="bg-black dark:bg-black border-b border-gray-800">
-        <div className="container mx-4 px-4 py-4 flex items-center justify-between">
+      <header className="border-b border-gray-800 bg-gray-950">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
+          {/* Left — logo + back + title */}
           <div className="flex items-center gap-4">
-            <button
-              className="text-white hover:text-gray-300 transition-colors cursor-pointer"
-              onClick={() => router.back()}
-            >
-              <ArrowLeft className="w-6 h-6" />
-            </button>
-            <div>
-              <h1 className="text-xl font-bold text-white">DETECTION RESULTS</h1>
-              <p className="text-sm text-gray-400">
-                {projectName !== "—" ? `Detection Results for ${projectName}` : `Job: ${jobId}`}
-              </p>
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shrink-0">
+              <FileImage className="w-4 h-4 text-white" />
+            </div>
+            <div className="border-l border-gray-700 pl-4 flex items-center gap-3">
+              <button
+                className="text-gray-400 hover:text-gray-200 transition-colors cursor-pointer"
+                onClick={() => router.back()}
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <div>
+                <h1 className="text-base font-bold text-white tracking-wide">DETECTION RESULTS</h1>
+                <p className="text-xs text-gray-400">
+                  {projectName !== "—" ? projectName : `Job: ${jobId}`}
+                </p>
+              </div>
             </div>
           </div>
-          <div className="flex flex-row gap-4 items-center justify-end">
-            <h3 className="p-2 text-gray-400">
-              <span className="flex items-center gap-1">
-                <SettingsIcon fontSize="small" />
-                {modelName}
-              </span>
-            </h3>
-            <h3 className="p-2 text-gray-400">
-              <span className="flex items-center gap-1">
-                <CalendarMonthIcon fontSize="small" />
-                {projectDate}
-              </span>
-            </h3>
+          {/* Right — model + date */}
+          <div className="flex items-center gap-4 text-xs text-gray-400">
+            <span className="flex items-center gap-1">
+              <SettingsIcon fontSize="small" />
+              {modelName}
+            </span>
+            <span className="flex items-center gap-1">
+              <CalendarMonthIcon fontSize="small" />
+              {projectDate}
+            </span>
           </div>
         </div>
       </header>
