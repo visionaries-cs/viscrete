@@ -63,7 +63,7 @@ const HeroSection = () => {
 
           {/* Subheadline */}
           <p className="text-xl md:text-2xl font-medium text-gray-900 dark:text-white/90">
-            Automated Structural Inspection Framework
+            Visual Inspection System for Concrete Evaluation
           </p>
 
           {/* Description */}
