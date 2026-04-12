@@ -16,6 +16,7 @@ import {
   ChevronUp,
   Terminal,
 } from "lucide-react";
+import { ModeToggle } from "@/components/ui/mode-toggle";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -846,11 +847,14 @@ export default function PreprocessPage() {
             <h1 className="text-base font-bold text-gray-900 dark:text-white">Preprocessing Pipeline</h1>
             <p className="text-xs text-gray-400 font-mono">Job: {job_id}</p>
           </div>
-          {jobMeta && (
-            <span className="ml-auto text-xs px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 font-medium capitalize">
-              {jobMeta.input_type} pipeline
-            </span>
-          )}
+          <div className="ml-auto flex items-center gap-2">
+            {jobMeta && (
+              <span className="text-xs px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 font-medium capitalize">
+                {jobMeta.input_type} pipeline
+              </span>
+            )}
+            <ModeToggle />
+          </div>
         </div>
       </header>
 

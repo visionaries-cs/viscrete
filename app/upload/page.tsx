@@ -26,6 +26,7 @@ import {
   Clock,
   AlertCircle,
 } from "lucide-react";
+import { ModeToggle } from "@/components/ui/mode-toggle";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -314,6 +315,9 @@ export default function UploadPage() {
           <div>
             <h1 className="text-base font-bold text-gray-900 dark:text-white tracking-wide">VISCRETE</h1>
             <p className="text-xs text-gray-500 dark:text-gray-400">Concrete Defect Detection System</p>
+          </div>
+          <div className="ml-auto">
+            <ModeToggle />
           </div>
         </div>
       </header>

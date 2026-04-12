@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { cn } from "@/lib/utils";
 import {
   ImageUp,
   SlidersHorizontal,
@@ -10,15 +11,7 @@ import {
   Network,
 } from "lucide-react";
 
-/* ------------------------------------------------------------------ */
-/*  Architecture type definitions                                     */
-/* ------------------------------------------------------------------ */
-
 type ArchType = "process" | "system";
-
-/* ------------------------------------------------------------------ */
-/*  Pipeline stage data per architecture type                         */
-/* ------------------------------------------------------------------ */
 
 interface StageDetail {
   title: string;
@@ -105,10 +98,6 @@ const stages: PipelineStage[] = [
   },
 ];
 
-/* ------------------------------------------------------------------ */
-/*  Component                                                         */
-/* ------------------------------------------------------------------ */
-
 const AlgorithmSection = () => {
   const [archType, setArchType] = useState<ArchType>("process");
   const [activeStage, setActiveStage] = useState(0);
@@ -117,14 +106,15 @@ const AlgorithmSection = () => {
   const detail = archType === "process" ? current.process : current.system;
 
   return (
-    <section className="w-full py-24 bg-[#101115]" id="algorithm">
+    <section className="w-full py-24 bg-gray-50 dark:bg-[#101115]" id="algorithm">
       <div className="container max-w-6xl mx-auto px-6">
+
         {/* ── Header ─────────────────────────────────── */}
         <div className="text-center mb-12 space-y-4">
-          <p className="text-sm font-mono text-[#0da6f2] uppercase tracking-widest">
+          <p className="text-sm font-mono text-emerald-700 dark:text-[#0da6f2] uppercase tracking-widest">
             How It Works
           </p>
-          <h2 className="text-3xl md:text-4xl font-bold text-white">
+          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white">
             The Algorithm Behind{" "}
             <span className="bg-gradient-to-r from-[#2ca75d] to-[#0da6f2] bg-clip-text text-transparent">
               viscrete
@@ -134,25 +124,29 @@ const AlgorithmSection = () => {
 
         {/* ── Architecture type toggle ────────────────── */}
         <div className="flex justify-center mb-10">
-          <div className="inline-flex rounded-lg border border-[#1e4032] bg-[#0c0e12] p-1 gap-1">
+          <div className="inline-flex rounded-lg p-1 gap-1
+                          border border-emerald-200 bg-gray-100
+                          dark:border-[#1e4032] dark:bg-[#0c0e12]">
             <button
               onClick={() => setArchType("process")}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
+              className={cn(
+                "flex items-center gap-2 px-5 py-2.5 rounded-md text-sm font-medium transition-colors cursor-pointer",
                 archType === "process"
-                  ? "bg-[#2ca75d]/20 text-[#2ca75d] border border-[#2ca75d]/40"
-                  : "text-gray-400 hover:text-white"
-              }`}
+                  ? "bg-emerald-50 text-emerald-700 border border-emerald-300 dark:bg-[#2ca75d]/20 dark:text-[#2ca75d] dark:border-[#2ca75d]/40"
+                  : "text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+              )}
             >
               <Workflow className="w-4 h-4" />
               Process Architecture
             </button>
             <button
               onClick={() => setArchType("system")}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
+              className={cn(
+                "flex items-center gap-2 px-5 py-2.5 rounded-md text-sm font-medium transition-colors cursor-pointer",
                 archType === "system"
-                  ? "bg-[#0da6f2]/20 text-[#0da6f2] border border-[#0da6f2]/40"
-                  : "text-gray-400 hover:text-white"
-              }`}
+                  ? "bg-blue-50 text-blue-700 border border-blue-300 dark:bg-[#0da6f2]/20 dark:text-[#0da6f2] dark:border-[#0da6f2]/40"
+                  : "text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+              )}
             >
               <Network className="w-4 h-4" />
               System Architecture
@@ -160,47 +154,40 @@ const AlgorithmSection = () => {
           </div>
         </div>
 
-        {/* ── Pipeline carousel buttons (process only) ── */}
+        {/* ── Pipeline stage buttons (process only) ─── */}
         {archType === "process" && (
-          <div className="flex items-center justify-center gap-2 mb-12">
-              {stages.map((stage, idx) => {
-                const Icon = stage.icon;
-                const isActive = idx === activeStage;
-                const accentColor = "#2ca75d";
-
-                return (
-                  <div key={stage.id} className="flex items-center gap-2">
-                    {/* stage button */}
-                    <button
-                      onClick={() => setActiveStage(idx)}
-                      className="flex items-center gap-2 px-5 py-3 rounded-lg text-sm font-medium transition-all cursor-pointer"
-                      style={{
-                        backgroundColor: isActive
-                          ? `${accentColor}15`
-                          : "#0c0e12",
-                        border: `1px solid ${
-                          isActive ? `${accentColor}66` : "#1e4032"
-                        }`,
-                        color: isActive ? accentColor : "#9ca3af",
-                      }}
-                    >
-                      <Icon className="w-4 h-4" />
-                      {stage.label}
-                    </button>
-
-                    {/* arrow separator (skip after last) */}
-                    {idx < stages.length - 1 && (
-                      <ChevronRight className="w-5 h-5 text-gray-600 shrink-0" />
+          <div className="flex items-center justify-center gap-2 mb-12 flex-wrap">
+            {stages.map((stage, idx) => {
+              const Icon = stage.icon;
+              const isActive = idx === activeStage;
+              return (
+                <div key={stage.id} className="flex items-center gap-2">
+                  <button
+                    onClick={() => setActiveStage(idx)}
+                    className={cn(
+                      "flex items-center gap-2 px-5 py-3 rounded-lg text-sm font-medium transition-all cursor-pointer border",
+                      isActive
+                        ? "bg-emerald-50 border-emerald-300 text-emerald-700 dark:bg-[#2ca75d]/[0.08] dark:border-[#2ca75d]/40 dark:text-[#2ca75d]"
+                        : "bg-gray-50 border-emerald-100 text-gray-500 hover:text-gray-800 hover:border-emerald-200 dark:bg-[#0c0e12] dark:border-[#1e4032] dark:text-gray-400 dark:hover:text-white dark:hover:border-[#2ca75d]/30"
                     )}
-                  </div>
-                );
-              })}
+                  >
+                    <Icon className="w-4 h-4" />
+                    {stage.label}
+                  </button>
+                  {idx < stages.length - 1 && (
+                    <ChevronRight className="w-5 h-5 text-gray-300 dark:text-gray-600 shrink-0" />
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
 
         {/* ── System Architecture image ──────────────── */}
         {archType === "system" && (
-          <div className="rounded-lg border border-[#1e4032] bg-[#0c0e12] p-4 md:p-6">
+          <div className="rounded-lg border border-emerald-200 bg-gray-100 p-4 md:p-6
+                          dark:border-[#1e4032] dark:bg-[#0c0e12]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/system-architecture.png"
               alt="System Architecture Diagram"
@@ -214,23 +201,22 @@ const AlgorithmSection = () => {
           <>
             <div
               key={`process-${activeStage}`}
-              className="rounded-lg border border-[#1e4032] bg-[#0c0e12] p-8 md:p-10 animate-in fade-in duration-300"
+              className="rounded-lg border border-emerald-200 bg-gray-100 p-8 md:p-10 animate-in fade-in duration-300
+                         dark:border-[#1e4032] dark:bg-[#0c0e12]"
             >
               <div className="flex items-center gap-3 mb-6">
-                <div
-                  className="w-10 h-10 rounded-md flex items-center justify-center"
-                  style={{ backgroundColor: "rgba(44,167,93,0.15)" }}
-                >
-                  <current.icon className="w-5 h-5 text-[#2ca75d]" />
+                <div className="w-10 h-10 rounded-md flex items-center justify-center
+                                bg-emerald-50 dark:bg-[#2ca75d]/15">
+                  <current.icon className="w-5 h-5 text-emerald-600 dark:text-[#2ca75d]" />
                 </div>
-                <h3 className="text-xl font-semibold text-white">
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
                   {detail.title}
                 </h3>
               </div>
 
               <ul className="space-y-3">
                 {detail.bullets.map((b, i) => (
-                  <li key={i} className="flex items-start gap-3 text-sm text-gray-400 leading-relaxed">
+                  <li key={i} className="flex items-start gap-3 text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
                     <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#2ca75d]" />
                     {b}
                   </li>
@@ -244,17 +230,18 @@ const AlgorithmSection = () => {
                 <button
                   key={idx}
                   onClick={() => setActiveStage(idx)}
-                  className="h-1.5 rounded-full transition-all cursor-pointer"
-                  style={{
-                    width: idx === activeStage ? "2rem" : "0.375rem",
-                    backgroundColor:
-                      idx === activeStage ? "#2ca75d" : "#1e4032",
-                  }}
+                  className={cn(
+                    "h-1.5 rounded-full transition-all cursor-pointer",
+                    idx === activeStage
+                      ? "w-8 bg-[#2ca75d]"
+                      : "w-1.5 bg-emerald-200 dark:bg-[#1e4032]"
+                  )}
                 />
               ))}
             </div>
           </>
         )}
+
       </div>
     </section>
   );

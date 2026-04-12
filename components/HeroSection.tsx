@@ -19,24 +19,37 @@ const HeroSection = () => {
   };
 
   return (
-    <section className="relative min-h-screen w-full flex items-center justify-center overflow-hidden">
-      {/* Background */}
-      <div className="absolute inset-0 bg-[#14171e]">
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#2ca75d15_1px,transparent_1px),linear-gradient(to_bottom,#2ca75d15_1px,transparent_1px)] bg-[size:14px_24px] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_110%)]"></div>
+    <section className="relative min-h-screen w-full flex items-center justify-center overflow-hidden
+                        bg-white dark:bg-[#14171e]">
+      {/* Grid background */}
+      <div className="absolute inset-0 pointer-events-none">
+        {/* Light mode grid */}
+        <div className="absolute inset-0 dark:hidden
+          bg-[linear-gradient(to_right,#2ca75d0d_1px,transparent_1px),linear-gradient(to_bottom,#2ca75d0d_1px,transparent_1px)]
+          bg-[size:14px_24px]
+          [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_110%)]" />
+        {/* Dark mode grid */}
+        <div className="absolute inset-0 hidden dark:block
+          bg-[linear-gradient(to_right,#2ca75d15_1px,transparent_1px),linear-gradient(to_bottom,#2ca75d15_1px,transparent_1px)]
+          bg-[size:14px_24px]
+          [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_110%)]" />
       </div>
 
       {/* Scan line effect */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute inset-x-0 h-px bg-[#2ca75d]/20 animate-scan-line" />
+        <div className="absolute inset-x-0 h-px bg-[#2ca75d]/10 dark:bg-[#2ca75d]/20 animate-scan-line" />
       </div>
 
       {/* Content */}
       <div className="relative z-10 container max-w-4xl mx-auto text-center px-6">
         <div className="flex flex-col items-center space-y-8">
+
           {/* Badge */}
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-[#2ca75d]/30 bg-[#1e4032]">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full
+                          border border-emerald-300 bg-emerald-50
+                          dark:border-[#2ca75d]/30 dark:bg-[#1e4032]">
             <span className="w-2 h-2 rounded-full bg-[#2ca75d] animate-pulse" />
-            <span className="text-sm font-mono text-[#2ca75d]">
+            <span className="text-sm font-mono text-emerald-700 dark:text-[#2ca75d]">
               Structural Analysis Platform
             </span>
           </div>
@@ -49,12 +62,12 @@ const HeroSection = () => {
           </h1>
 
           {/* Subheadline */}
-          <p className="text-xl md:text-2xl font-medium text-white/90">
+          <p className="text-xl md:text-2xl font-medium text-gray-900 dark:text-white/90">
             Automated Structural Inspection Framework
           </p>
 
           {/* Description */}
-          <p className="text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed">
+          <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto leading-relaxed">
             A pluggable, modular system designed to automate concrete wall
             defect detection using vision-based models and traditional image
             processing for safer infrastructure.

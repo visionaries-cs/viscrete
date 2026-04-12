@@ -1,50 +1,36 @@
 "use client";
 
-import { ChevronsUpDownIcon } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
-import * as React from "react";
-import { useEffect,useState } from "react";
+import { useEffect, useState } from "react";
+import { cn } from "@/lib/utils";
 
-import { Button } from "./button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "./dropdown-menu";
-
-export function ModeToggle() {
+export function ModeToggle({ className }: { className?: string }) {
   const [mounted, setMounted] = useState(false);
-  const { theme, setTheme } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme();
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  useEffect(() => { setMounted(true); }, []);
 
-  if (!mounted) {
-    return null;
-  }
+  // Render a same-size placeholder to avoid layout shift
+  if (!mounted) return <div className="w-8 h-8 shrink-0" />;
+
+  const isDark = resolvedTheme === "dark";
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="gap-1 px-2 py-0 text-xs">
-          <span className="capitalize">{theme}</span>
-          <span className="inline"> theme</span>
-          <ChevronsUpDownIcon className="size-3" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => setTheme("light")}>
-          Light
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("dark")}>
-          Dark
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("system")}>
-          System
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <button
+      onClick={() => setTheme(isDark ? "light" : "dark")}
+      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      className={cn(
+        "w-8 h-8 flex items-center justify-center rounded-lg transition-colors shrink-0",
+        "text-gray-500 hover:text-gray-900 hover:bg-gray-100",
+        "dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800",
+        className
+      )}
+    >
+      {isDark
+        ? <Sun className="w-4 h-4" />
+        : <Moon className="w-4 h-4" />
+      }
+    </button>
   );
 }

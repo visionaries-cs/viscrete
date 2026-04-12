@@ -41,15 +41,17 @@ const features = [
 
 const TechnologySection = () => {
   return (
-    <section className="w-full py-24 bg-[#14171e]" id="technology">
+    <section className="w-full py-24 bg-white dark:bg-[#14171e]" id="technology">
       <div className="container max-w-6xl mx-auto px-6">
         <div className="text-center mb-16 space-y-4">
-          <p className="text-sm font-mono text-[#0da6f2] uppercase tracking-widest">
+          <p className="text-sm font-mono text-emerald-700 dark:text-[#0da6f2] uppercase tracking-widest">
             Core Capabilities
           </p>
-          <h2 className="text-3xl md:text-4xl font-bold text-white">
+          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white">
             The Technology Behind{" "}
-            <span className="bg-gradient-to-r from-[#2ca75d] to-[#0da6f2] bg-clip-text text-transparent">viscrete</span>
+            <span className="bg-gradient-to-r from-[#2ca75d] to-[#0da6f2] bg-clip-text text-transparent">
+              viscrete
+            </span>
           </h2>
         </div>
 
@@ -57,15 +59,21 @@ const TechnologySection = () => {
           {features.map((feature) => (
             <div
               key={feature.title}
-              className="group p-6 rounded-lg border border-[#1e4032] bg-[#101115] hover:border-[#2ca75d]/50 transition-colors"
+              className="group p-6 rounded-lg transition-colors
+                         border border-emerald-100 bg-gray-50
+                         hover:border-emerald-300
+                         dark:border-[#1e4032] dark:bg-[#101115]
+                         dark:hover:border-[#2ca75d]/50"
             >
-              <div className="mb-4 w-10 h-10 rounded-md bg-[#1e4032] flex items-center justify-center group-hover:bg-[#2ca75d]/20 transition-colors">
-                <feature.icon className="w-5 h-5 text-[#2ca75d]" />
+              <div className="mb-4 w-10 h-10 rounded-md flex items-center justify-center transition-colors
+                              bg-emerald-50 group-hover:bg-emerald-100
+                              dark:bg-[#1e4032] dark:group-hover:bg-[#2ca75d]/20">
+                <feature.icon className="w-5 h-5 text-emerald-600 dark:text-[#2ca75d]" />
               </div>
-              <h3 className="text-lg font-semibold text-white mb-2">
+              <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">
                 {feature.title}
               </h3>
-              <p className="text-sm text-gray-400 leading-relaxed">
+              <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
                 {feature.description}
               </p>
             </div>

@@ -17,6 +17,7 @@ import {
   AlertTriangle,
   CheckCircle2,
 } from "lucide-react";
+import { ModeToggle } from "@/components/ui/mode-toggle";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -106,6 +107,7 @@ export default function ReportPage() {
               <FileText className="w-4 h-4" /> Print / Save PDF
             </button>
           )}
+          <ModeToggle />
         </div>
       </header>
 

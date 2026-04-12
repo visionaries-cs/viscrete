@@ -25,13 +25,13 @@ const strategies = [
 
 const StrategySection = () => {
   return (
-    <section className="w-full py-24 bg-[#14171e]">
+    <section className="w-full py-24 bg-white dark:bg-[#14171e]">
       <div className="container max-w-5xl mx-auto px-6">
         <div className="text-center mb-16 space-y-4">
-          <h2 className="text-3xl md:text-4xl font-bold text-white">
+          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white">
             Strengthen Your Strategy
           </h2>
-          <p className="text-gray-400 text-lg max-w-xl mx-auto">
+          <p className="text-gray-600 dark:text-gray-400 text-lg max-w-xl mx-auto">
             Enhance your strategy with intelligent tools designed for success.
           </p>
         </div>
@@ -40,17 +40,20 @@ const StrategySection = () => {
           {strategies.map((item) => (
             <div
               key={item.title}
-              className="p-6 rounded-lg border border-[#4a411e]/50 bg-[#4a411e]/10 hover:border-[#e5ac0c]/50 transition-colors"
+              className="p-6 rounded-lg transition-colors border
+                         border-amber-200/60 bg-amber-50/40 hover:border-amber-300
+                         dark:border-[#4a411e]/50 dark:bg-[#4a411e]/10 dark:hover:border-[#e5ac0c]/50"
             >
               <div className="flex items-start gap-4">
-                <div className="w-10 h-10 rounded-md bg-[#4a411e] flex items-center justify-center shrink-0">
-                  <item.icon className="w-5 h-5 text-[#e5ac0c]" />
+                <div className="w-10 h-10 rounded-md flex items-center justify-center shrink-0
+                                bg-amber-100 dark:bg-[#4a411e]">
+                  <item.icon className="w-5 h-5 text-amber-600 dark:text-[#e5ac0c]" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-white mb-1">
+                  <h3 className="text-lg font-semibold mb-1 text-gray-900 dark:text-white">
                     {item.title}
                   </h3>
-                  <p className="text-sm text-gray-400 leading-relaxed">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
                     {item.description}
                   </p>
                 </div>

@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import SettingsIcon from '@mui/icons-material/Settings';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import { ModeToggle } from "@/components/ui/mode-toggle";
 
 // ─── Types / Helpers ──────────────────────────────────────────────────────────
 
@@ -334,38 +335,39 @@ export default function ResultPage() {
   return (
     <div className="flex flex-col min-h-screen overflow-hidden">
       {/* HEADER */}
-      <header className="border-b border-gray-800 bg-gray-950">
+      <header className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
           {/* Left — logo + back + title */}
           <div className="flex items-center gap-4">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shrink-0">
               <FileImage className="w-4 h-4 text-white" />
             </div>
-            <div className="border-l border-gray-700 pl-4 flex items-center gap-3">
+            <div className="border-l border-gray-200 dark:border-gray-700 pl-4 flex items-center gap-3">
               <button
-                className="text-gray-400 hover:text-gray-200 transition-colors cursor-pointer"
+                className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors cursor-pointer"
                 onClick={() => router.back()}
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
               <div>
-                <h1 className="text-base font-bold text-white tracking-wide">DETECTION RESULTS</h1>
-                <p className="text-xs text-gray-400">
+                <h1 className="text-base font-bold text-gray-900 dark:text-white tracking-wide">DETECTION RESULTS</h1>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
                   {projectName !== "—" ? projectName : `Job: ${jobId}`}
                 </p>
               </div>
             </div>
           </div>
-          {/* Right — model + date */}
-          <div className="flex items-center gap-4 text-xs text-gray-400">
+          {/* Right — model + date + toggle */}
+          <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
             <span className="flex items-center gap-1">
               <SettingsIcon fontSize="small" />
               {modelName}
             </span>
-            <span className="flex items-center gap-1">
+            <span className="hidden sm:flex items-center gap-1">
               <CalendarMonthIcon fontSize="small" />
               {projectDate}
             </span>
+            <ModeToggle />
           </div>
         </div>
       </header>

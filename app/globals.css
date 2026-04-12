@@ -123,3 +123,13 @@
     @apply bg-background text-foreground;
   }
 }
+
+@keyframes scan-line {
+  0%   { top: -2px; }
+  100% { top: 100%; }
+}
+
+.animate-scan-line {
+  animation: scan-line 6s linear infinite;
+  position: absolute;
+}
