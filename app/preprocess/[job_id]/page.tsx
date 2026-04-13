@@ -15,6 +15,7 @@ import {
   ChevronDown,
   ChevronUp,
   Terminal,
+  Video,
 } from "lucide-react";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 
@@ -35,6 +36,7 @@ interface JobStatus {
   input_type: "image" | "video";
   file_count: number;
   files: FileStatusItem[];
+  preprocessing_result?: PreprocessResult | null;
 }
 
 interface PipelineStep {
@@ -73,6 +75,7 @@ interface PreprocessResult {
   pipeline_steps: PipelineStep[];
   cluster_info: ClusterInfo[];
   cii_scores?: CiiScoreEntry[];
+  output_video_path?: string | null;
 }
 
 interface LogLine {
@@ -573,6 +576,86 @@ function ExecutionDashboard({
   );
 }
 
+// ─── Video Player ─────────────────────────────────────────────────────────────
+
+function VideoPlayer({ src, totalFrames, steps }: {
+  src: string;
+  totalFrames: number;
+  steps: PipelineStep[];
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
+  const totalSec = steps.reduce((s, p) => s + p.duration_sec, 0);
+
+  return (
+    <div className="w-full">
+      <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+        <Video className="w-4 h-4" />
+        Preprocessed Video Output
+      </h2>
+
+      <div className="w-full bg-white dark:bg-gray-950 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+        {/* Video area */}
+        <div className="relative w-full bg-black flex items-center justify-center" style={{ minHeight: 320 }}>
+          {isLoading && !hasError && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-gray-400 z-10">
+              <Loader2 className="w-8 h-8 animate-spin" />
+              <span className="text-sm">Loading video…</span>
+            </div>
+          )}
+
+          {hasError ? (
+            <div className="flex flex-col items-center gap-3 py-12 px-6 text-gray-500 dark:text-gray-400 w-full">
+              <Video className="w-12 h-12 text-gray-400 dark:text-gray-600" />
+              <p className="text-sm font-medium">Video preview unavailable</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 text-center">
+                The browser could not load the video. Check that the path exists and the format is browser-compatible (H.264 MP4 recommended).
+              </p>
+              <code className="text-[10px] font-mono bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-3 py-1.5 rounded-lg break-all max-w-full">
+                {src}
+              </code>
+              <a
+                href={src}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-blue-500 hover:underline"
+              >
+                Try opening directly ↗
+              </a>
+            </div>
+          ) : (
+            <video
+              ref={videoRef}
+              src={src}
+              controls
+              className="w-full max-h-[480px] object-contain"
+              onLoadedData={() => setIsLoading(false)}
+              onError={() => { setIsLoading(false); setHasError(true); }}
+            />
+          )}
+        </div>
+
+        {/* Metadata strip */}
+        <div className="grid grid-cols-3 divide-x divide-gray-100 dark:divide-gray-800 border-t border-gray-100 dark:border-gray-800">
+          <div className="px-5 py-3">
+            <p className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-0.5">Frames processed</p>
+            <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{totalFrames}</p>
+          </div>
+          <div className="px-5 py-3">
+            <p className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-0.5">Pipeline steps</p>
+            <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{steps.length}</p>
+          </div>
+          <div className="px-5 py-3">
+            <p className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-0.5">Total time</p>
+            <p className="text-sm font-semibold font-mono text-gray-800 dark:text-gray-100">{totalSec.toFixed(2)}s</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PreprocessPage() {
@@ -608,6 +691,14 @@ export default function PreprocessPage() {
   const lastActiveIdxRef = useRef(-1);
   const startTimeRef = useRef(0);
   const logEndRef = useRef<HTMLDivElement>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cleanup polling on unmount
+  useEffect(() => () => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    if (pollTimeoutRef.current) clearTimeout(pollTimeoutRef.current);
+  }, []);
 
   // Keep jobMetaRef in sync so effects can read current fileCount without it as a dep
   useEffect(() => { jobMetaRef.current = jobMeta; }, [jobMeta]);
@@ -696,21 +787,27 @@ export default function PreprocessPage() {
         setStepStates(pipelineSteps.map(() => alreadyDone ? "completed" : "pending"));
         if (alreadyDone) {
           setIsComplete(true);
-          // Restore cached preprocess result (cluster info + step details)
-          try {
-            const cached = localStorage.getItem(`preprocess_result_${job_id}`);
-            if (cached) {
-              const parsed: PreprocessResult = JSON.parse(cached);
-              setResult(parsed);
-              if (parsed.pipeline_steps?.length) {
-                setStepDetails(parsed.pipeline_steps);
-                setStepStates(parsed.pipeline_steps.map(s =>
-                  s.status === "completed" ? "completed" : "failed"
-                ));
-              }
+          // Prefer preprocessing_result from job status; fall back to localStorage cache
+          const serverResult = data.preprocessing_result ?? null;
+          const applyResult = (r: PreprocessResult) => {
+            setResult(r);
+            if (r.pipeline_steps?.length) {
+              setStepDetails(r.pipeline_steps);
+              setStepStates(r.pipeline_steps.map(s =>
+                s.status === "completed" ? "completed" : "failed"
+              ));
+            } else {
+              setStepStates(pipelineSteps.map(() => "completed"));
             }
-          } catch {
-            // ignore stale/corrupt cache
+          };
+          if (serverResult) {
+            applyResult(serverResult);
+            try { localStorage.setItem(`preprocess_result_${job_id}`, JSON.stringify(serverResult)); } catch { }
+          } else {
+            try {
+              const cached = localStorage.getItem(`preprocess_result_${job_id}`);
+              if (cached) applyResult(JSON.parse(cached));
+            } catch { /* ignore stale/corrupt cache */ }
           }
         }
       } catch (e) {
@@ -727,13 +824,19 @@ export default function PreprocessPage() {
     }
   }, [jobMeta]);
 
+  function stopPolling() {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    if (pollTimeoutRef.current) { clearTimeout(pollTimeoutRef.current); pollTimeoutRef.current = null; }
+  }
+
   async function runPreprocessing(inputType?: "image" | "video") {
     if (hasStarted.current) return;
     hasStarted.current = true;
 
     const pipelineSteps = (inputType ?? jobMeta?.input_type) === "video" ? VIDEO_STEPS : IMAGE_STEPS;
     setSteps(pipelineSteps);
-    setStepStates(pipelineSteps.map(() => "pending"));
+    // Phase 1: step 1 active (spinner), all others pending
+    setStepStates(["active", ...pipelineSteps.slice(1).map((): StepState => "pending")]);
     setIsRunning(true);
     setError(null);
     setIsComplete(false);
@@ -742,73 +845,99 @@ export default function PreprocessPage() {
     setStepProgress(0);
     lastActiveIdxRef.current = -1;
 
-    // Simulate step advancement while request is in-flight
-    const STEP_INTERVAL_MS = 1500;
-    let simIdx = 0;
-    const interval = setInterval(() => {
-      if (simIdx < pipelineSteps.length) {
-        const idx = simIdx;
-        setStepStates(prev => {
-          const next = [...prev];
-          if (idx > 0) next[idx - 1] = "completed";
-          next[idx] = "active";
-          return next;
-        });
-        simIdx++;
-      }
-    }, STEP_INTERVAL_MS);
-
+    // Fire POST — 202 Accepted, pipeline starts in background
     try {
-      // Cast through unknown because api.ts PreprocessResponse type is outdated
-      const data = await preprocessJob(job_id) as unknown as PreprocessResult;
-      clearInterval(interval);
-
-      // Replace simulated states with real step outcomes from the API
-      if (data.pipeline_steps?.length) {
-        setStepDetails(data.pipeline_steps);
-        setStepStates(data.pipeline_steps.map(s => s.status === "completed" ? "completed" : "failed"));
-      } else {
-        setStepStates(pipelineSteps.map(() => "completed"));
-      }
-
-      setResult(data);
-      setIsComplete(true);
-
-      // Append actual result summary to terminal
-      const resultLogs: LogLine[] = [
-        { tag: "─────",   tagColor: "text-gray-700",    message: "" },
-        { tag: "[DONE]",  tagColor: "text-emerald-400", message: `Pipeline finished. ${data.total_processed} image${data.total_processed !== 1 ? "s" : ""} processed.` },
-      ];
-      if (data.pipeline_steps?.length) {
-        const totalSec = data.pipeline_steps.reduce((s, p) => s + p.duration_sec, 0);
-        resultLogs.push({ tag: "[TIME]", tagColor: "text-blue-400", message: `Total execution time: ${totalSec.toFixed(2)}s` });
-      }
-      if (data.cluster_info?.length) {
-        resultLogs.push({ tag: "[CLUST]", tagColor: "text-purple-400", message: `${data.cluster_info.length} cluster${data.cluster_info.length !== 1 ? "s" : ""} created:` });
-        data.cluster_info.forEach(c => {
-          resultLogs.push({
-            tag: "[CLUST]", tagColor: "text-purple-400",
-            message: `  Cluster ${c.cluster_id}: ${c.member_count} image${c.member_count !== 1 ? "s" : ""}, clip_limit=${c.clahe_params.clip_limit.toFixed(2)}, grid=${c.clahe_params.tile_grid_size[0]}×${c.clahe_params.tile_grid_size[1]} (${c.clahe_params.source.toUpperCase()})`,
-          });
-        });
-      }
-      setVisibleLogs(prev => [...prev, ...resultLogs]);
-
-      // Persist so cluster info survives page refresh
-      try { localStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch { /* quota */ }
+      await preprocessJob(job_id);
     } catch (e: unknown) {
-      clearInterval(interval);
-      const msg = e instanceof Error ? e.message : "Preprocessing failed";
+      const msg = e instanceof Error ? e.message : "Failed to start preprocessing";
+      setStepStates(prev => { const n = [...prev]; n[0] = "failed"; return n; });
+      setError(msg);
+      setIsRunning(false);
+      return;
+    }
+
+    // ── Phase 2/3 handler called on each successful poll ──────────────────────
+    async function poll() {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(job_id)}`);
+        if (!res.ok) return; // transient — try again next tick
+        const data: JobStatus = await res.json();
+        setJobMeta(data);
+
+        if (data.status === "preprocessed") {
+          // ── Phase 2: pipeline finished ──────────────────────────────────────
+          stopPolling();
+          const r: PreprocessResult | null = data.preprocessing_result ?? null;
+
+          if (r) {
+            if (r.pipeline_steps?.length) {
+              setStepDetails(r.pipeline_steps);
+              setStepStates(r.pipeline_steps.map(s => s.status === "completed" ? "completed" : "failed"));
+            } else {
+              setStepStates(pipelineSteps.map((): StepState => "completed"));
+            }
+            setResult(r);
+
+            // Append summary to terminal
+            const resultLogs: LogLine[] = [
+              { tag: "─────",  tagColor: "text-gray-700",    message: "" },
+              { tag: "[DONE]", tagColor: "text-emerald-400", message: `Pipeline finished. ${r.total_processed} file${r.total_processed !== 1 ? "s" : ""} processed.` },
+            ];
+            if (r.pipeline_steps?.length) {
+              const totalSec = r.pipeline_steps.reduce((s, p) => s + p.duration_sec, 0);
+              resultLogs.push({ tag: "[TIME]",  tagColor: "text-blue-400",   message: `Total execution time: ${totalSec.toFixed(2)}s` });
+            }
+            if (r.cluster_info?.length) {
+              resultLogs.push({ tag: "[CLUST]", tagColor: "text-purple-400", message: `${r.cluster_info.length} cluster${r.cluster_info.length !== 1 ? "s" : ""} created.` });
+            }
+            setVisibleLogs(prev => [...prev, ...resultLogs]);
+            try { localStorage.setItem(CACHE_KEY, JSON.stringify(r)); } catch { /* quota */ }
+          } else {
+            // No preprocessing_result in response — mark all complete, fall back to cache
+            setStepStates(pipelineSteps.map((): StepState => "completed"));
+            try {
+              const cached = localStorage.getItem(CACHE_KEY);
+              if (cached) setResult(JSON.parse(cached));
+            } catch { /* ignore */ }
+          }
+
+          setIsComplete(true);
+          setIsRunning(false);
+
+        } else if (data.status === "failed") {
+          // ── Phase 3: server-side failure ────────────────────────────────────
+          stopPolling();
+          setStepStates(prev => {
+            const next = [...prev];
+            const activeIdx = next.findIndex(s => s === "active");
+            if (activeIdx >= 0) next[activeIdx] = "failed";
+            return next;
+          });
+          setError("Preprocessing failed on the server.");
+          setIsRunning(false);
+        }
+        // status === "preprocessing" → stay in Phase 1, do nothing
+      } catch {
+        // Network error — keep polling
+      }
+    }
+
+    // Poll immediately then every 5 s
+    poll();
+    pollRef.current = setInterval(poll, 5000);
+
+    // 30-minute hard timeout
+    pollTimeoutRef.current = setTimeout(() => {
+      stopPolling();
       setStepStates(prev => {
         const next = [...prev];
         const activeIdx = next.findIndex(s => s === "active");
         if (activeIdx >= 0) next[activeIdx] = "failed";
         return next;
       });
-      setError(msg);
-    } finally {
+      setError("Preprocessing timed out after 30 minutes.");
       setIsRunning(false);
-    }
+    }, 30 * 60 * 1000);
   }
 
   // Build before/after image entries, joining CII scores from the preprocess result.
@@ -900,6 +1029,29 @@ export default function PreprocessPage() {
             })}
           </div>
 
+          {/* Phase 1 — video container placeholder with spinner */}
+          {isRunning && jobMeta?.input_type === "video" && (
+            <div className="mt-6 w-full">
+              <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                <Video className="w-4 h-4" />
+                Preprocessed Video Output
+              </h2>
+              <div className="w-full bg-white dark:bg-gray-950 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+                {/* Spinner area */}
+                <div className="w-full bg-gray-100 dark:bg-gray-900 flex flex-col items-center justify-center gap-3 py-16">
+                  <Loader2 className="w-10 h-10 text-emerald-500 animate-spin" />
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Processing video…</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500">The processed output will appear here once the pipeline completes.</p>
+                </div>
+                {/* Note strip */}
+                <div className="border-t border-gray-100 dark:border-gray-800 px-5 py-3 flex items-center gap-2">
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 shrink-0" />
+                  <p className="text-xs text-amber-600 dark:text-amber-400">This may take several minutes for large videos.</p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Execution dashboard — visible while running */}
           {isRunning && (
             <ExecutionDashboard
@@ -933,7 +1085,7 @@ export default function PreprocessPage() {
         {isComplete && (
           <>
             {/* Cluster Cards + Step Timing — collapsible, survives refresh via localStorage */}
-            {result && result.cluster_info.length > 0 && (
+            {result && result.cluster_info?.length > 0 && (
               <div className="bg-white dark:bg-gray-950 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
                 {/* Toggle header */}
                 <button
@@ -999,8 +1151,26 @@ export default function PreprocessPage() {
               </div>
             )}
 
-            {/* Before / After Comparisons */}
-            {imageFiles.length > 0 && (
+            {/* Video pipeline — preprocessed video player */}
+            {jobMeta?.input_type === "video" && (() => {
+              const videoFile = jobMeta.files[0];
+              const ext = videoFile?.filename.split(".").pop() ?? "mp4";
+              // Use processed_path from job status if available; otherwise fall back
+              // to the standard static path pattern used by the backend
+              const videoSrc = videoFile?.processed_path
+                ? `${API_BASE_URL}/static/${videoFile.processed_path}`
+                : `${API_BASE_URL}/static/${encodeURIComponent(job_id)}/processed/${videoFile?.file_id}.${ext}`;
+              return (
+                <VideoPlayer
+                  src={videoSrc}
+                  totalFrames={result?.total_processed ?? 0}
+                  steps={result?.pipeline_steps ?? []}
+                />
+              );
+            })()}
+
+            {/* Image pipeline — Before / After Comparisons */}
+            {jobMeta?.input_type !== "video" && imageFiles.length > 0 && (
               <div>
                 <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">
                   Before / After Comparison

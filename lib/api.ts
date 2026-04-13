@@ -169,13 +169,17 @@ export async function uploadImage(jobId: string, file: File): Promise<unknown> {
 
 // ─── Preprocess ───────────────────────────────────────────────────────────────
 
-/** POST /api/v1/jobs/{job_id}/preprocess — run preprocessing pipeline */
-export async function preprocessJob(jobId: string): Promise<PreprocessResponse> {
+/** POST /api/v1/jobs/{job_id}/preprocess — start preprocessing pipeline (202 Accepted) */
+export async function preprocessJob(jobId: string): Promise<void> {
   const res = await fetch(
     `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/preprocess`,
     { method: 'POST' }
   );
-  return handleResponse<PreprocessResponse>(res);
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
+    throw new Error(errData.detail || `HTTP ${res.status}`);
+  }
+  // 202 Accepted — pipeline started in background, no body
 }
 
 // ─── Detect ───────────────────────────────────────────────────────────────────
