@@ -28,6 +28,7 @@ import {
   Tag,
   Layers,
   ImageIcon,
+  Film,
   FileText,
   FileImage,
 } from "lucide-react";
@@ -38,6 +39,12 @@ import { ModeToggle } from "@/components/ui/mode-toggle";
 // ─── Types / Helpers ──────────────────────────────────────────────────────────
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://viscrete-core.shares.zrok.io";
+
+const VIDEO_EXTS = new Set(['.mp4', '.webm', '.mov', '.avi', '.mkv']);
+function isVideoPath(p: string) {
+  const ext = p.slice(p.lastIndexOf('.')).toLowerCase();
+  return VIDEO_EXTS.has(ext);
+}
 
 type Severity = "Low" | "Medium" | "High";
 
@@ -116,6 +123,9 @@ export default function ResultPage() {
   const peelingCount  = flatDetections.filter(d => d.defect_type === 'peeling').length;
   const algaeCount    = flatDetections.filter(d => d.defect_type === 'algae').length;
   const stainCount    = flatDetections.filter(d => d.defect_type === 'staining').length;
+
+  // View mode — images (carousel) vs video player
+  const [viewMode, setViewMode] = useState<"images" | "video">("images");
 
   // Image carousel state
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -300,9 +310,12 @@ export default function ResultPage() {
 
   // ── Image carousel ──────────────────────────────────────────────────────────
 
-  // annotated_paths is the authoritative list of images from the flat API response
+  // Split annotated_paths into image frames and video files
   const annotatedPaths: string[] = flatData?.annotated_paths ?? [];
-  const totalImages = annotatedPaths.length;
+  const imageAnnotatedPaths = annotatedPaths.filter(p => !isVideoPath(p));
+  const videoAnnotatedPaths = annotatedPaths.filter(isVideoPath);
+  const isVideoJob = videoAnnotatedPaths.length > 0;
+  const totalImages = imageAnnotatedPaths.length;
 
   const goToPrevious = () => setCurrentImageIndex(prev => (prev === 0 ? totalImages - 1 : prev - 1));
   const goToNext = () => setCurrentImageIndex(prev => (prev === totalImages - 1 ? 0 : prev + 1));
@@ -320,7 +333,7 @@ export default function ResultPage() {
 
   // Derive processed image path from annotated path:
   // e.g. "uuid/annotated/file_annotated.jpg" → "uuid/processed/file.jpg"
-  const currentAnnotatedPath = annotatedPaths[currentImageIndex];
+  const currentAnnotatedPath = imageAnnotatedPaths[currentImageIndex];
   const currentImageSrc = currentAnnotatedPath
     ? `${API_BASE_URL}/static/${currentAnnotatedPath
         .replace('/annotated/', '/processed/')
@@ -484,7 +497,43 @@ export default function ResultPage() {
             {/* Overlay Controls */}
             <div className="flex justify-center pt-6 px-8">
               <div className="bg-white/90 backdrop-blur-sm border border-gray-200 dark:bg-gray-950/90 dark:border-gray-700 rounded-lg px-6 py-3 flex flex-col gap-3">
-                {/* Row 1 — overlay type toggles */}
+
+                {/* Video / Images toggle — shown only for video jobs */}
+                {isVideoJob && (
+                  <div className="flex items-center gap-3">
+                    <span className="text-gray-500 dark:text-gray-400 text-sm uppercase tracking-wider">View</span>
+                    <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-full p-0.5 gap-0.5">
+                      <button
+                        onClick={() => setViewMode("images")}
+                        className={cn(
+                          'flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer',
+                          viewMode === "images"
+                            ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200',
+                        )}
+                      >
+                        <ImageIcon className="w-3.5 h-3.5" />
+                        Images
+                      </button>
+                      <button
+                        onClick={() => setViewMode("video")}
+                        className={cn(
+                          'flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer',
+                          viewMode === "video"
+                            ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200',
+                        )}
+                      >
+                        <Film className="w-3.5 h-3.5" />
+                        Video
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Overlay toggles + class pills — hidden in video mode */}
+                {viewMode === "images" && (
+                <>
                 <div className="flex items-center gap-6">
                   <span className="text-gray-500 dark:text-gray-400 text-sm uppercase tracking-wider">Overlays</span>
 
@@ -548,11 +597,30 @@ export default function ResultPage() {
                     );
                   })}
                 </div>
+                </>
+                )}
               </div>
             </div>
 
-            {/* Image Carousel */}
+            {/* Image Carousel / Video Player */}
             <div className="flex-1 flex flex-col p-8 min-h-0">
+
+              {/* ── Video player ─────────────────────────────────────────────── */}
+              {viewMode === "video" && isVideoJob && (
+                <div className="bg-gray-200/40 border-2 border-dashed border-gray-300 dark:bg-gray-800/30 dark:border-gray-700/50 rounded-lg mb-4 flex items-center justify-center" style={{ height: '480px' }}>
+                  <video
+                    key={videoAnnotatedPaths[0]}
+                    src={`${API_BASE_URL}/static/${videoAnnotatedPaths[0]}`}
+                    controls
+                    className="max-w-full max-h-full rounded"
+                    style={{ maxHeight: '464px' }}
+                  />
+                </div>
+              )}
+
+              {/* ── Image carousel ───────────────────────────────────────────── */}
+              {viewMode === "images" && (
+              <>
               <div className="bg-gray-200/40 border-2 border-dashed border-gray-300 dark:bg-gray-800/30 dark:border-gray-700/50 rounded-lg mb-4 p-8" style={{ height: '480px' }}>
                 {!currentImageSrc ? (
                   <div className="w-full h-full flex flex-col items-center justify-center">
@@ -650,6 +718,8 @@ export default function ResultPage() {
                     <ArrowRight className="w-5 h-5 ml-2" />
                   </Button>
                 </div>
+              )}
+              </>
               )}
 
               {/* Defect Table */}
