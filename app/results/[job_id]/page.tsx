@@ -92,6 +92,10 @@ export default function ResultPage() {
   const [detectData, setDetectData] = useState<DetectResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [needsDetection, setNeedsDetection] = useState(false);
+  const [isPolling, setIsPolling] = useState(false);
+
+  const mountedRef = useRef(true);
+  useEffect(() => { return () => { mountedRef.current = false; }; }, []);
 
   // Report state
   const [isGenerating, setIsGenerating] = useState(false);
@@ -164,6 +168,11 @@ export default function ResultPage() {
             }
             return;
           }
+          if (job.status === "detecting") {
+            // Detection is already in-progress on the backend — poll until resolved
+            pollForDetection();
+            return;
+          }
           if (job.status === "preprocessed") {
             setNeedsDetection(true);
             return;
@@ -191,6 +200,45 @@ export default function ResultPage() {
     } finally {
       setIsRunning(false);
     }
+  }
+
+  function pollForDetection() {
+    setIsPolling(true);
+    setIsRunning(true);
+    setError(null);
+
+    const tick = async () => {
+      if (!mountedRef.current) return;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const job = await res.json();
+        if (!mountedRef.current) return;
+
+        if (REDIRECT_STATUSES.has(job.status)) {
+          setIsPolling(false);
+          if (job.status === "completed") setReportGenerated(true);
+          await fetchCachedResults();
+          return;
+        }
+        if (job.status === "detecting") {
+          // Still running — check again in 2 s
+          setTimeout(tick, 2000);
+          return;
+        }
+        // Unexpected status (e.g. backend rolled back to preprocessed on error)
+        setIsPolling(false);
+        setIsRunning(false);
+        setError(`Unexpected job status during detection: ${job.status}`);
+      } catch (e: unknown) {
+        if (!mountedRef.current) return;
+        setIsPolling(false);
+        setIsRunning(false);
+        setError(e instanceof Error ? e.message : "Failed to poll job status");
+      }
+    };
+
+    tick();
   }
 
   async function runDetection() {
@@ -376,8 +424,12 @@ export default function ResultPage() {
       {isRunning && (
         <div className="flex flex-col items-center justify-center flex-1 gap-4 bg-gray-100 dark:bg-gray-900 text-gray-500 dark:text-gray-400">
           <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
-          <p className="font-medium text-gray-900 dark:text-white">Running YOLOv11 inference…</p>
-          <p className="text-sm">This may take a moment</p>
+          <p className="font-medium text-gray-900 dark:text-white">
+            {isPolling ? "Detection in progress…" : "Running YOLOv11 inference…"}
+          </p>
+          <p className="text-sm">
+            {isPolling ? "Waiting for the backend to finish" : "This may take a moment"}
+          </p>
         </div>
       )}
 
