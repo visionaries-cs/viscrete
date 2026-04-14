@@ -100,6 +100,7 @@ export default function ResultPage() {
   const [error, setError] = useState<string | null>(null);
   const [needsDetection, setNeedsDetection] = useState(false);
   const [isPolling, setIsPolling] = useState(false);
+  const [isVideoJob, setIsVideoJob] = useState(false);
 
   const mountedRef = useRef(true);
   useEffect(() => { return () => { mountedRef.current = false; }; }, []);
@@ -169,6 +170,10 @@ export default function ResultPage() {
               month: "long", day: "numeric", year: "numeric",
               hour: "numeric", minute: "2-digit",
             }));
+          }
+          // Detect video job from uploaded filenames
+          if (Array.isArray(job.files) && job.files.some((f: { filename: string }) => isVideoPath(f.filename))) {
+            setIsVideoJob(true);
           }
           if (REDIRECT_STATUSES.has(job.status)) {
             // Already detected — fetch cached results directly
@@ -310,12 +315,13 @@ export default function ResultPage() {
 
   // ── Image carousel ──────────────────────────────────────────────────────────
 
-  // Split annotated_paths into image frames and video files
+  // Split annotated_paths into image frames only (video path comes from annotated_video_path)
   const annotatedPaths: string[] = flatData?.annotated_paths ?? [];
   const imageAnnotatedPaths = annotatedPaths.filter(p => !isVideoPath(p));
-  const videoAnnotatedPaths = annotatedPaths.filter(isVideoPath);
-  const isVideoJob = videoAnnotatedPaths.length > 0;
   const totalImages = imageAnnotatedPaths.length;
+
+  // Use annotated_video_path directly from the detection response — do not construct manually
+  const annotatedVideoPath: string | null = flatData?.annotated_video_path ?? null;
 
   const goToPrevious = () => setCurrentImageIndex(prev => (prev === 0 ? totalImages - 1 : prev - 1));
   const goToNext = () => setCurrentImageIndex(prev => (prev === totalImages - 1 ? 0 : prev + 1));
@@ -335,9 +341,7 @@ export default function ResultPage() {
   // e.g. "uuid/annotated/file_annotated.jpg" → "uuid/processed/file.jpg"
   const currentAnnotatedPath = imageAnnotatedPaths[currentImageIndex];
   const currentImageSrc = currentAnnotatedPath
-    ? `${API_BASE_URL}/static/${currentAnnotatedPath
-        .replace('/annotated/', '/processed/')
-        .replace(/_annotated(\.[^.]+)$/, '$1')}`
+    ? `${API_BASE_URL}/static/${currentAnnotatedPath}`
     : null;
 
   // Reset dimensions when the displayed image changes so stale overlays don't show
@@ -531,8 +535,8 @@ export default function ResultPage() {
                   </div>
                 )}
 
-                {/* Overlay toggles + class pills — hidden in video mode */}
-                {viewMode === "images" && (
+                {/* Overlay toggles + class pills — hidden for video jobs */}
+                {!isVideoJob && viewMode === "images" && (
                 <>
                 <div className="flex items-center gap-6">
                   <span className="text-gray-500 dark:text-gray-400 text-sm uppercase tracking-wider">Overlays</span>
@@ -608,13 +612,20 @@ export default function ResultPage() {
               {/* ── Video player ─────────────────────────────────────────────── */}
               {viewMode === "video" && isVideoJob && (
                 <div className="bg-gray-200/40 border-2 border-dashed border-gray-300 dark:bg-gray-800/30 dark:border-gray-700/50 rounded-lg mb-4 flex items-center justify-center" style={{ height: '480px' }}>
-                  <video
-                    key={videoAnnotatedPaths[0]}
-                    src={`${API_BASE_URL}/static/${videoAnnotatedPaths[0]}`}
-                    controls
-                    className="max-w-full max-h-full rounded"
-                    style={{ maxHeight: '464px' }}
-                  />
+                  {annotatedVideoPath ? (
+                    <video
+                      key={annotatedVideoPath}
+                      src={`${API_BASE_URL}/static/${annotatedVideoPath}`}
+                      controls
+                      className="max-w-full max-h-full rounded"
+                      style={{ maxHeight: '464px' }}
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center gap-3 text-gray-400 dark:text-gray-600">
+                      <Film className="w-12 h-12" />
+                      <p className="text-sm">Annotated video not available</p>
+                    </div>
+                  )}
                 </div>
               )}
 
