@@ -174,6 +174,9 @@ export default function ResultPage() {
           // Detect video job from uploaded filenames
           if (Array.isArray(job.files) && job.files.some((f: { filename: string }) => isVideoPath(f.filename))) {
             setIsVideoJob(true);
+            setShowBoundingBoxes(false);
+            setShowLabels(false);
+            setShowColorOverlay(false);
           }
           if (REDIRECT_STATUSES.has(job.status)) {
             // Already detected — fetch cached results directly
