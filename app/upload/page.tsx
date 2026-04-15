@@ -9,7 +9,6 @@ import {
   validateFiles,
   listJobs,
   deleteJob,
-  getJobFiles,
   updateLocation,
   API_BASE_URL,
   type JobStatusResponse,
@@ -323,37 +322,31 @@ export default function UploadPage() {
     return p;
   }
 
-  // After a save, re-fetch file list and merge updated GPS into validationResults
-  async function refreshValidationGps(jid: string) {
-    try {
-      const items = await getJobFiles(jid);
-      // Index by both file_id and filename so we can match regardless of what validate returned
-      const byId: Record<string, typeof items[0]>       = {};
-      const byName: Record<string, typeof items[0]>     = {};
-      for (const item of items) {
-        byId[item.file_id]     = item;
-        byName[item.filename]  = item;
-      }
+  // Optimistically apply a confirmed location into validationResults.
+  // The backend PATCH only writes to metadata.json — re-fetching the job DB record
+  // would return stale null GPS data, so we update local state directly.
+  function applyLocationToResults(
+    payload: LocationUpdateRequest,
+    ctx: typeof modalCtx,
+    capturedSelected: Set<string>,
+  ) {
+    const newGpsData = payload.latitude != null && payload.longitude != null
+      ? { latitude: payload.latitude, longitude: payload.longitude, altitude: payload.altitude ?? null }
+      : null;
+    const newLabel = payload.location_label ?? null;
 
-      setValidationResults(prev =>
-        prev ? prev.map(r => {
-          // Match by file_id first, fall back to filename
-          const updated = (r.file_id ? byId[r.file_id] : null) ?? byName[r.filename];
-          if (!updated) return r;
-          const lat = updated.gps_data?.latitude;
-          const lng = updated.gps_data?.longitude;
-          if (lat != null && lng != null) {
-            return { ...r, gps_data: { latitude: lat, longitude: lng, altitude: updated.gps_data?.altitude ?? null } };
-          }
-          if (updated.location_label) {
-            return { ...r, location_label: updated.location_label };
-          }
-          return r;
-        }) : prev
-      );
-    } catch {
-      // non-critical
-    }
+    setValidationResults(prev =>
+      prev ? prev.map(r => {
+        const isTargeted =
+          ctx === "batch"  ? (r.gps_data?.latitude == null && r.gps == null && !r.location_label) :
+          ctx === "select" ? capturedSelected.has(r.filename) :
+          r.filename === ctx;
+        if (!isTargeted) return r;
+        const updatedGps   = newGpsData ?? r.gps_data ?? null;
+        const updatedLabel = newLabel   ?? r.location_label ?? null;
+        return { ...r, gps_data: updatedGps, location_label: updatedLabel };
+      }) : prev
+    );
   }
 
   // No-GPS eligible files — keyed by filename (file_id is optional on ValidationResult)
@@ -388,6 +381,9 @@ export default function UploadPage() {
     const payload = toLocationPayload(result);
     if (!payload.latitude && !payload.location_label) return;
 
+    // Capture before clearSelection() mutates the set
+    const capturedSelected = new Set(selectedFilenames);
+
     setSaving(true);
     setSaveError(null);
     try {
@@ -404,7 +400,7 @@ export default function UploadPage() {
       }
       setSaveSuccess(modalCtx);
       setModalCtx(null);
-      await refreshValidationGps(jobId);
+      applyLocationToResults(payload, modalCtx, capturedSelected);
     } catch (e: unknown) {
       setSaveError(e instanceof Error ? e.message : "Update failed");
     } finally {

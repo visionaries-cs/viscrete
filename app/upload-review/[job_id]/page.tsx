@@ -72,7 +72,7 @@ export default function UploadReviewPage() {
       const items = await getJobFiles(jobId);
       setFiles(items.map(f => ({
         ...f,
-        hasGps: f.gps_data?.latitude != null && f.gps_data?.longitude != null,
+        hasGps: (f.gps_data?.latitude != null && f.gps_data?.longitude != null) || !!f.location_label,
       })));
     } catch (e: unknown) {
       setFetchError(e instanceof Error ? e.message : "Failed to load files");
@@ -126,6 +126,9 @@ export default function UploadReviewPage() {
     // Guard: must have at least coords or label
     if (!payload.latitude && !payload.location_label) return;
 
+    // Capture selected IDs before clearSelection() is called below
+    const capturedSelectedIds = new Set(selectedIds);
+
     setSaving(true);
     setSaveError(null);
     try {
@@ -141,7 +144,30 @@ export default function UploadReviewPage() {
       }
       setSaveSuccess(modalCtx);
       setModalCtx(null);
-      await loadFiles();
+
+      // The backend PATCH only writes to metadata.json — the jobs DB record is not
+      // updated, so re-fetching via loadFiles() would return stale null GPS data.
+      // Optimistically apply the saved location directly to local state instead.
+      const newGpsData = payload.latitude != null && payload.longitude != null
+        ? { latitude: payload.latitude, longitude: payload.longitude, altitude: payload.altitude ?? null }
+        : null;
+      const newLabel = payload.location_label ?? null;
+
+      setFiles(prev => prev.map(f => {
+        const isTargeted =
+          modalCtx === "batch"  ? !f.hasGps :
+          modalCtx === "select" ? capturedSelectedIds.has(f.file_id) :
+          f.file_id === modalCtx;
+        if (!isTargeted) return f;
+        const updatedGps    = newGpsData ?? f.gps_data ?? null;
+        const updatedLabel  = newLabel   ?? f.location_label ?? null;
+        return {
+          ...f,
+          gps_data:      updatedGps,
+          location_label: updatedLabel,
+          hasGps: (updatedGps?.latitude != null && updatedGps?.longitude != null) || !!updatedLabel,
+        };
+      }));
     } catch (e: unknown) {
       setSaveError(e instanceof Error ? e.message : "Update failed");
     } finally {
@@ -233,7 +259,7 @@ export default function UploadReviewPage() {
                     >
                       {t === "gps"    && <MapPin    className="w-3 h-3" />}
                       {t === "no-gps" && <MapPinOff className="w-3 h-3" />}
-                      {t === "all" ? "All" : t === "gps" ? "With GPS" : "No GPS"}
+                      {t === "all" ? "All" : t === "gps" ? "With Location" : "No Location"}
                     </button>
                   ))}
                 </div>
@@ -334,10 +360,14 @@ export default function UploadReviewPage() {
                         <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
                           {file.filename}
                         </p>
-                        {file.hasGps ? (
+                        {file.gps_data?.latitude != null && file.gps_data?.longitude != null ? (
                           <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5 font-mono">
-                            {file.gps_data!.latitude!.toFixed(6)}, {file.gps_data!.longitude!.toFixed(6)}
-                            {file.gps_data?.altitude != null && ` · ${file.gps_data.altitude.toFixed(1)} m`}
+                            {file.gps_data.latitude.toFixed(6)}, {file.gps_data.longitude.toFixed(6)}
+                            {file.gps_data.altitude != null && ` · ${file.gps_data.altitude.toFixed(1)} m`}
+                          </p>
+                        ) : file.location_label ? (
+                          <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5 truncate">
+                            {file.location_label}
                           </p>
                         ) : (
                           <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">No location</p>
@@ -352,7 +382,7 @@ export default function UploadReviewPage() {
                             ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
                             : "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
                         )}>
-                          {file.hasGps ? "GPS" : "No GPS"}
+                          {file.hasGps ? (file.gps_data?.latitude != null ? "GPS" : "Label") : "No GPS"}
                         </span>
                         {!file.hasGps && (
                           <button
@@ -388,13 +418,13 @@ export default function UploadReviewPage() {
                 </div>
                 <div className="border border-gray-200 dark:border-gray-800 rounded-xl p-3">
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 flex items-center gap-1">
-                    <MapPin className="w-3.5 h-3.5 text-emerald-500" /> With GPS
+                    <MapPin className="w-3.5 h-3.5 text-emerald-500" /> Located
                   </p>
                   <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{withGps}</p>
                 </div>
                 <div className="border border-gray-200 dark:border-gray-800 rounded-xl p-3">
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 flex items-center gap-1">
-                    <MapPinOff className="w-3.5 h-3.5 text-orange-500" /> No GPS
+                    <MapPinOff className="w-3.5 h-3.5 text-orange-500" /> No Location
                   </p>
                   <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">{withoutGps}</p>
                 </div>
@@ -446,7 +476,7 @@ export default function UploadReviewPage() {
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
                 {allBatchDisabled
-                  ? "All files already have GPS — nothing to update."
+                  ? "All files already have a location — nothing to update."
                   : `Applies one location to all ${withoutGps} file${withoutGps !== 1 ? "s" : ""} missing a location.`
                 }
               </p>
