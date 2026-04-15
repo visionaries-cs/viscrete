@@ -333,8 +333,8 @@ export default function ResultPage() {
     const image = imageRef.current;
     if (!image) return;
     setImageDimensions({
-      width: image.width,
-      height: image.height,
+      width:        image.width,
+      height:       image.height,
       naturalWidth: image.naturalWidth,
       naturalHeight: image.naturalHeight,
     });
@@ -352,20 +352,24 @@ export default function ResultPage() {
     setImageDimensions({ width: 0, height: 0, naturalWidth: 0, naturalHeight: 0 });
   }, [currentImageSrc]);
 
+  // ResizeObserver — fires after every layout change to the img element
+  // (window.resize misses flex-layout reflows and gives stale dimensions)
   useEffect(() => {
-    const updateDimensions = () => {
-      const image = imageRef.current;
-      if (!image) return;
+    const image = imageRef.current;
+    if (!image) return;
+    const ro = new ResizeObserver(() => {
+      // naturalWidth is 0 until the image data is loaded; skip until then
+      if (!image.complete || !image.naturalWidth) return;
       setImageDimensions({
-        width: image.width,
-        height: image.height,
+        width:        image.width,
+        height:       image.height,
         naturalWidth: image.naturalWidth,
         naturalHeight: image.naturalHeight,
       });
-    };
-    window.addEventListener("resize", updateDimensions);
-    return () => window.removeEventListener("resize", updateDimensions);
-  }, []);
+    });
+    ro.observe(image);
+    return () => ro.disconnect();
+  }, [currentImageSrc]);
 
   // API is flat — all detections belong to the job, not per-image
   // Filter by per-class visibility toggle
@@ -665,10 +669,17 @@ export default function ResultPage() {
                           const { bounding_box, defect_type, confidence } = detection;
                           const { x1, y1, x2, y2 } = bounding_box;
 
-                          const left   = x1 * scaleX;
-                          const top    = y1 * scaleY;
-                          const width  = (x2 - x1) * scaleX;
-                          const height = (y2 - y1) * scaleY;
+                          // Clamp coords to image bounds — backend may return values
+                          // slightly outside [0, natural] due to model padding.
+                          const cx1 = Math.max(0, Math.min(x1, naturalWidth));
+                          const cy1 = Math.max(0, Math.min(y1, naturalHeight));
+                          const cx2 = Math.max(0, Math.min(x2, naturalWidth));
+                          const cy2 = Math.max(0, Math.min(y2, naturalHeight));
+
+                          const left   = cx1 * scaleX;
+                          const top    = cy1 * scaleY;
+                          const width  = (cx2 - cx1) * scaleX;
+                          const height = (cy2 - cy1) * scaleY;
 
                           // Place label above the box when there's room (top > 28px),
                           // otherwise below. Clamp left so the label doesn't overflow
