@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -9,16 +9,23 @@ import {
   validateFiles,
   listJobs,
   deleteJob,
+  getJobFiles,
+  updateLocation,
   API_BASE_URL,
   type JobStatusResponse,
   type ValidationResult,
+  type LocationUpdateRequest,
 } from "@/lib/api";
+import LocationPickerModal, {
+  type LocationPickerResult,
+} from "@/components/LocationPickerModal";
 import {
   Upload,
   Loader2,
   CheckCircle2,
   XCircle,
   MapPin,
+  MapPinOff,
   ChevronLeft,
   ChevronRight,
   ArrowRight,
@@ -29,6 +36,10 @@ import {
   AlertCircle,
   AlertTriangle,
   X,
+  Map,
+  Layers,
+  CheckSquare,
+  Square,
 } from "lucide-react";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 
@@ -114,11 +125,24 @@ export default function UploadPage() {
   const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
   const [isBatchDeleting, setIsBatchDeleting] = useState(false);
 
-  // ── Image preview modal
-  const [previewResult, setPreviewResult] = useState<ValidationResult | null>(null);
+  // ── Image preview modal — store filename so we always look up the live record
+  const [previewFilename, setPreviewFilename] = useState<string | null>(null);
+  const previewResult = previewFilename
+    ? (validationResults ?? []).find(r => r.filename === previewFilename) ?? null
+    : null;
 
   // ── Toast
   const [toast, setToast] = useState<{ msg: string; type: "error" | "warn" } | null>(null);
+
+  // ── Location state
+  // selectedFilenames: selection keys are filenames (file_id is optional on ValidationResult)
+  // modalCtx: "batch" | "select" | filename string (single) | null
+  const [selectedFilenames, setSelectedFilenames] = useState<Set<string>>(new Set());
+  type ModalContext = "batch" | "select" | string | null;
+  const [modalCtx, setModalCtx] = useState<ModalContext>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState<ModalContext>(null);
 
   // Reset files when media type changes
   useEffect(() => {
@@ -286,9 +310,111 @@ export default function UploadPage() {
     if (jobId) router.push(`/preprocess/${encodeURIComponent(jobId)}`);
   }
 
+  // ── Location helpers ─────────────────────────────────────────────────────────
+
+  function toLocationPayload(result: LocationPickerResult): LocationUpdateRequest {
+    const p: LocationUpdateRequest = {};
+    if (result.latitude != null && result.longitude != null) {
+      p.latitude  = result.latitude;
+      p.longitude = result.longitude;
+      if (result.altitude != null) p.altitude = result.altitude;
+    }
+    if (result.location_label) p.location_label = result.location_label;
+    return p;
+  }
+
+  // After a save, re-fetch file list and merge updated GPS into validationResults
+  async function refreshValidationGps(jid: string) {
+    try {
+      const items = await getJobFiles(jid);
+      // Index by both file_id and filename so we can match regardless of what validate returned
+      const byId: Record<string, typeof items[0]>       = {};
+      const byName: Record<string, typeof items[0]>     = {};
+      for (const item of items) {
+        byId[item.file_id]     = item;
+        byName[item.filename]  = item;
+      }
+
+      setValidationResults(prev =>
+        prev ? prev.map(r => {
+          // Match by file_id first, fall back to filename
+          const updated = (r.file_id ? byId[r.file_id] : null) ?? byName[r.filename];
+          if (!updated) return r;
+          const lat = updated.gps_data?.latitude;
+          const lng = updated.gps_data?.longitude;
+          if (lat != null && lng != null) {
+            return { ...r, gps_data: { latitude: lat, longitude: lng, altitude: updated.gps_data?.altitude ?? null } };
+          }
+          if (updated.location_label) {
+            return { ...r, location_label: updated.location_label };
+          }
+          return r;
+        }) : prev
+      );
+    } catch {
+      // non-critical
+    }
+  }
+
+  // No-GPS eligible files — keyed by filename (file_id is optional on ValidationResult)
+  const noGpsFilenames = (validationResults ?? [])
+    .filter(r => r.gps_data?.latitude == null && r.gps == null && !r.location_label)
+    .map(r => r.filename);
+
+  const eligibleCount = noGpsFilenames.length;
+
+  function toggleSelectFilename(filename: string) {
+    setSelectedFilenames(prev => {
+      const next = new Set(prev);
+      next.has(filename) ? next.delete(filename) : next.add(filename);
+      return next;
+    });
+  }
+
+  function selectAllEligible() { setSelectedFilenames(new Set(noGpsFilenames)); }
+  function clearSelection()    { setSelectedFilenames(new Set()); }
+
+  // Resolve filenames → file_ids for the PATCH payload
+  function fileIdsForFilenames(filenames: Iterable<string>): string[] {
+    const all = validationResults ?? [];
+    return [...filenames].flatMap(name => {
+      const match = all.find(r => r.filename === name);
+      return match?.file_id ? [match.file_id] : [];
+    });
+  }
+
+  async function handleLocationConfirm(result: LocationPickerResult) {
+    if (!jobId) return;
+    const payload = toLocationPayload(result);
+    if (!payload.latitude && !payload.location_label) return;
+
+    setSaving(true);
+    setSaveError(null);
+    try {
+      if (modalCtx === "batch") {
+        await updateLocation(jobId, payload);
+      } else if (modalCtx === "select") {
+        const file_ids = fileIdsForFilenames(selectedFilenames);
+        await updateLocation(jobId, { ...payload, ...(file_ids.length ? { file_ids } : {}) });
+        clearSelection();
+      } else if (typeof modalCtx === "string") {
+        // modalCtx is a filename for single mode
+        const file_ids = fileIdsForFilenames([modalCtx]);
+        await updateLocation(jobId, { ...payload, ...(file_ids.length ? { file_ids } : {}) });
+      }
+      setSaveSuccess(modalCtx);
+      setModalCtx(null);
+      await refreshValidationGps(jobId);
+    } catch (e: unknown) {
+      setSaveError(e instanceof Error ? e.message : "Update failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   // ── Filter validation results
   const filteredResults = (validationResults ?? []).filter(r => {
-    const hasGps = r.gps != null;
+    const hasGps = r.gps_data?.latitude != null || r.gps != null || !!r.location_label;
     if (gpsFilter === "with" && !hasGps) return false;
     if (gpsFilter === "without" && hasGps) return false;
     const isLowQuality = r.laplacian_score < r.blur_threshold;
@@ -320,6 +446,29 @@ export default function UploadPage() {
         )}>
           <AlertCircle className="w-4 h-4 shrink-0" />
           {toast.msg}
+        </div>
+      )}
+
+      {/* ── Location picker modal ── */}
+      {modalCtx !== null && (
+        <LocationPickerModal
+          title={
+            modalCtx === "batch"  ? `Batch — apply to all ${eligibleCount} files without location` :
+            modalCtx === "select" ? `Apply to ${selectedFilenames.size} selected file${selectedFilenames.size !== 1 ? "s" : ""}` :
+            modalCtx
+          }
+          onConfirm={handleLocationConfirm}
+          onClose={() => { setModalCtx(null); setSaveError(null); }}
+        />
+      )}
+
+      {/* ── Saving overlay ── */}
+      {saving && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="flex items-center gap-3 bg-white dark:bg-[#161616] rounded-2xl px-6 py-4 shadow-xl border border-gray-200 dark:border-gray-800">
+            <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Saving location…</span>
+          </div>
         </div>
       )}
 
@@ -732,15 +881,90 @@ export default function UploadPage() {
                   </div>
                 </div>
 
+                {/* Location toolbar — only when files have no GPS */}
+                {eligibleCount > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 px-3 py-2.5 bg-white dark:bg-[#161616] rounded-xl border border-gray-200 dark:border-gray-800">
+                    {/* Select-all toggle */}
+                    <button
+                      onClick={selectedFilenames.size === eligibleCount ? clearSelection : selectAllEligible}
+                      className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition cursor-pointer"
+                    >
+                      {selectedFilenames.size === eligibleCount
+                        ? <CheckSquare className="w-4 h-4 text-blue-500" />
+                        : <Square className="w-4 h-4" />}
+                      {selectedFilenames.size === eligibleCount ? "Deselect all" : "Select all no-GPS"}
+                    </button>
+
+                    {selectedFilenames.size > 0 && (
+                      <>
+                        <span className="text-gray-300 dark:text-gray-700">|</span>
+                        <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">{selectedFilenames.size} selected</span>
+                        <button
+                          onClick={() => { setModalCtx("select"); setSaveError(null); setSaveSuccess(null); }}
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white transition cursor-pointer"
+                        >
+                          <Map className="w-3.5 h-3.5" /> Set Location for Selected
+                        </button>
+                        <button
+                          onClick={clearSelection}
+                          className="text-xs text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition cursor-pointer ml-auto"
+                        >Clear</button>
+                      </>
+                    )}
+
+                    <div className="ml-auto flex items-center gap-2">
+                      {saveSuccess === "batch" && (
+                        <span className="text-xs text-emerald-600 dark:text-emerald-400">Applied.</span>
+                      )}
+                      <button
+                        onClick={() => { setModalCtx("batch"); setSaveError(null); setSaveSuccess(null); }}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-gray-900 hover:bg-gray-700 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100 text-white transition cursor-pointer"
+                      >
+                        <Layers className="w-3.5 h-3.5" /> Set Location for All ({eligibleCount})
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Save error */}
+                {saveError && (
+                  <div className="flex items-center gap-2 px-3 py-2.5 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-700 dark:text-red-300">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    {saveError}
+                    <button onClick={() => setSaveError(null)} className="ml-auto text-xs text-red-400 hover:text-red-600 cursor-pointer">Dismiss</button>
+                  </div>
+                )}
+
                 {/* File cards */}
                 {filteredResults.length === 0 ? (
                   <p className="text-sm text-gray-400 text-center py-8">No files match the current filters.</p>
                 ) : (
                   <>
                     <div className="space-y-1.5 max-h-[560px] overflow-y-auto pr-1">
-                      {pagedResults.map((r, i) => (
-                        <FileResultCard key={(resultsPage - 1) * RESULTS_PER_PAGE + i} result={r} onPreview={() => setPreviewResult(r)} />
-                      ))}
+                      {pagedResults.map((r, i) => {
+                        const hasCoords = r.gps_data?.latitude != null || r.gps != null;
+                        const isNoGps = !hasCoords && !r.location_label;
+                        const isSelected = selectedFilenames.has(r.filename);
+                        const displayCoords: { lat: number; lng: number } | null =
+                          r.gps_data?.latitude != null
+                            ? { lat: r.gps_data.latitude!, lng: r.gps_data.longitude! }
+                            : r.gps ? { lat: r.gps.lat, lng: r.gps.lng }
+                            : null;
+                        const locationLabel: string | null = r.location_label ?? null;
+                        return (
+                          <FileResultCard
+                            key={(resultsPage - 1) * RESULTS_PER_PAGE + i}
+                            result={r}
+                            isNoGps={isNoGps}
+                            isSelected={isSelected}
+                            displayCoords={displayCoords}
+                            locationLabel={locationLabel}
+                            onPreview={() => setPreviewFilename(r.filename)}
+                            onToggleSelect={isNoGps ? () => toggleSelectFilename(r.filename) : undefined}
+                            onSetLocation={isNoGps ? () => { setModalCtx(r.filename); setSaveError(null); setSaveSuccess(null); } : undefined}
+                          />
+                        );
+                      })}
                     </div>
                     {totalResultsPages > 1 && (
                       <div className="flex items-center justify-between pt-2">
@@ -774,7 +998,7 @@ export default function UploadPage() {
 
       {/* ── Image Preview Modal ── */}
       {previewResult && (
-        <ImagePreviewModal result={previewResult} onClose={() => setPreviewResult(null)} />
+        <ImagePreviewModal result={previewResult} onClose={() => setPreviewFilename(null)} />
       )}
     </div>
   );
@@ -847,10 +1071,17 @@ function ImagePreviewModal({ result, onClose }: { result: ValidationResult; onCl
           {/* GPS */}
           <div className="bg-gray-50 dark:bg-gray-900 rounded-xl px-3 py-2.5">
             <p className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-1">GPS</p>
-            {result.gps ? (
+            {result.gps_data?.latitude != null ? (
+              <p className="font-mono text-xs text-gray-700 dark:text-gray-300 leading-relaxed">
+                {result.gps_data.latitude.toFixed(5)}<br />{result.gps_data.longitude!.toFixed(5)}
+                {result.gps_data.altitude != null && <><br />{result.gps_data.altitude.toFixed(1)} m</>}
+              </p>
+            ) : result.gps ? (
               <p className="font-mono text-xs text-gray-700 dark:text-gray-300 leading-relaxed">
                 {result.gps.lat.toFixed(5)}<br />{result.gps.lng.toFixed(5)}
               </p>
+            ) : result.location_label ? (
+              <p className="text-xs text-emerald-600 dark:text-emerald-400 leading-relaxed">{result.location_label}</p>
             ) : (
               <p className="text-xs text-gray-400 dark:text-gray-500">No data</p>
             )}
@@ -871,25 +1102,57 @@ function ImagePreviewModal({ result, onClose }: { result: ValidationResult; onCl
 
 // ─── File Result Card ─────────────────────────────────────────────────────────
 
-function FileResultCard({ result, onPreview }: { result: ValidationResult; onPreview: () => void }) {
+function FileResultCard({
+  result,
+  isNoGps = false,
+  isSelected = false,
+  displayCoords = null,
+  locationLabel = null,
+  onPreview,
+  onToggleSelect,
+  onSetLocation,
+}: {
+  result: ValidationResult;
+  isNoGps?: boolean;
+  isSelected?: boolean;
+  displayCoords?: { lat: number; lng: number } | null;
+  locationLabel?: string | null;
+  onPreview: () => void;
+  onToggleSelect?: () => void;
+  onSetLocation?: () => void;
+}) {
   const isLowQuality = result.laplacian_score < result.blur_threshold;
   return (
     <div
-      onClick={onPreview}
+      onClick={onToggleSelect ?? onPreview}
       className={cn(
         "bg-white dark:bg-[#161616] rounded-xl border px-3 py-2 transition cursor-pointer",
-        result.is_valid
-          ? "border-emerald-200 dark:border-emerald-900/60 hover:border-emerald-400 dark:hover:border-emerald-700"
-          : "border-red-200 dark:border-red-900/60 hover:border-red-400 dark:hover:border-red-700"
+        isSelected
+          ? "border-blue-400 dark:border-blue-600 bg-blue-50/60 dark:bg-blue-950/30"
+          : result.is_valid
+            ? "border-emerald-200 dark:border-emerald-900/60 hover:border-emerald-400 dark:hover:border-emerald-700"
+            : "border-red-200 dark:border-red-900/60 hover:border-red-400 dark:hover:border-red-700"
       )}
     >
       {/* Single compact row */}
       <div className="flex items-center gap-2 min-w-0">
-        {result.is_valid
-          ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-          : <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />}
+        {/* Checkbox for no-GPS files, otherwise valid/invalid icon */}
+        {isNoGps ? (
+          <div onClick={e => { e.stopPropagation(); onToggleSelect?.(); }} className="shrink-0 cursor-pointer">
+            {isSelected
+              ? <CheckSquare className="w-3.5 h-3.5 text-blue-500" />
+              : <Square className="w-3.5 h-3.5 text-gray-300 dark:text-gray-600" />}
+          </div>
+        ) : (
+          result.is_valid
+            ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+            : <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+        )}
 
-        <span className="flex-1 min-w-0 truncate text-xs font-medium text-gray-800 dark:text-gray-100">
+        <span
+          className="flex-1 min-w-0 truncate text-xs font-medium text-gray-800 dark:text-gray-100"
+          onClick={e => { e.stopPropagation(); onPreview(); }}
+        >
           {result.filename}
         </span>
 
@@ -908,11 +1171,30 @@ function FileResultCard({ result, onPreview }: { result: ValidationResult; onPre
           {isLowQuality ? "Low" : "High"}
         </span>
 
-        <span className="shrink-0 flex items-center gap-0.5 text-[11px] text-gray-400 dark:text-gray-500">
-          {result.gps
-            ? <><MapPin className="w-2.5 h-2.5 text-blue-400" />{result.gps.lat.toFixed(3)}, {result.gps.lng.toFixed(3)}</>
-            : <span className="text-gray-300 dark:text-gray-700">No GPS</span>}
-        </span>
+        {isNoGps ? (
+          <>
+            <span className="shrink-0 flex items-center gap-0.5 text-[11px] text-gray-300 dark:text-gray-700">
+              <MapPinOff className="w-2.5 h-2.5 text-orange-400" /> No GPS
+            </span>
+            {onSetLocation && (
+              <button
+                onClick={e => { e.stopPropagation(); onSetLocation(); }}
+                className="shrink-0 p-1 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-950/30 transition cursor-pointer"
+                title="Set location"
+              >
+                <Map className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </>
+        ) : (
+          <span className="shrink-0 flex items-center gap-0.5 text-[11px] text-gray-400 dark:text-gray-500">
+            {displayCoords
+              ? <><MapPin className="w-2.5 h-2.5 text-blue-400" />{displayCoords.lat.toFixed(3)}, {displayCoords.lng.toFixed(3)}</>
+              : locationLabel
+                ? <><MapPin className="w-2.5 h-2.5 text-emerald-400" /><span className="truncate max-w-[80px]">{locationLabel}</span></>
+                : <span className="text-gray-300 dark:text-gray-700">No GPS</span>}
+          </span>
+        )}
       </div>
 
       {/* Error reason — indented below filename */}

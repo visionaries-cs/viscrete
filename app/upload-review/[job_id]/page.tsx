@@ -1,9 +1,18 @@
 "use client";
 
+import { useState, useCallback, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
+import {
+  getJobFiles,
+  updateLocation,
+  type FileStatusItem,
+  type LocationUpdateRequest,
+} from "@/lib/api";
+import LocationPickerModal, {
+  type LocationPickerResult,
+} from "@/components/LocationPickerModal";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   ArrowLeft,
   ArrowRight,
@@ -11,509 +20,451 @@ import {
   MapPin,
   MapPinOff,
   Image as ImageIcon,
-  ChevronUp,
-  ChevronDown,
   Layers,
   Loader2,
   AlertCircle,
+  CheckSquare,
+  Square,
+  Map,
 } from "lucide-react";
-import { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
-import { useRouter } from 'next/navigation';
-import { validateImages } from "@/lib/api";
 
-// Image data structure
-// GPS location (latitude/longitude) will be fetched per image from location API
-interface ImageData {
-  id: string;
-  filename: string;
-  size: string;
-  camera: string;
-  datetime: string;
-  latitude?: number; // Fetched from location API (can be null/undefined)
-  longitude?: number; // Fetched from location API (can be null/undefined)
-  hasGPS: boolean; // Determined by API response
-  thumbnail?: string;
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface FileRow extends FileStatusItem {
+  hasGps: boolean;
 }
 
+type FilterType = "all" | "gps" | "no-gps";
+
+// Which modal is open: "batch" | "select" | file_id string (single)
+type ModalContext = "batch" | "select" | string | null;
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Convert a LocationPickerResult into a PATCH payload for updateLocation(). */
+function toPayload(result: LocationPickerResult): LocationUpdateRequest {
+  const p: LocationUpdateRequest = {};
+  if (result.latitude != null && result.longitude != null) {
+    p.latitude  = result.latitude;
+    p.longitude = result.longitude;
+    if (result.altitude != null) p.altitude = result.altitude;
+  }
+  if (result.location_label) p.location_label = result.location_label;
+  return p;
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default function UploadReviewPage() {
-  const params = useParams();
-  const jobId = params.job_id as string;
-  
-  const [filterType, setFilterType] = useState<"all" | "gps" | "no-gps">("all");
-  const [expandedImage, setExpandedImage] = useState<string | null>(null);
-  const [images, setImages] = useState<ImageData[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  
-  // Fetch images from backend API
-  useEffect(() => {
-    const fetchImages = async () => {
-      if (!jobId) {
-        setError("No job ID provided");
-        setIsLoading(false);
-        return;
-      }
+  const params  = useParams();
+  const jobId   = params.job_id as string;
+  const router  = useRouter();
 
-      try {
-        setIsLoading(true);
-        setError(null);
+  // ── File list ───────────────────────────────────────────────────────────────
+  const [files,      setFiles]      = useState<FileRow[]>([]);
+  const [isLoading,  setIsLoading]  = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
-        const data = await validateImages(jobId);
-        
-        // Map backend response to ImageData
-        const mappedImages: ImageData[] = data.images.map((img: any) => {
-          // Parse coordinates string "latitude, longitude" to individual values
-          let latitude: number | undefined;
-          let longitude: number | undefined;
-          let hasGPS = false;
-          
-          if (img.coordinates && typeof img.coordinates === 'string') {
-            const coords = img.coordinates.split(',').map((c: string) => parseFloat(c.trim()));
-            if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
-              latitude = coords[0];
-              longitude = coords[1];
-              hasGPS = true;
-            }
-          }
-          
-          return {
-            id: img.filename || img.image_name,
-            filename: img.filename || img.image_name,
-            size: "N/A", // Backend doesn't provide size yet
-            camera: "Unknown", // Backend doesn't provide camera info yet
-            datetime: "N/A", // Backend doesn't provide datetime yet
-            latitude,
-            longitude,
-            hasGPS,
-            thumbnail: undefined
-          };
-        });
-        
-        setImages(mappedImages);
-      } catch (err) {
-        console.error('Error fetching images:', err);
-        setError(err instanceof Error ? err.message : 'Failed to fetch images');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchImages();
+  const loadFiles = useCallback(async () => {
+    setIsLoading(true);
+    setFetchError(null);
+    try {
+      const items = await getJobFiles(jobId);
+      setFiles(items.map(f => ({
+        ...f,
+        hasGps: f.gps_data?.latitude != null && f.gps_data?.longitude != null,
+      })));
+    } catch (e: unknown) {
+      setFetchError(e instanceof Error ? e.message : "Failed to load files");
+    } finally {
+      setIsLoading(false);
+    }
   }, [jobId]);
-  
-  // Stats calculated from fetched image data
-  const totalImages = images.length;
-  const withGPS = images.filter((img) => img.hasGPS).length;
-  const withoutGPS = images.filter((img) => !img.hasGPS).length;
-  const pending = totalImages - withGPS - withoutGPS;
-  const completionPercentage = totalImages > 0 ? Math.round((withGPS / totalImages) * 100) : 0;
 
-  const handleFilterChange = (type: "all" | "gps" | "no-gps") => {
-    setFilterType(type);
-  };
+  useEffect(() => { loadFiles(); }, [loadFiles]);
 
-  const toggleLocationEntry = (imageId: string) => {
-    setExpandedImage(expandedImage === imageId ? null : imageId);
-  };
+  // ── Filter + selection ──────────────────────────────────────────────────────
+  const [filterType,  setFilterType]  = useState<FilterType>("all");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  const handleSaveLocation = (imageId: string) => {
-    // TODO: Implement save location logic
-    console.log("Save location for image:", imageId);
-  };
+  const eligibleFiles  = files.filter(f => !f.hasGps);
+  const allBatchDisabled = eligibleFiles.length === 0;
 
-  const handleBatchLocationEntry = () => {
-    // TODO: Implement batch location entry logic
-    console.log("Batch location entry");
-  };
+  const visibleFiles = files.filter(f => {
+    if (filterType === "gps")    return f.hasGps;
+    if (filterType === "no-gps") return !f.hasGps;
+    return true;
+  });
 
-  const router = useRouter();
+  function toggleSelect(id: string) {
+    const file = files.find(f => f.file_id === id);
+    if (!file || file.hasGps) return;
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
 
+  const selectAllEligible = () =>
+    setSelectedIds(new Set(eligibleFiles.map(f => f.file_id)));
+  const clearSelection = () => setSelectedIds(new Set());
+
+  // ── Modal state ─────────────────────────────────────────────────────────────
+  const [modalCtx,    setModalCtx]    = useState<ModalContext>(null);
+  const [saving,      setSaving]      = useState(false);
+  const [saveError,   setSaveError]   = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState<ModalContext>(null); // which context last succeeded
+
+  const modalFile = typeof modalCtx === "string" && modalCtx !== "batch" && modalCtx !== "select"
+    ? files.find(f => f.file_id === modalCtx) ?? null
+    : null;
+
+  /** Called when the user confirms a location in any context */
+  async function handleConfirm(result: LocationPickerResult) {
+    const payload = toPayload(result);
+    // Guard: must have at least coords or label
+    if (!payload.latitude && !payload.location_label) return;
+
+    setSaving(true);
+    setSaveError(null);
+    try {
+      if (modalCtx === "batch") {
+        // Batch — omit file_ids; backend updates all files missing location
+        await updateLocation(jobId, payload);
+      } else if (modalCtx === "select") {
+        await updateLocation(jobId, { ...payload, file_ids: [...selectedIds] });
+        clearSelection();
+      } else if (typeof modalCtx === "string") {
+        // Single file
+        await updateLocation(jobId, { ...payload, file_ids: [modalCtx] });
+      }
+      setSaveSuccess(modalCtx);
+      setModalCtx(null);
+      await loadFiles();
+    } catch (e: unknown) {
+      setSaveError(e instanceof Error ? e.message : "Update failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // ── Stats ───────────────────────────────────────────────────────────────────
+  const totalImages   = files.length;
+  const withGps       = files.filter(f => f.hasGps).length;
+  const withoutGps    = totalImages - withGps;
+  const completionPct = totalImages > 0 ? Math.round((withGps / totalImages) * 100) : 0;
+
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-white dark:bg-[#0c0c0c]">
-      {/* Header */}
-      <header className="bg-black dark:bg-black border-b border-gray-800">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#0a0a0a]">
+
+      {/* ── Location picker modal (shared across all three modes) ──────────── */}
+      {modalCtx !== null && (
+        <LocationPickerModal
+          title={
+            modalCtx === "batch"  ? `Batch — apply to all ${withoutGps} files without location` :
+            modalCtx === "select" ? `Apply to ${selectedIds.size} selected file${selectedIds.size !== 1 ? "s" : ""}` :
+            modalFile?.filename   ?? "Set Location"
+          }
+          onConfirm={handleConfirm}
+          onClose={() => { setModalCtx(null); setSaveError(null); }}
+        />
+      )}
+
+      {/* ── Saving overlay (blocks double-submit while PATCH is in flight) ─── */}
+      {saving && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="flex items-center gap-3 bg-white dark:bg-[#161616] rounded-2xl px-6 py-4 shadow-xl border border-gray-200 dark:border-gray-800">
+            <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Saving location…</span>
+          </div>
+        </div>
+      )}
+
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <header className="bg-white dark:bg-[#111] border-b border-gray-200 dark:border-gray-800">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <button className="text-white hover:text-gray-300 transition-colors cursor-pointer" onClick={() => {
-              router.push('/upload/');
-            }}>
-              <ArrowLeft className="w-6 h-6" />
+            <button
+              className="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 transition cursor-pointer"
+              onClick={() => router.push("/upload")}
+            >
+              <ArrowLeft className="w-5 h-5" />
             </button>
             <div>
-              <h1 className="text-xl font-bold text-white">UPLOAD REVIEW</h1>
-              <p className="text-sm text-gray-400">
-                Verify GPS data and add missing locations
+              <h1 className="text-base font-bold text-gray-900 dark:text-white">Upload Review</h1>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Verify GPS data and assign missing locations
               </p>
             </div>
           </div>
-          <Button className="bg-white text-black hover:bg-gray-100 font-medium cursor-pointer" onClick={() => {
-            router.push(`/results/${jobId}`);
-          }}>
-            Proceed to Analysis
+          <Button
+            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold cursor-pointer"
+            onClick={() => router.push(`/preprocess/${jobId}`)}
+          >
+            Proceed to Preprocessing
             <ArrowRight className="w-4 h-4 ml-2" />
           </Button>
         </div>
       </header>
 
-      {/* Main Content */}
-      <div className="container mx-auto px-4 py-6">
+      <div className="max-w-7xl mx-auto px-6 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column - Image List */}
+
+          {/* ── Left: file list ──────────────────────────────────────────── */}
           <div className="lg:col-span-2 space-y-4">
-            {/* Filters */}
+
+            {/* Filter + count */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400">
-                  <Filter className="w-4 h-4" />
-                  <span>Filter:</span>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant={filterType === "all" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => handleFilterChange("all")}
-                    className={
-                      filterType === "all"
-                        ? "bg-black text-white hover:bg-gray-800 cursor-pointer"
-                        : "cursor-pointer"
-                    }
-                  >
-                    All
-                  </Button>
-                  <Button
-                    variant={filterType === "gps" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => handleFilterChange("gps")}
-                    className="cursor-pointer"
-                  >
-                    <MapPin className="w-4 h-4 mr-1" />
-                    With GPS
-                  </Button>
-                  <Button
-                    variant={filterType === "no-gps" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => handleFilterChange("no-gps")}
-                    className="cursor-pointer"
-                  >
-                    <MapPinOff className="w-4 h-4 mr-1" />
-                    No GPS
-                  </Button>
+                <Filter className="w-4 h-4 text-gray-400" />
+                <div className="flex gap-1">
+                  {(["all", "gps", "no-gps"] as FilterType[]).map(t => (
+                    <button
+                      key={t}
+                      onClick={() => setFilterType(t)}
+                      className={cn(
+                        "flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer",
+                        filterType === t
+                          ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900"
+                          : "bg-white dark:bg-[#161616] border border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-400 hover:border-gray-400",
+                      )}
+                    >
+                      {t === "gps"    && <MapPin    className="w-3 h-3" />}
+                      {t === "no-gps" && <MapPinOff className="w-3 h-3" />}
+                      {t === "all" ? "All" : t === "gps" ? "With GPS" : "No GPS"}
+                    </button>
+                  ))}
                 </div>
               </div>
-              <div className="px-4 py-1 border border-gray-300 dark:border-gray-600 rounded-full text-sm">
-                {totalImages > 0 ? `${totalImages} of ${totalImages} images` : 'No images'}
-              </div>
+              <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">
+                {visibleFiles.length} / {totalImages} files
+              </span>
             </div>
 
-            {/* Image List - Placeholder */}
-            <div className="space-y-3">
-              {isLoading ? (
-                <Card className="border border-gray-300 dark:border-gray-700">
-                  <CardContent className="p-4">
-                    <div className="text-center py-12">
-                      <Loader2 className="w-12 h-12 mx-auto mb-3 animate-spin text-gray-400" />
-                      <p className="font-medium text-gray-600 dark:text-gray-400">Loading images...</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">Fetching data from backend</p>
-                    </div>
-                  </CardContent>
-                </Card>
-              ) : error ? (
-                <Card className="border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-950">
-                  <CardContent className="p-4">
-                    <div className="text-center py-12">
-                      <AlertCircle className="w-12 h-12 mx-auto mb-3 text-red-500" />
-                      <p className="font-medium text-red-700 dark:text-red-300">Error loading images</p>
-                      <p className="text-sm text-red-600 dark:text-red-400 mt-1">{error}</p>
-                      <Button 
-                        className="mt-4 bg-red-600 hover:bg-red-700 text-white cursor-pointer"
-                        onClick={() => window.location.reload()}
-                      >
-                        Retry
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ) : images.length === 0 ? (
-                <Card className="border border-gray-300 dark:border-gray-700">
-                  <CardContent className="p-4">
-                    <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-                      <ImageIcon className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                      <p className="font-medium">No images found</p>
-                      <p className="text-sm mt-1">No images uploaded for this job</p>
-                    </div>
-                  </CardContent>
-                </Card>
-              ) : (
-                images
-                  .filter((img) => {
-                    if (filterType === "gps") return img.hasGPS;
-                    if (filterType === "no-gps") return !img.hasGPS;
-                    return true;
-                  })
-                  .map((image) => (
-                    <Card key={image.id} className="border border-gray-300 dark:border-gray-700">
-                      <CardContent className="p-4">
-                        <div className="flex gap-4">
-                          {/* Thumbnail */}
-                          <div className="relative w-24 h-24 bg-gray-200 dark:bg-gray-800 rounded flex-shrink-0">
-                            {image.hasGPS ? (
-                              <div className="absolute top-1 left-1 bg-green-600/90 p-1 rounded">
-                                <MapPin className="w-4 h-4 text-white" />
-                              </div>
-                            ) : (
-                              <div className="absolute top-1 left-1 bg-orange-600/90 p-1 rounded">
-                                <MapPinOff className="w-4 h-4 text-white" />
-                              </div>
-                            )}
-                            <div className="w-full h-full flex items-center justify-center">
-                              <ImageIcon className="w-8 h-8 text-gray-400" />
-                            </div>
-                          </div>
+            {/* Select-toggle toolbar */}
+            {eligibleFiles.length > 0 && (
+              <div className="flex items-center gap-3 px-4 py-2.5 bg-white dark:bg-[#161616] rounded-xl border border-gray-200 dark:border-gray-800">
+                <button
+                  onClick={selectedIds.size === eligibleFiles.length ? clearSelection : selectAllEligible}
+                  className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition cursor-pointer"
+                >
+                  {selectedIds.size === eligibleFiles.length
+                    ? <CheckSquare className="w-4 h-4 text-blue-500" />
+                    : <Square      className="w-4 h-4" />}
+                  {selectedIds.size === eligibleFiles.length ? "Deselect all" : "Select all no-GPS"}
+                </button>
+                {selectedIds.size > 0 && (
+                  <>
+                    <span className="text-gray-300 dark:text-gray-700">|</span>
+                    <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">
+                      {selectedIds.size} selected
+                    </span>
+                    <button
+                      onClick={clearSelection}
+                      className="text-xs text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition cursor-pointer ml-auto"
+                    >
+                      Clear
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
 
-                          {/* Details */}
-                          <div className="flex-1">
-                            <div className="flex items-start justify-between">
-                              <div>
-                                <h3 className="font-semibold text-black dark:text-white">
-                                  {image.filename}
-                                </h3>
-                                <p className="text-sm text-gray-600 dark:text-gray-400">
-                                  {image.size}
-                                </p>
-                              </div>
-                              <span
-                                className={`text-xs px-3 py-1 rounded font-medium ${
-                                  image.hasGPS
-                                    ? "bg-green-600 text-white"
-                                    : "bg-orange-600 text-white"
-                                }`}
-                              >
-                                {image.hasGPS ? "GPS FOUND" : "NO GPS"}
-                              </span>
-                            </div>
+            {/* Error from save */}
+            {saveError && (
+              <div className="flex items-center gap-2 px-4 py-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-700 dark:text-red-300">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                {saveError}
+                <button onClick={() => setSaveError(null)} className="ml-auto text-red-400 hover:text-red-600 cursor-pointer">
+                  <span className="text-xs">Dismiss</span>
+                </button>
+              </div>
+            )}
 
-                            <div className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-400">
-                              <div className="flex items-center gap-2">
-                                <ImageIcon className="w-4 h-4" />
-                                <span>{image.camera}</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span>📅</span>
-                                <span>{image.datetime}</span>
-                              </div>
-                              {image.hasGPS && image.latitude && image.longitude && (
-                                <div className="flex items-center gap-2">
-                                  <MapPin className="w-4 h-4" />
-                                  <span>
-                                    {image.latitude.toFixed(6)}, {image.longitude.toFixed(6)}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
+            {/* File rows */}
+            {isLoading ? (
+              <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                <Loader2 className="w-8 h-8 animate-spin text-blue-500 mb-3" />
+                <p className="text-sm">Loading files…</p>
+              </div>
+            ) : fetchError ? (
+              <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-2xl p-6 text-center">
+                <AlertCircle className="w-6 h-6 text-red-500 mx-auto mb-2" />
+                <p className="text-sm text-red-700 dark:text-red-300 font-medium mb-3">{fetchError}</p>
+                <button onClick={loadFiles} className="text-sm text-red-600 dark:text-red-400 underline cursor-pointer">
+                  Retry
+                </button>
+              </div>
+            ) : visibleFiles.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                <ImageIcon className="w-10 h-10 mb-3 opacity-50" />
+                <p className="text-sm">No files match this filter</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {visibleFiles.map(file => {
+                  const isSelected = selectedIds.has(file.file_id);
+                  const canSelect  = !file.hasGps;
+                  return (
+                    <div
+                      key={file.file_id}
+                      onClick={() => canSelect && toggleSelect(file.file_id)}
+                      className={cn(
+                        "flex items-center gap-4 px-4 py-3 rounded-xl border transition",
+                        canSelect ? "cursor-pointer" : "cursor-default",
+                        isSelected
+                          ? "bg-blue-50 border-blue-300 dark:bg-blue-950/30 dark:border-blue-700"
+                          : "bg-white border-gray-200 hover:border-gray-300 dark:bg-[#161616] dark:border-gray-800 dark:hover:border-gray-700",
+                      )}
+                    >
+                      {/* Checkbox / GPS icon */}
+                      <div className="shrink-0">
+                        {canSelect
+                          ? isSelected
+                              ? <CheckSquare className="w-4 h-4 text-blue-500" />
+                              : <Square      className="w-4 h-4 text-gray-300 dark:text-gray-600" />
+                          : <MapPin className="w-4 h-4 text-emerald-500" />
+                        }
+                      </div>
 
-                        {/* Expandable Location Entry */}
-                        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                      {/* Filename + coords */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                          {file.filename}
+                        </p>
+                        {file.hasGps ? (
+                          <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5 font-mono">
+                            {file.gps_data!.latitude!.toFixed(6)}, {file.gps_data!.longitude!.toFixed(6)}
+                            {file.gps_data?.altitude != null && ` · ${file.gps_data.altitude.toFixed(1)} m`}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">No location</p>
+                        )}
+                      </div>
+
+                      {/* Badge + single-edit button */}
+                      <div className="shrink-0 flex items-center gap-2">
+                        <span className={cn(
+                          "px-2 py-0.5 rounded-full text-[11px] font-bold",
+                          file.hasGps
+                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+                            : "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
+                        )}>
+                          {file.hasGps ? "GPS" : "No GPS"}
+                        </span>
+                        {!file.hasGps && (
                           <button
-                            className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white cursor-pointer"
-                            onClick={() => toggleLocationEntry(image.id)}
+                            onClick={e => { e.stopPropagation(); setModalCtx(file.file_id); setSaveError(null); }}
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-950/30 transition cursor-pointer"
+                            title="Set location"
                           >
-                            {expandedImage === image.id ? (
-                              <ChevronUp className="w-4 h-4" />
-                            ) : (
-                              <ChevronDown className="w-4 h-4" />
-                            )}
-                            {expandedImage === image.id ? "Hide" : "Show"} Location Entry
+                            <Map className="w-4 h-4" />
                           </button>
-
-                          {expandedImage === image.id && (
-                            <div className="mt-4 space-y-4">
-                              <div>
-                                <Label htmlFor={`locationName-${image.id}`} className="text-sm mb-2">
-                                  Location Name
-                                </Label>
-                                <Input
-                                  id={`locationName-${image.id}`}
-                                  placeholder="e.g., Building A - North Wing"
-                                  className="border-gray-300 dark:border-gray-600"
-                                />
-                              </div>
-                              <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                  <Label htmlFor={`latitude-${image.id}`} className="text-sm mb-2">
-                                    Latitude
-                                  </Label>
-                                  <Input
-                                    id={`latitude-${image.id}`}
-                                    placeholder="14.6752"
-                                    defaultValue={image.latitude?.toFixed(6) || ""}
-                                    className="border-gray-300 dark:border-gray-600"
-                                  />
-                                </div>
-                                <div>
-                                  <Label htmlFor={`longitude-${image.id}`} className="text-sm mb-2">
-                                    Longitude
-                                  </Label>
-                                  <Input
-                                    id={`longitude-${image.id}`}
-                                    placeholder="128.231"
-                                    defaultValue={image.longitude?.toFixed(6) || ""}
-                                    className="border-gray-300 dark:border-gray-600"
-                                  />
-                                </div>
-                              </div>
-                              <Button
-                                className="w-full bg-black text-white hover:bg-gray-800 cursor-pointer"
-                                onClick={() => handleSaveLocation(image.id)}
-                              >
-                                <MapPin className="w-4 h-4 mr-2" />
-                                Save Location
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))
-              )}
-            </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
-          {/* Right Column - Summary & Batch Entry */}
-          <div className="space-y-6">
-            {/* Upload Summary */}
-            <Card className="border border-gray-300 dark:border-gray-700">
-              <CardContent className="p-6">
-                <h2 className="text-lg font-bold text-black dark:text-white mb-4">
-                  Upload Summary
-                </h2>
+          {/* ── Right: summary + action panels ───────────────────────────── */}
+          <div className="space-y-5">
 
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                  <div className="border border-gray-300 dark:border-gray-600 rounded-lg p-3">
-                    <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 mb-1">
-                      <ImageIcon className="w-4 h-4" />
-                      <span>Total Images</span>
-                    </div>
-                    <p className="text-3xl font-bold text-black dark:text-white">
-                      {totalImages}
-                    </p>
-                  </div>
-                  <div className="border border-gray-300 dark:border-gray-600 rounded-lg p-3">
-                    <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 mb-1">
-                      <MapPin className="w-4 h-4" />
-                      <span>With GPS</span>
-                    </div>
-                    <p className="text-3xl font-bold text-black dark:text-white">
-                      {withGPS}
-                    </p>
-                  </div>
-                  <div className="border border-gray-300 dark:border-gray-600 rounded-lg p-3">
-                    <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 mb-1">
-                      <MapPinOff className="w-4 h-4" />
-                      <span>Without GPS</span>
-                    </div>
-                    <p className="text-3xl font-bold text-black dark:text-white">
-                      {withoutGPS}
-                    </p>
-                  </div>
-                  <div className="border border-gray-300 dark:border-gray-600 rounded-lg p-3">
-                    <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 mb-1">
-                      <span>⚠️</span>
-                      <span>Pending</span>
-                    </div>
-                    <p className="text-3xl font-bold text-black dark:text-white">
-                      {pending}
-                    </p>
-                  </div>
+            {/* Summary */}
+            <div className="bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800 p-5 shadow-sm">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-4">
+                Summary
+              </h2>
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div className="border border-gray-200 dark:border-gray-800 rounded-xl p-3">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 flex items-center gap-1">
+                    <ImageIcon className="w-3.5 h-3.5" /> Total
+                  </p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{totalImages}</p>
                 </div>
+                <div className="border border-gray-200 dark:border-gray-800 rounded-xl p-3">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 flex items-center gap-1">
+                    <MapPin className="w-3.5 h-3.5 text-emerald-500" /> With GPS
+                  </p>
+                  <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{withGps}</p>
+                </div>
+                <div className="border border-gray-200 dark:border-gray-800 rounded-xl p-3">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 flex items-center gap-1">
+                    <MapPinOff className="w-3.5 h-3.5 text-orange-500" /> No GPS
+                  </p>
+                  <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">{withoutGps}</p>
+                </div>
+                <div className="border border-gray-200 dark:border-gray-800 rounded-xl p-3">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Coverage</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{completionPct}%</p>
+                </div>
+              </div>
+              <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-1.5">
+                <div
+                  className="bg-emerald-500 h-1.5 rounded-full transition-all duration-500"
+                  style={{ width: `${completionPct}%` }}
+                />
+              </div>
+            </div>
 
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600 dark:text-gray-400">
-                      Location Completion
-                    </span>
-                    <span className="font-semibold text-black dark:text-white">
-                      {completionPercentage}%
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                    <div
-                      className="bg-black dark:bg-white h-2 rounded-full transition-all"
-                      style={{ width: `${completionPercentage}%` }}
-                    />
-                  </div>
-                  {pending > 0 && (
-                    <p className="text-xs text-orange-600 dark:text-orange-400">
-                      {pending} images require manual location entry
-                    </p>
-                  )}
+            {/* Select-toggle panel — visible when ≥1 file selected */}
+            {selectedIds.size > 0 && (
+              <div className="bg-white dark:bg-[#161616] rounded-2xl border border-blue-300 dark:border-blue-700 p-5 shadow-sm">
+                <div className="flex items-center gap-2 mb-1">
+                  <CheckSquare className="w-4 h-4 text-blue-500 shrink-0" />
+                  <h2 className="text-sm font-semibold text-gray-900 dark:text-white">
+                    {selectedIds.size} File{selectedIds.size !== 1 ? "s" : ""} Selected
+                  </h2>
                 </div>
-              </CardContent>
-            </Card>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                  Assign the same location to all selected files.
+                </p>
+                {saveSuccess === "select" && (
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400 mb-3">
+                    Location applied to selected files.
+                  </p>
+                )}
+                <Button
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold cursor-pointer"
+                  onClick={() => { setModalCtx("select"); setSaveError(null); setSaveSuccess(null); }}
+                >
+                  <Map className="w-4 h-4 mr-2" />
+                  Set Location for Selected
+                </Button>
+              </div>
+            )}
 
-            {/* Batch Location Entry */}
-            <Card className="border border-gray-300 dark:border-gray-700">
-              <CardContent className="p-6">
-                <div className="flex items-start gap-3 mb-4">
-                  <Layers className="w-5 h-5 mt-1 flex-shrink-0" />
-                  <div>
-                    <h2 className="text-lg font-bold text-black dark:text-white">
-                      Batch Location Entry
-                    </h2>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                      {pending > 0 
-                        ? `Apply the same location to all ${pending} images without GPS data.`
-                        : 'Apply the same location to images without GPS data (fetched per image from API).'
-                      }
-                    </p>
-                  </div>
-                </div>
+            {/* Batch panel */}
+            <div className="bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800 p-5 shadow-sm">
+              <div className="flex items-center gap-2 mb-1">
+                <Layers className="w-4 h-4 text-gray-500 shrink-0" />
+                <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Batch Apply</h2>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                {allBatchDisabled
+                  ? "All files already have GPS — nothing to update."
+                  : `Applies one location to all ${withoutGps} file${withoutGps !== 1 ? "s" : ""} missing a location.`
+                }
+              </p>
+              {saveSuccess === "batch" && (
+                <p className="text-xs text-emerald-600 dark:text-emerald-400 mb-3">
+                  Batch location applied successfully.
+                </p>
+              )}
+              <Button
+                className="w-full bg-gray-900 hover:bg-gray-700 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100 text-white font-semibold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                onClick={() => { setModalCtx("batch"); setSaveError(null); setSaveSuccess(null); }}
+                disabled={allBatchDisabled}
+              >
+                <Map className="w-4 h-4 mr-2" />
+                Set Location for All
+              </Button>
+            </div>
 
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="batchLocationName" className="text-sm mb-2">
-                      Location Name
-                    </Label>
-                    <Input
-                      id="batchLocationName"
-                      placeholder="e.g., Building A - North Wing"
-                      className="border-gray-300 dark:border-gray-600"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="batchLatitude" className="text-sm mb-2">
-                        Latitude
-                      </Label>
-                      <Input
-                        id="batchLatitude"
-                        placeholder="14.6752"
-                        className="border-gray-300 dark:border-gray-600"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="batchLongitude" className="text-sm mb-2">
-                        Longitude
-                      </Label>
-                      <Input
-                        id="batchLongitude"
-                        placeholder="128.231"
-                        className="border-gray-300 dark:border-gray-600"
-                      />
-                    </div>
-                  </div>
-                  <Button
-                    className="w-full bg-black text-white hover:bg-gray-800 cursor-pointer"
-                    onClick={handleBatchLocationEntry}
-                    disabled={pending === 0}
-                  >
-                    {pending > 0 ? `Apply to All ${pending} Images` : 'No Images to Update'}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
           </div>
         </div>
       </div>

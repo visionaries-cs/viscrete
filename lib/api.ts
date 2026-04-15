@@ -23,14 +23,37 @@ export interface JobStatusResponse {
 }
 
 export interface ValidationResult {
+  file_id?: string;
   filename: string;
   is_valid: boolean;
   laplacian_score: number;
   blur_threshold: number;
   is_blurry: boolean;
   original_path?: string | null;
+  // Actual API shape — gps_data is nested with latitude/longitude/altitude
+  gps_data?: { latitude: number | null; longitude: number | null; altitude?: number | null } | null;
+  // Legacy shape used by upload page (lat/lng flat)
   gps?: { lat: number; lng: number } | null;
   reason?: string | null;
+  // Set locally after a PATCH /location — backend reflects this on FileStatusItem
+  location_label?: string | null;
+}
+
+export interface FileStatusItem {
+  file_id: string;
+  filename: string;
+  status: string;
+  laplacian_score?: number;
+  gps_data?: { latitude: number | null; longitude: number | null; altitude?: number | null } | null;
+  location_label?: string | null;
+}
+
+export interface LocationUpdateRequest {
+  latitude?: number;
+  longitude?: number;
+  altitude?: number;
+  location_label?: string;
+  file_ids?: string[];
 }
 
 export interface ClusterInfo {
@@ -114,6 +137,33 @@ export interface ReportResponse {
 
 
 // ─── Jobs ─────────────────────────────────────────────────────────────────────
+
+/** GET /api/v1/jobs/{job_id} — get job status including per-file list */
+export async function getJobFiles(jobId: string): Promise<FileStatusItem[]> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}`);
+  const data = await handleResponse<{ files?: FileStatusItem[] }>(res);
+  return data.files ?? [];
+}
+
+/** PATCH /api/v1/jobs/{job_id}/location — update location for files without GPS
+ *  - Batch: omit file_ids — backend updates all files missing both GPS and label
+ *  - Select-toggle / Single: pass file_ids array
+ *  Must supply latitude+longitude together, or location_label, or both.
+ */
+export async function updateLocation(
+  jobId: string,
+  payload: LocationUpdateRequest,
+): Promise<void> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/location`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+  );
+  await handleResponse<unknown>(res);
+}
 
 /** GET /api/v1/jobs — list all non-deleted jobs newest first */
 export async function listJobs(): Promise<JobStatusResponse[]> {

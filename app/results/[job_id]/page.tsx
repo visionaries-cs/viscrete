@@ -643,7 +643,7 @@ export default function ResultPage() {
                     <p className="text-gray-400 dark:text-gray-600 text-sm mt-2">Detection results will appear here</p>
                   </div>
                 ) : (
-                  <div className="relative w-full h-full overflow-hidden">
+                  <div className="relative w-full h-full">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       ref={imageRef}
@@ -653,11 +653,12 @@ export default function ResultPage() {
                       className="w-full h-full object-contain"
                       onLoad={handleImageLoad}
                     />
-                    {/* Overlay container — positioned at the actual rendered image rect */}
+                    {/* Overlay container — positioned at the actual rendered image rect.
+                        No overflow-hidden so labels near the top edge aren't clipped. */}
                     {hasValidDimensions && (
                       <div
                         ref={containerRef}
-                        className="absolute overflow-hidden pointer-events-none"
+                        className="absolute pointer-events-none"
                         style={{ left: offsetX, top: offsetY, width: renderedW, height: renderedH }}
                       >
                         {getCurrentDetections().map((detection, index) => {
