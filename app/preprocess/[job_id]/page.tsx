@@ -937,7 +937,7 @@ export default function PreprocessPage() {
 
     // ── WebSocket message handler ─────────────────────────────────────────────
 
-    function handleMsg(msg: Record<string, unknown>) {
+    function handleMsg(msg: Record<string, unknown>, isReconnect = false) {
       if (cancelled) return;
       const ts = getTimestamp(msg.timestamp as string | undefined);
 
@@ -956,7 +956,18 @@ export default function PreprocessPage() {
               error: null,
             })
           );
-          setStepStates(initSteps);
+          if (isReconnect) {
+            // Preserve steps already completed/failed — only reset still-pending ones
+            setStepStates((prev) => {
+              if (prev.length === 0) return initSteps;
+              return initSteps.map((s, i) => {
+                const existing = prev[i];
+                return existing && existing.status !== "pending" ? existing : s;
+              });
+            });
+          } else {
+            setStepStates(initSteps);
+          }
           addLine({
             timestamp: ts,
             step: null,
@@ -1118,58 +1129,75 @@ export default function PreprocessPage() {
         job_id
       )}/preprocess/ws`;
 
-      ws = new WebSocket(wsUrl);
+      let reconnectAttempts = 0;
+      let pipelineStarted = false;
 
-      ws.onopen = async () => {
-        if (cancelled) {
-          ws?.close();
-          return;
-        }
-        setIsRunning(true);
-        try {
-          const res = await fetch(
-            `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(
-              job_id
-            )}/preprocess`,
-            { method: "POST" }
-          );
-          if (cancelled) return;
-          if (res.status === 409) {
-            setGlobalError("Job is not ready for preprocessing.");
-            addPipelineLine("Error: job not ready for preprocessing", "error");
+      function connect(isReconnect: boolean) {
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = async () => {
+          if (cancelled) { ws?.close(); return; }
+          if (isReconnect) return; // server replays buffered events — no POST needed
+          setIsRunning(true);
+          try {
+            const res = await fetch(
+              `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(
+                job_id
+              )}/preprocess`,
+              { method: "POST" }
+            );
+            if (cancelled) return;
+            if (res.status === 409) {
+              setGlobalError("Job is not ready for preprocessing.");
+              addPipelineLine("Error: job not ready for preprocessing", "error");
+              setIsRunning(false);
+              ws?.close();
+              return;
+            }
+            pipelineStarted = true;
+            // 202 → pipeline streams events via WS
+          } catch (e) {
+            if (cancelled) return;
+            const errMsg =
+              e instanceof Error ? e.message : "Failed to start preprocessing";
+            setGlobalError(errMsg);
+            addPipelineLine(`Error: ${errMsg}`, "error");
             setIsRunning(false);
             ws?.close();
           }
-          // 202 → pipeline streams events via WS
-        } catch (e) {
-          if (cancelled) return;
-          const errMsg =
-            e instanceof Error ? e.message : "Failed to start preprocessing";
-          setGlobalError(errMsg);
-          addPipelineLine(`Error: ${errMsg}`, "error");
-          setIsRunning(false);
-          ws?.close();
-        }
-      };
+        };
 
-      ws.onmessage = (event) => {
-        try {
-          handleMsg(JSON.parse(event.data) as Record<string, unknown>);
-        } catch { /* malformed JSON — ignore */ }
-      };
+        ws.onmessage = (event) => {
+          try {
+            handleMsg(
+              JSON.parse(event.data) as Record<string, unknown>,
+              isReconnect
+            );
+          } catch { /* malformed JSON — ignore */ }
+        };
 
-      ws.onerror = () => {
-        // onclose fires after onerror — handled there
-      };
+        ws.onerror = () => {
+          // onclose fires after onerror — handled there
+        };
 
-      ws.onclose = () => {
-        if (!receivedCompleted && !cancelled) {
-          addPipelineLine(
-            "WebSocket unavailable — switched to polling"
-          );
-          startPolling();
-        }
-      };
+        ws.onclose = () => {
+          if (receivedCompleted || cancelled) return;
+          if (!pipelineStarted) return; // POST failed or never sent — do not reconnect
+          if (reconnectAttempts < 2) {
+            reconnectAttempts++;
+            const delay = reconnectAttempts * 1500;
+            addPipelineLine(
+              `WebSocket closed — reconnecting in ${delay / 1000}s…`
+            );
+            setTimeout(() => connect(true), delay);
+          } else {
+            addPipelineLine("WebSocket unavailable — switched to polling");
+            startPolling();
+          }
+        };
+      }
+
+      connect(false);
     }
 
     // ── Load already-complete job ─────────────────────────────────────────────
