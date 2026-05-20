@@ -645,7 +645,8 @@ export default function UploadPage() {
                   />
                 </div>
 
-                <div>
+                {/* Media type toggle hidden — images only */}
+                <div className="hidden">
                   <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Media Type <span className="text-red-500">*</span>
                   </label>
@@ -699,20 +700,16 @@ export default function UploadPage() {
                   ref={fileInputRef}
                   type="file"
                   multiple
-                  accept={mediaType === "image" ? ".jpg,.jpeg,.png,.bmp,.tiff" : ".mp4,.avi,.mov"}
+                  accept=".jpg,.jpeg,.png,.bmp,.tiff"
                   onChange={e => addFiles(e.target.files)}
                   className="hidden"
                 />
                 <Upload className={cn("w-10 h-10 mx-auto mb-3", isDragging ? "text-blue-500" : "text-gray-400")} />
                 <p className="font-semibold text-gray-700 dark:text-gray-200 mb-1">
-                  Drop {mediaType === "image" ? "images" : "videos"} here
+                  Drop images here
                 </p>
                 <p className="text-sm text-gray-400 mb-2">or click to browse</p>
-                <p className="text-xs text-gray-400">
-                  {mediaType === "image"
-                    ? "JPG, PNG, BMP, TIFF — max 20 MB each"
-                    : "MP4, AVI, MOV — max 500 MB each"}
-                </p>
+                <p className="text-xs text-gray-400">JPG, PNG, BMP, TIFF — max 20 MB each</p>
               </div>
 
               {/* File list */}
@@ -730,7 +727,7 @@ export default function UploadPage() {
                     {files.map((f, i) => (
                       <div key={i} className="rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 overflow-hidden">
                         <div className="flex items-center gap-3 px-3 py-2 text-sm">
-                          {mediaType === "image" ? <FileImage className="w-4 h-4 text-blue-400 shrink-0" /> : <FileVideo className="w-4 h-4 text-purple-400 shrink-0" />}
+                          <FileImage className="w-4 h-4 text-blue-400 shrink-0" />
                           <span className="flex-1 truncate text-gray-700 dark:text-gray-300">{f.name}</span>
                           <span className="text-gray-400 text-xs shrink-0">{formatBytes(f.size)}</span>
                           <button
@@ -741,7 +738,8 @@ export default function UploadPage() {
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
-                        {mediaType === "video" && (
+                        {/* SRT attachment hidden — video mode disabled */}
+                        <div className="hidden">
                           <div className="px-3 pb-2">
                             {srtMap[f.name] ? (
                               <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 text-xs">
@@ -772,7 +770,7 @@ export default function UploadPage() {
                               </label>
                             )}
                           </div>
-                        )}
+                        </div>
                       </div>
                     ))}
                   </div>

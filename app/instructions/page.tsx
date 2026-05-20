@@ -33,7 +33,7 @@ const steps = [
     icon: Upload,
     title: "Upload Your Files",
     color: "blue",
-    summary: "Create a job and upload concrete images or a drone video for inspection.",
+    summary: "Create a job and upload concrete images for inspection.",
     details: [
       {
         heading: "Start a new inspection",
@@ -41,7 +41,7 @@ const steps = [
       },
       {
         heading: "Accepted file types",
-        body: "Images: JPG, JPEG, PNG, BMP, TIFF. Video: MP4, AVI, MOV (one video per job). You can upload multiple images at once.",
+        body: "Images: JPG, JPEG, PNG, BMP, TIFF. You can upload multiple images at once.",
       },
       {
         heading: "Quality check",
@@ -54,12 +54,13 @@ const steps = [
       {
         heading: "SRT telemetry (video only)",
         body: "Upload a .srt telemetry file alongside your drone video to enable per-frame GPS location tagging in the final report.",
+        videoOnly: true,
       },
     ],
     tips: [
-      "Use sharp, well-lit photos taken within 1–3 m of the surface for best results.",
-      "Avoid extreme glare or reflections — these reduce detection accuracy.",
-      "For videos, ensure stable footage; shaky frames may be flagged as blurry.",
+      { text: "Use sharp, well-lit photos taken within 1–3 m of the surface for best results." },
+      { text: "Avoid extreme glare or reflections — these reduce detection accuracy." },
+      { text: "For videos, ensure stable footage; shaky frames may be flagged as blurry.", videoOnly: true },
     ],
   },
   {
@@ -80,6 +81,7 @@ const steps = [
       {
         heading: "Video pipeline (5 steps)",
         body: "Frame Sampling → Median Frame Construction → MOCS Optimization → Parallel Frame Processing → Save Output. MOCS runs once on a representative median frame, and the resulting parameters apply to all frames.",
+        videoOnly: true,
       },
       {
         heading: "Live progress",
@@ -91,9 +93,9 @@ const steps = [
       },
     ],
     tips: [
-      "You do not need to adjust any settings — MOCS finds the optimal parameters automatically.",
-      "Processing time scales with file count and image resolution. Large batches may take a few minutes.",
-      "Video processing is parallelized — larger videos benefit from GPU availability on the server.",
+      { text: "You do not need to adjust any settings — MOCS finds the optimal parameters automatically." },
+      { text: "Processing time scales with file count and image resolution. Large batches may take a few minutes." },
+      { text: "Video processing is parallelized — larger videos benefit from GPU availability on the server.", videoOnly: true },
     ],
   },
   {
@@ -118,6 +120,7 @@ const steps = [
       {
         heading: "Video jobs",
         body: "For video uploads, VISCRETE processes every frame and applies cross-frame deduplication (IoU > 0.4) to eliminate duplicate sightings of the same physical defect across consecutive frames.",
+        videoOnly: true,
       },
       {
         heading: "Stat cards",
@@ -125,9 +128,9 @@ const steps = [
       },
     ],
     tips: [
-      "Higher confidence scores (> 70%) indicate more certain detections.",
-      "Use the class toggle pills to focus on one defect type at a time.",
-      "Click a row in the Defect Summary table to jump to and highlight that exact detection on the image.",
+      { text: "Higher confidence scores (> 70%) indicate more certain detections." },
+      { text: "Use the class toggle pills to focus on one defect type at a time." },
+      { text: "Click a row in the Defect Summary table to jump to and highlight that exact detection on the image." },
     ],
   },
   {
@@ -159,16 +162,16 @@ const steps = [
       },
     ],
     tips: [
-      "Generate the report only after you are satisfied with the detection results.",
-      "The CSV export is ideal for integrating VISCRETE data into maintenance management systems.",
-      "Completed jobs are accessible from the Previous Jobs list at any time — they never expire.",
+      { text: "Generate the report only after you are satisfied with the detection results." },
+      { text: "The CSV export is ideal for integrating VISCRETE data into maintenance management systems." },
+      { text: "Completed jobs are accessible from the Previous Jobs list at any time — they never expire." },
     ],
   },
 ];
 
 const fileRequirements = [
   { label: "Images", icon: ImageIcon, items: ["JPG / JPEG / PNG / BMP / TIFF", "Minimum 480 × 480 px recommended", "Multiple files supported per job", "Clear, in-focus shots within 1–3 m of surface"] },
-  { label: "Video", icon: Film, items: ["MP4 / AVI / MOV (one per job)", "H.264 encoding recommended for best compatibility", "Pair with a .srt telemetry file for GPS tagging", "Stable footage reduces blurry-frame rejections"] },
+  { label: "Video", icon: Film, videoOnly: true, items: ["MP4 / AVI / MOV (one per job)", "H.264 encoding recommended for best compatibility", "Pair with a .srt telemetry file for GPS tagging", "Stable footage reduces blurry-frame rejections"] },
 ];
 
 const faqs = [
@@ -267,7 +270,7 @@ function StepCard({ step, index }: { step: typeof steps[number]; index: number }
         <div className={cn("border-t px-6 pb-6 pt-5 space-y-6", c.border.replace("border-", "border-t-"))}>
           {/* Detail list */}
           <div className="space-y-4">
-            {step.details.map(({ heading, body }) => (
+            {step.details.filter(d => !d.videoOnly).map(({ heading, body }) => (
               <div key={heading} className="flex gap-3">
                 <div className={cn("mt-1.5 w-1.5 h-1.5 rounded-full shrink-0", c.dot)} />
                 <div>
@@ -285,10 +288,10 @@ function StepCard({ step, index }: { step: typeof steps[number]; index: number }
               <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Tips</span>
             </div>
             <ul className="space-y-1.5">
-              {step.tips.map(tip => (
-                <li key={tip} className="flex gap-2 text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+              {step.tips.filter(t => !t.videoOnly).map(tip => (
+                <li key={tip.text} className="flex gap-2 text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
                   <CheckCircle2 className={cn("w-3.5 h-3.5 shrink-0 mt-0.5", c.num)} />
-                  {tip}
+                  {tip.text}
                 </li>
               ))}
             </ul>
@@ -368,7 +371,7 @@ export default function InstructionsPage() {
             </span>
           </h1>
           <p className="text-gray-500 dark:text-gray-400 max-w-xl mx-auto leading-relaxed">
-            VISCRETE is an AI-powered concrete defect inspection tool. Upload images or drone footage,
+            VISCRETE is an AI-powered concrete defect inspection tool. Upload images
             and the system automatically enhances, analyzes, and reports on surface defects — no manual configuration needed.
           </p>
           <div className="flex items-center justify-center gap-3 pt-2">
@@ -424,7 +427,7 @@ export default function InstructionsPage() {
             File Requirements
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {fileRequirements.map(({ label, icon: Icon, items }) => (
+            {fileRequirements.filter(r => !r.videoOnly).map(({ label, icon: Icon, items }) => (
               <div key={label} className="bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm p-5">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center">

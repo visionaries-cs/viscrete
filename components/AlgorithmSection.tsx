@@ -497,18 +497,20 @@ const AlgorithmSection = () => {
                       <Camera className="w-3.5 h-3.5" />
                       Image
                     </button>
-                    <button
-                      onClick={() => setBranch("video")}
-                      className={cn(
-                        "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer",
-                        branch === "video"
-                          ? "bg-emerald-50 dark:bg-[#2ca75d]/15 text-emerald-700 dark:text-[#2ca75d] border border-emerald-200 dark:border-[#2ca75d]/30"
-                          : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-                      )}
-                    >
-                      <Video className="w-3.5 h-3.5" />
-                      Video
-                    </button>
+                    <span className="hidden">
+                      <button
+                        onClick={() => setBranch("video")}
+                        className={cn(
+                          "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer",
+                          branch === "video"
+                            ? "bg-emerald-50 dark:bg-[#2ca75d]/15 text-emerald-700 dark:text-[#2ca75d] border border-emerald-200 dark:border-[#2ca75d]/30"
+                            : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                        )}
+                      >
+                        <Video className="w-3.5 h-3.5" />
+                        Video
+                      </button>
+                    </span>
                   </div>
                 )}
               </div>
