@@ -100,6 +100,7 @@ export default function ResultPage() {
   // Report state
   const [isGenerating, setIsGenerating] = useState(false);
   const [reportGenerated, setReportGenerated] = useState(false);
+  const [needsRegenerate, setNeedsRegenerate] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [csvGenerated, setCsvGenerated] = useState(false);
@@ -267,7 +268,11 @@ export default function ResultPage() {
             // Already detected — fetch cached results directly
             await fetchCachedResults();
             if (job.status === "completed") {
-              setReportGenerated(true);
+              if (job.pdf_path) {
+                setReportGenerated(true);
+              } else {
+                setNeedsRegenerate(true);
+              }
             }
             return;
           }
@@ -322,7 +327,13 @@ export default function ResultPage() {
 
         if (REDIRECT_STATUSES.has(job.status)) {
           setIsPolling(false);
-          if (job.status === "completed") setReportGenerated(true);
+          if (job.status === "completed") {
+            if (job.pdf_path) {
+              setReportGenerated(true);
+            } else {
+              setNeedsRegenerate(true);
+            }
+          }
           await fetchCachedResults();
           return;
         }
@@ -413,6 +424,7 @@ export default function ResultPage() {
     try {
       await generateReport(jobId, true);
       setReportGenerated(true);
+      setNeedsRegenerate(false);
       setRemarksChangedAfterReport(false);
     } catch (e: unknown) {
       setReportError(e instanceof Error ? e.message : "Failed to regenerate report");
@@ -1402,7 +1414,19 @@ export default function ResultPage() {
             <div>
               <div className="text-xs text-gray-500 dark:text-gray-400 uppercase mb-4 tracking-wider">Export Report</div>
 
-              {!reportGenerated ? (
+              {needsRegenerate && !reportGenerated ? (
+                <Button
+                  className="cursor-pointer w-full bg-[#ffcc00] hover:bg-[#ffdd57] text-black font-semibold mb-3"
+                  onClick={handleRegenerateReport}
+                  disabled={isGenerating}
+                >
+                  {isGenerating ? (
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Regenerating…</>
+                  ) : (
+                    <><RefreshCw className="w-4 h-4 mr-2" /> Regenerate PDF Report</>
+                  )}
+                </Button>
+              ) : !reportGenerated ? (
                 <Button
                   className="cursor-pointer w-full bg-[#ffcc00] hover:bg-[#ffdd57] text-black font-semibold mb-3"
                   onClick={handleGenerateReport}
@@ -1466,12 +1490,12 @@ export default function ResultPage() {
                   <DropdownMenuLabel className="text-xs text-gray-400 dark:text-gray-500">PDF</DropdownMenuLabel>
                   <DropdownMenuItem
                     className="text-gray-800 hover:bg-gray-100 dark:text-white dark:hover:bg-gray-800 cursor-pointer"
-                    onClick={reportGenerated ? handleDownloadPdf : handleGenerateReport}
+                    onClick={reportGenerated ? handleDownloadPdf : needsRegenerate ? handleRegenerateReport : handleGenerateReport}
                   >
                     <FileText className="w-4 h-4 mr-2 shrink-0" />
                     <div>
-                      <div className="font-semibold">{reportGenerated ? 'Download PDF Report' : 'Generate PDF Report'}</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">{reportGenerated ? 'Annotated images & summary' : 'Create the inspection PDF'}</div>
+                      <div className="font-semibold">{reportGenerated ? 'Download PDF Report' : needsRegenerate ? 'Regenerate PDF Report' : 'Generate PDF Report'}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">{reportGenerated ? 'Annotated images & summary' : needsRegenerate ? 'PDF was missing — regenerate it' : 'Create the inspection PDF'}</div>
                     </div>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator className="bg-gray-100 dark:bg-gray-800" />

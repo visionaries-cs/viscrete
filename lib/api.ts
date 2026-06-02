@@ -22,6 +22,7 @@ export interface JobStatusResponse {
   file_count?: number;
   created_at?: string;
   updated_at?: string;
+  pdf_path?: string | null;
 }
 
 export interface ValidationResult {
