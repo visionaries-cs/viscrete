@@ -138,7 +138,7 @@ export default function ReportPage() {
                 Detection is complete. Generate a PDF report of the inspection results.
               </p>
               <button
-                onClick={handleGenerateReport}
+                onClick={() => handleGenerateReport()}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition"
               >
                 Generate Report
