@@ -20,9 +20,9 @@ export interface JobStatusResponse {
   site_location?: string; // backend may return either field name
   inspector_name?: string;
   file_count?: number;
+  total_defects?: number;
   created_at?: string;
   updated_at?: string;
-  pdf_path?: string | null;
 }
 
 export interface ValidationResult {
@@ -212,6 +212,7 @@ export async function createJob(
   inputType: 'image' | 'video',
   siteName: string,
   inspectorName: string,
+  siteId?: string | null,
 ): Promise<JobStatusResponse> {
   const res = await fetch(`${API_BASE_URL}/api/v1/jobs`, {
     method: 'POST',
@@ -220,6 +221,7 @@ export async function createJob(
       input_type: inputType,
       site_location: siteName,
       inspector_name: inspectorName,
+      ...(siteId ? { site_id: siteId } : {}),
     }),
   });
   return handleResponse<JobStatusResponse>(res);
@@ -282,13 +284,13 @@ export async function preprocessJob(jobId: string): Promise<void> {
 
 // ─── Detect ───────────────────────────────────────────────────────────────────
 
-/** POST /api/v1/jobs/{job_id}/detect — run YOLOv11 inference */
-export async function detectJob(jobId: string): Promise<DetectResponse> {
+/** POST /api/v1/jobs/{job_id}/detect — queues detection in background, returns 202 */
+export async function detectJob(jobId: string): Promise<{ status: string; job_id: string }> {
   const res = await fetch(
     `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/detect`,
     { method: 'POST' }
   );
-  return handleResponse<DetectResponse>(res);
+  return handleResponse<{ status: string; job_id: string }>(res);
 }
 
 /** GET /api/v1/jobs/{job_id}/detect — retrieve cached detection results */
@@ -381,4 +383,175 @@ export interface ValidateImagesResponse {
 export async function validateImages(jobId: string): Promise<ValidateImagesResponse> {
   const res = await fetch(`${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}`);
   return handleResponse<ValidateImagesResponse>(res);
+}
+
+// ─── Sites ────────────────────────────────────────────────────────────────────
+
+export interface SiteResponse {
+  site_id:        string;
+  name:           string;
+  address:        string;
+  description:    string;
+  inspector_name: string;
+  created_at:     string;
+  updated_at:     string | null;
+}
+
+export interface SiteCreatePayload {
+  name:           string;
+  address?:       string;
+  description?:   string;
+  inspector_name?: string;
+}
+
+export interface SiteUpdatePayload {
+  name?:           string;
+  address?:        string;
+  description?:    string;
+  inspector_name?: string;
+}
+
+/** POST /api/v1/sites */
+export async function createSite(payload: SiteCreatePayload): Promise<SiteResponse> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/sites`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return handleResponse<SiteResponse>(res);
+}
+
+/** GET /api/v1/sites */
+export async function listSites(): Promise<SiteResponse[]> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/sites`);
+  return handleResponse<SiteResponse[]>(res);
+}
+
+/** GET /api/v1/sites/{site_id} */
+export async function getSite(siteId: string): Promise<SiteResponse> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/sites/${encodeURIComponent(siteId)}`);
+  return handleResponse<SiteResponse>(res);
+}
+
+/** PATCH /api/v1/sites/{site_id} */
+export async function updateSite(siteId: string, payload: SiteUpdatePayload): Promise<SiteResponse> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/sites/${encodeURIComponent(siteId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return handleResponse<SiteResponse>(res);
+}
+
+/** DELETE /api/v1/sites/{site_id} */
+export async function deleteSite(siteId: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/sites/${encodeURIComponent(siteId)}`, {
+    method: 'DELETE',
+  });
+  await handleResponse<unknown>(res);
+}
+
+/** GET /api/v1/sites/{site_id}/jobs */
+export async function getJobsForSite(siteId: string): Promise<JobStatusResponse[]> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/sites/${encodeURIComponent(siteId)}/jobs`);
+  return handleResponse<JobStatusResponse[]>(res);
+}
+
+// ─── Defects ──────────────────────────────────────────────────────────────────
+
+export interface AuditEntry {
+  status:     string;
+  changed_at: string;
+  note:       string;
+}
+
+export interface DefectItem {
+  defect_id:     string;
+  job_id:        string;
+  file_id:       string;
+  filename:      string;
+  floor:         string | null;
+  room:          string | null;
+  area_tag:      string | null;
+  defect_type:   string;
+  confidence:    number;
+  severity:      string;
+  item_status:   string;
+  gps_latitude:  number | null;
+  gps_longitude: number | null;
+  audit_trail:   AuditEntry[];
+  annotated_path: string | null;
+}
+
+export interface SiteDefectsResponse {
+  site_id: string;
+  total:   number;
+  defects: DefectItem[];
+}
+
+export interface SiteItemsFilter {
+  floor?:       string;
+  room?:        string;
+  defect_type?: string;
+  item_status?: string;
+}
+
+/** GET /api/v1/sites/{site_id}/items */
+export async function getSiteItems(siteId: string, filters?: SiteItemsFilter): Promise<SiteDefectsResponse> {
+  const params = new URLSearchParams();
+  if (filters?.floor)       params.set('floor',       filters.floor);
+  if (filters?.room)        params.set('room',         filters.room);
+  if (filters?.defect_type) params.set('defect_type',  filters.defect_type);
+  if (filters?.item_status) params.set('item_status',  filters.item_status);
+  const qs = params.toString();
+  const res = await fetch(`${API_BASE_URL}/api/v1/sites/${encodeURIComponent(siteId)}/items${qs ? `?${qs}` : ''}`);
+  return handleResponse<SiteDefectsResponse>(res);
+}
+
+/** PATCH /api/v1/jobs/{job_id}/defects/{defect_id}/status */
+export async function updateDefectStatus(
+  jobId: string,
+  defectId: string,
+  itemStatus: 'open' | 'in_progress' | 'resolved',
+  note = '',
+): Promise<DefectItem> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/defects/${encodeURIComponent(defectId)}/status`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ item_status: itemStatus, note }),
+    },
+  );
+  return handleResponse<DefectItem>(res);
+}
+
+/** PATCH /api/v1/jobs/{job_id}/files/{file_id}/location */
+export async function setFileLocation(
+  jobId: string,
+  fileId: string,
+  location: { floor?: string | null; room?: string | null; area_tag?: string | null },
+): Promise<void> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/files/${encodeURIComponent(fileId)}/location`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(location),
+    },
+  );
+  await handleResponse<unknown>(res);
+}
+
+/** POST /api/v1/jobs/{job_id}/site */
+export async function assignJobToSite(jobId: string, siteId: string | null): Promise<void> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/site`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ site_id: siteId }),
+    },
+  );
+  await handleResponse<unknown>(res);
 }

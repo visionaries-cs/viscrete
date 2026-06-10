@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { getJob, generateReport, API_BASE_URL } from "@/lib/api";
 import { Loader2, AlertCircle, FileText } from "lucide-react";
 
-type PageState = "checking" | "detected" | "needs-regenerate" | "generating" | "loading-pdf" | "completed" | "error";
+type PageState = "checking" | "detected" | "generating" | "loading-pdf" | "completed" | "error";
 
 export default function ReportPage() {
   const { job_id } = useParams<{ job_id: string }>();
@@ -24,11 +24,7 @@ export default function ReportPage() {
     try {
       const job = await getJob(job_id);
       if (job.status === "completed") {
-        if (job.pdf_path) {
-          await loadPdf();
-        } else {
-          setState("needs-regenerate");
-        }
+        await loadPdf();
       } else if (job.status === "detected" || job.status === "reporting") {
         setState("detected");
       } else {
@@ -102,27 +98,6 @@ export default function ReportPage() {
             <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
             <p className="font-medium text-gray-700 dark:text-gray-300">Creating PDF Report…</p>
             <p className="text-sm">This may take a moment for large jobs.</p>
-          </div>
-        )}
-
-        {/* Completed but PDF failed — prompt to regenerate */}
-        {state === "needs-regenerate" && (
-          <div className="flex-1 flex flex-col items-center justify-center p-6">
-            <div className="bg-white dark:bg-gray-950 rounded-2xl border border-gray-200 dark:border-gray-800 p-8 text-center max-w-sm w-full">
-              <div className="w-12 h-12 rounded-xl bg-amber-50 dark:bg-amber-950/40 flex items-center justify-center mx-auto mb-4">
-                <FileText className="w-6 h-6 text-amber-500" />
-              </div>
-              <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-2">PDF Not Available</h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-                The report was generated but the PDF file is missing. Regenerate it to continue.
-              </p>
-              <button
-                onClick={() => handleGenerateReport(true)}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition"
-              >
-                Regenerate Report
-              </button>
-            </div>
           </div>
         )}
 

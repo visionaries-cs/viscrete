@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import {
@@ -12,10 +12,13 @@ import {
   listJobs,
   deleteJob,
   updateLocation,
+  listSites,
+  createSite,
   API_BASE_URL,
   type JobStatusResponse,
   type ValidationResult,
   type LocationUpdateRequest,
+  type SiteResponse,
 } from "@/lib/api";
 import LocationPickerModal, {
   type LocationPickerResult,
@@ -48,6 +51,7 @@ import {
   RefreshCw,
   ShieldCheck,
   User,
+  Building2,
 } from "lucide-react";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 
@@ -103,16 +107,181 @@ const STATUS_COLORS: Record<string, string> = {
 const JOBS_PER_PAGE = 5;
 const RESULTS_PER_PAGE = 12;
 
+// ─── Site Picker Modal ────────────────────────────────────────────────────────
+
+function SitePickerModal({
+  open,
+  sites,
+  sitesLoading,
+  onConfirm,
+  onClose,
+  onCreateSite,
+}: {
+  open: boolean;
+  sites: SiteResponse[];
+  sitesLoading: boolean;
+  onConfirm: (site: SiteResponse) => void;
+  onClose: () => void;
+  onCreateSite: (name: string) => Promise<SiteResponse>;
+}) {
+  const [selectedId, setSelectedId] = useState("");
+  const [createName, setCreateName] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Reset local state whenever modal opens
+  const [lastOpen, setLastOpen] = useState(false);
+  if (open && !lastOpen) { setSelectedId(""); setCreateName(""); setError(null); setLastOpen(true); }
+  if (!open && lastOpen) { setLastOpen(false); }
+
+  if (!open) return null;
+
+  async function handleCreate() {
+    if (!createName.trim()) return;
+    setCreating(true);
+    setError(null);
+    try {
+      const site = await onCreateSite(createName.trim());
+      onConfirm(site);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to create site");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-200 dark:border-gray-700 shadow-2xl w-full max-w-sm">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100 dark:border-gray-800">
+          <div className="flex items-center gap-2">
+            <Building2 className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Inspection Site</h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+
+          {/* Select existing */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+              Select an existing site
+            </label>
+            {sitesLoading ? (
+              <div className="flex items-center gap-2 text-xs text-gray-400 py-2">
+                <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                Loading sites…
+              </div>
+            ) : (
+              <select
+                value={selectedId}
+                onChange={e => setSelectedId(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#222] text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+              >
+                <option value="">— Choose a site —</option>
+                {sites.map(s => (
+                  <option key={s.site_id} value={s.site_id}>
+                    {s.name}{s.address ? ` · ${s.address}` : ""}
+                  </option>
+                ))}
+              </select>
+            )}
+            {sites.length === 0 && !sitesLoading && (
+              <p className="text-xs text-gray-400 mt-1">No sites yet — create one below.</p>
+            )}
+          </div>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+            <span className="text-xs text-gray-400">or create new</span>
+            <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+          </div>
+
+          {/* Create new */}
+          <div className="space-y-2">
+            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">
+              New site name
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. Rizal Hall Block A"
+              value={createName}
+              onChange={e => setCreateName(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleCreate(); } }}
+              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#222] text-gray-900 dark:text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+            />
+            <button
+              type="button"
+              onClick={handleCreate}
+              disabled={!createName.trim() || creating}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold transition"
+            >
+              {creating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+              {creating ? "Creating…" : "Create & Select"}
+            </button>
+          </div>
+
+          {error && (
+            <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1">
+              <AlertCircle className="w-3.5 h-3.5 shrink-0" />{error}
+            </p>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-2 px-5 pb-5">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-3 py-1.5 rounded-lg text-xs text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={!selectedId}
+            onClick={() => {
+              const site = sites.find(s => s.site_id === selectedId) ?? null;
+              if (site) onConfirm(site);
+            }}
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white transition"
+          >
+            Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function UploadPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const siteId = searchParams.get("site_id");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── Form state
   const [siteName, setSiteName] = useState("");
   const [inspectorName, setInspectorName] = useState("");
   const [mediaType, setMediaType] = useState<"image" | "video">("image");
+
+  // ── Site linkage
+  const [activeSiteId, setActiveSiteId] = useState<string | null>(siteId);
+  const [availableSites, setAvailableSites] = useState<SiteResponse[]>([]);
+  const [sitesLoading, setSitesLoading] = useState(false);
+  const [sitePickerOpen, setSitePickerOpen] = useState(false);
 
   // ── File state
   const [files, setFiles] = useState<File[]>([]);
@@ -195,9 +364,21 @@ export default function UploadPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [viewMode]);
 
-  // Load previous jobs on mount
+  // Load previous jobs and available sites on mount
   useEffect(() => {
     loadJobs();
+    (async () => {
+      setSitesLoading(true);
+      try {
+        const data = await listSites();
+        setAvailableSites(data);
+        if (siteId) {
+          const match = data.find(s => s.site_id === siteId);
+          if (match) setSiteName(match.name);
+        }
+      } catch { /* site list is optional */ }
+      finally { setSitesLoading(false); }
+    })();
   }, []);
 
   async function loadJobs() {
@@ -342,7 +523,7 @@ export default function UploadPage() {
     setIsUploading(true);
     setValidationResults(null);
     try {
-      const job = await createJob(mediaType, siteName.trim(), inspectorName.trim());
+      const job = await createJob(mediaType, siteName.trim(), inspectorName.trim(), activeSiteId);
       setJobId(job.job_id);
       const srtFiles = Object.values(srtMap);
       const results = await validateFiles(job.job_id, [...files, ...srtFiles]);
@@ -543,6 +724,24 @@ export default function UploadPage() {
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
+      {/* Site Picker Modal */}
+      <SitePickerModal
+        open={sitePickerOpen}
+        sites={availableSites}
+        sitesLoading={sitesLoading}
+        onClose={() => setSitePickerOpen(false)}
+        onConfirm={site => {
+          setActiveSiteId(site.site_id);
+          setSiteName(site.name);
+          setSitePickerOpen(false);
+        }}
+        onCreateSite={async name => {
+          const site = await createSite({ name });
+          setAvailableSites(prev => [site, ...prev]);
+          return site;
+        }}
+      />
+
       {/* Toast */}
       {toast && (
         <div className={cn(
@@ -621,14 +820,37 @@ export default function UploadPage() {
                   <label htmlFor="siteName" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Site Name <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    id="siteName"
-                    type="text"
-                    placeholder="e.g. Magsaysay Bridge"
-                    value={siteName}
-                    onChange={e => setSiteName(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                  />
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSitePickerOpen(true)}
+                    onKeyDown={e => { if (e.key === "Enter" || e.key === " ") setSitePickerOpen(true); }}
+                    className={cn(
+                      "flex items-center gap-2 w-full px-3 py-2 rounded-lg border text-sm cursor-pointer transition select-none",
+                      "border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1a1a1a]",
+                      "hover:border-blue-400 dark:hover:border-blue-600",
+                      "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent",
+                      siteName ? "text-gray-900 dark:text-white" : "text-gray-400"
+                    )}
+                  >
+                    <Building2 className="w-4 h-4 shrink-0 text-gray-400" />
+                    <span className="flex-1 truncate">{siteName || "Select or create a site…"}</span>
+                    <ChevronRight className="w-3.5 h-3.5 shrink-0 text-gray-400" />
+                  </div>
+                  {activeSiteId && (
+                    <div className="flex items-center gap-1.5 mt-1.5 text-xs text-blue-600 dark:text-blue-400">
+                      <CheckCircle2 className="w-3 h-3 shrink-0" />
+                      <span>Linked to site</span>
+                      <Link href={`/sites/${activeSiteId}`} className="underline hover:no-underline ml-0.5">View</Link>
+                      <button
+                        type="button"
+                        onClick={() => { setActiveSiteId(null); setSiteName(""); }}
+                        className="ml-auto text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div>

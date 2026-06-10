@@ -15,7 +15,7 @@ const HeroSection = () => {
   };
 
   const handleStart = () => {
-    router.push("/upload");
+    router.push("/inspection");
   };
 
   return (

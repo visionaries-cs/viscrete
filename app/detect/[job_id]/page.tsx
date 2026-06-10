@@ -1,12 +1,15 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   detectJob,
   getDetectResults,
   generateReport,
+  getJobFiles,
+  setFileLocation,
   type Detection,
+  type FileStatusItem,
   API_BASE_URL,
 } from "@/lib/api";
 import {
@@ -16,6 +19,11 @@ import {
   FileText,
   AlertTriangle,
   ImageIcon,
+  MapPin,
+  ChevronDown,
+  ChevronUp,
+  Save,
+  CheckCircle2,
 } from "lucide-react";
 
 // Actual API shape (api.ts DetectResponse is outdated — flat, not per-file array)
@@ -53,6 +61,11 @@ export default function DetectPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
 
+  // Location assignment
+  const [files, setFiles] = useState<FileStatusItem[]>([]);
+  const [locationOpen, setLocationOpen] = useState(false);
+  const [locationSaved, setLocationSaved] = useState(false);
+
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -78,6 +91,7 @@ export default function DetectPage() {
           const data = await getDetectResults(job_id) as unknown as DetectResponse;
           setResult(data);
           setHasRun(true);
+          loadFiles();
           setIsRunning(false);
         } else if (job.status === "failed") {
           stopTimers();
@@ -109,6 +123,11 @@ export default function DetectPage() {
           startPolling();
           return;
         }
+        // Previous attempt failed — show retry UI, don't auto-fire
+        if (job.status === "failed") {
+          setError("A previous detection attempt failed. Click Retry to try again.");
+          return;
+        }
       } catch {
         // If status check fails, fall through and attempt detection anyway
       }
@@ -118,19 +137,25 @@ export default function DetectPage() {
     return () => stopTimers();
   }, []);
 
+  async function loadFiles() {
+    try {
+      const f = await getJobFiles(job_id);
+      setFiles(f);
+    } catch { /* non-fatal */ }
+  }
+
   async function runDetection() {
     setIsRunning(true);
     setHasRun(false);
     setError(null);
     startTimer();
     try {
-      const data = await detectJob(job_id) as unknown as DetectResponse;
-      stopTimers();
-      setResult(data);
-      setHasRun(true);
+      await detectJob(job_id);
+      // 202 returned — inference is running in the background; poll for completion
+      startPolling();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Detection failed";
-      // 409 means inference is already running in the backend — switch to polling
+      // 409 with "already detecting" means a concurrent request already started it
       if (msg.includes("409") || msg.toLowerCase().includes("already")) {
         startPolling();
         return;
@@ -141,9 +166,7 @@ export default function DetectPage() {
       } else {
         setError(msg);
       }
-    } finally {
-      // Only clear running state on terminal outcomes; polling keeps it true
-      if (!pollRef.current) setIsRunning(false);
+      setIsRunning(false);
     }
   }
 
@@ -317,6 +340,18 @@ export default function DetectPage() {
               </div>
             </section>
 
+            {/* Location Assignment Panel */}
+            {files.length > 0 && (
+              <LocationAssignPanel
+                jobId={job_id}
+                files={files}
+                open={locationOpen}
+                saved={locationSaved}
+                onToggle={() => setLocationOpen(o => !o)}
+                onSave={() => setLocationSaved(true)}
+              />
+            )}
+
             {/* Generate Report (bottom) */}
             <div className="flex justify-end">
               <button
@@ -335,6 +370,125 @@ export default function DetectPage() {
         )}
       </main>
     </div>
+  );
+}
+
+// ─── Location Assign Panel ────────────────────────────────────────────────────
+
+interface LocationRow {
+  file_id: string;
+  filename: string;
+  floor: string;
+  room: string;
+  area_tag: string;
+}
+
+function LocationAssignPanel({
+  jobId,
+  files,
+  open,
+  saved,
+  onToggle,
+  onSave,
+}: {
+  jobId: string;
+  files: FileStatusItem[];
+  open: boolean;
+  saved: boolean;
+  onToggle: () => void;
+  onSave: () => void;
+}) {
+  const [rows, setRows] = useState<LocationRow[]>(
+    files.map(f => ({ file_id: f.file_id, filename: f.filename, floor: '', room: '', area_tag: '' }))
+  );
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  function update(fileId: string, field: keyof Omit<LocationRow, 'file_id' | 'filename'>, value: string) {
+    setRows(prev => prev.map(r => r.file_id === fileId ? { ...r, [field]: value } : r));
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await Promise.all(
+        rows.map(r => setFileLocation(jobId, r.file_id, {
+          floor:    r.floor    || null,
+          room:     r.room     || null,
+          area_tag: r.area_tag || null,
+        }))
+      );
+      onSave();
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : "Failed to save locations");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-gray-50 dark:hover:bg-gray-900/50 transition"
+      >
+        <div className="flex items-center gap-3">
+          <MapPin className="w-4 h-4 text-blue-500" />
+          <div>
+            <p className="text-sm font-semibold text-gray-900 dark:text-white">Assign Locations</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Optional — enables floor/room grouping in the site dashboard</p>
+          </div>
+          {saved && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
+        </div>
+        {open ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+      </button>
+
+      {open && (
+        <div className="border-t border-gray-100 dark:border-gray-800 px-6 py-4 space-y-3">
+          <div className="grid grid-cols-4 gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider px-1">
+            <span className="col-span-1">File</span>
+            <span>Floor</span>
+            <span>Room</span>
+            <span>Area Tag</span>
+          </div>
+
+          {rows.map(row => (
+            <div key={row.file_id} className="grid grid-cols-4 gap-2 items-center">
+              <p className="text-xs text-gray-600 dark:text-gray-400 truncate col-span-1" title={row.filename}>
+                {row.filename}
+              </p>
+              {(['floor', 'room', 'area_tag'] as const).map(field => (
+                <input
+                  key={field}
+                  type="text"
+                  placeholder={field === 'floor' ? 'e.g. 2F' : field === 'room' ? 'e.g. 204' : 'e.g. North wall'}
+                  value={row[field]}
+                  onChange={e => update(row.file_id, field, e.target.value)}
+                  className="w-full px-2 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] text-xs text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                />
+              ))}
+            </div>
+          ))}
+
+          {saveError && (
+            <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1">
+              <AlertCircle className="w-3 h-3" />{saveError}
+            </p>
+          )}
+
+          <div className="flex justify-end pt-2">
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold transition"
+            >
+              {saving ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Saving…</> : <><Save className="w-3.5 h-3.5" />Save Locations</>}
+            </button>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 

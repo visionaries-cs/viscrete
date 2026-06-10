@@ -38,6 +38,7 @@ import {
   ExternalLink,
   Table2,
   RefreshCw,
+  X,
 } from "lucide-react";
 import SettingsIcon from '@mui/icons-material/Settings';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
@@ -110,6 +111,14 @@ export default function ResultPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const flatData = detectData as any;
   const flatDetections: Detection[] = flatData?.detections ?? [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const perfMetrics = (flatData?.performance_metrics ?? null) as {
+    file_count: number;
+    total_duration_sec: number;
+    avg_duration_per_file_sec: number;
+    job_size_mb: number;
+    avg_cpu_percent: number;
+  } | null;
 
   // Derive per-class counts from the detections array.
   // The API's total_defect_counts field is unreliable — counting from flatDetections is the ground truth.
@@ -173,6 +182,13 @@ export default function ResultPage() {
     if (!confFocusedRef.current) setConfInputStr(confThreshold.toFixed(2));
   }, [confThreshold]);
 
+  // Extract detection duration from detection response
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const dur = (detectData as any)?.duration_sec;
+    if (dur != null) setDetectionDurationSec(dur as number);
+  }, [detectData]);
+
   const imageRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const carouselRef = useRef<HTMLDivElement>(null);
@@ -192,6 +208,13 @@ export default function ResultPage() {
       next.has(cls) ? next.delete(cls) : next.add(cls);
       return next;
     });
+
+  // Pipeline timing
+  const [preprocessDurationSec, setPreprocessDurationSec] = useState<number | null>(null);
+  const [detectionDurationSec, setDetectionDurationSec] = useState<number | null>(null);
+
+  // Performance metrics modal
+  const [metricsOpen, setMetricsOpen] = useState(false);
 
   // Project info from job status
   const [projectName, setProjectName] = useState("—");
@@ -267,6 +290,16 @@ export default function ResultPage() {
           if (REDIRECT_STATUSES.has(job.status)) {
             // Already detected — fetch cached results directly
             await fetchCachedResults();
+            // Non-blocking: fetch preprocessing timing for sidebar display
+            fetch(`${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/preprocess`)
+              .then(r => r.ok ? r.json() : null)
+              .catch(() => null)
+              .then((pp: { pipeline_steps?: Array<{ duration_sec: number }> } | null) => {
+                if (pp?.pipeline_steps?.length) {
+                  const total = pp.pipeline_steps.reduce((s, step) => s + step.duration_sec, 0);
+                  setPreprocessDurationSec(total);
+                }
+              });
             if (job.status === "completed") {
               if (job.pdf_path) {
                 setReportGenerated(true);
@@ -1402,6 +1435,51 @@ export default function ResultPage() {
 
             <div className="w-full h-px bg-gray-200 dark:bg-gray-800 mb-6" />
 
+            {/* Pipeline Timing */}
+            {(preprocessDurationSec != null || detectionDurationSec != null) && (
+              <div className="mb-6">
+                <div className="text-xs text-gray-500 dark:text-gray-400 uppercase mb-3 tracking-wider">Pipeline Timing</div>
+                <div className="space-y-2">
+                  {preprocessDurationSec != null && (
+                    <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800">
+                      <span className="text-xs text-gray-600 dark:text-gray-400">Preprocessing</span>
+                      <span className="text-xs font-mono font-semibold text-gray-900 dark:text-white tabular-nums">{preprocessDurationSec.toFixed(2)}s</span>
+                    </div>
+                  )}
+                  {detectionDurationSec != null && (
+                    <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800">
+                      <span className="text-xs text-gray-600 dark:text-gray-400">Detection</span>
+                      <span className="text-xs font-mono font-semibold text-gray-900 dark:text-white tabular-nums">{detectionDurationSec.toFixed(2)}s</span>
+                    </div>
+                  )}
+                  {preprocessDurationSec != null && detectionDurationSec != null && (
+                    <div className="flex items-center justify-between py-2.5 px-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/50">
+                      <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">Total</span>
+                      <span className="text-xs font-mono font-bold text-blue-700 dark:text-blue-300 tabular-nums">{(preprocessDurationSec + detectionDurationSec).toFixed(2)}s</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* View Overall Metrics button */}
+            {perfMetrics && (
+              <div className="mb-6">
+                <button
+                  onClick={() => setMetricsOpen(true)}
+                  className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl
+                             border border-gray-200 dark:border-gray-800
+                             bg-white dark:bg-gray-950
+                             hover:border-blue-300 dark:hover:border-blue-700
+                             text-sm font-semibold text-gray-700 dark:text-gray-300
+                             transition cursor-pointer"
+                >
+                  <span>View Overall Metrics</span>
+                  <ExternalLink className="w-4 h-4 text-gray-400 shrink-0" />
+                </button>
+              </div>
+            )}
+
             {/* Report error */}
             {reportError && (
               <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 dark:bg-red-950/30 dark:border-red-800 rounded-xl text-sm text-red-600 dark:text-red-400 mb-4">
@@ -1512,6 +1590,62 @@ export default function ResultPage() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Performance Metrics Modal */}
+      {metricsOpen && perfMetrics && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          onClick={() => setMetricsOpen(false)}
+        >
+          <div
+            className="w-full max-w-sm bg-white dark:bg-gray-950 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xl overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800">
+              <h2 className="text-sm font-bold text-gray-900 dark:text-white tracking-wide">
+                System Performance
+              </h2>
+              <button
+                onClick={() => setMetricsOpen(false)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Metrics rows */}
+            <div className="divide-y divide-gray-100 dark:divide-gray-800">
+              {[
+                { label: "Files Processed", value: String(perfMetrics.file_count) },
+                { label: "Total Time",       value: `${perfMetrics.total_duration_sec.toFixed(2)}s` },
+                { label: "Avg per File",     value: `${perfMetrics.avg_duration_per_file_sec.toFixed(2)}s` },
+                { label: "Job Size",         value: `${perfMetrics.job_size_mb.toFixed(1)} MB` },
+                { label: "Avg CPU",          value: `${perfMetrics.avg_cpu_percent.toFixed(1)}%` },
+              ].map(({ label, value }) => (
+                <div key={label} className="flex items-center justify-between px-6 py-3">
+                  <span className="text-xs text-gray-500 dark:text-gray-400">{label}</span>
+                  <span className="text-xs font-mono font-semibold text-gray-900 dark:text-white tabular-nums">
+                    {value}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-800">
+              <button
+                onClick={() => setMetricsOpen(false)}
+                className="w-full py-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-sm font-semibold
+                           text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700
+                           transition cursor-pointer"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
