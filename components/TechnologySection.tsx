@@ -1,4 +1,4 @@
-import { Scan, Video, Plane, BarChart3, MapPin, HardHat } from "lucide-react";
+import { Scan, Camera, Plane, BarChart3, MapPin, HardHat } from "lucide-react";
 
 const features = [
   {
@@ -8,10 +8,10 @@ const features = [
       "Automatically detects concrete surface defects such as cracks, spalling, and exposed rebars using YOLO-based deep learning models.",
   },
   {
-    icon: Video,
-    title: "Image & Video Processing",
+    icon: Camera,
+    title: "Image Processing",
     description:
-      "Processes images and video feeds from cameras or drones using computer vision and traditional image processing techniques.",
+      "Processes images from cameras or drones using computer vision and traditional image processing techniques.",
   },
   {
     icon: Plane,

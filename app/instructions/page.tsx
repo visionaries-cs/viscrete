@@ -14,7 +14,6 @@ import {
   CheckCircle2,
   AlertTriangle,
   ImageIcon,
-  Film,
   Info,
   ChevronDown,
   ChevronUp,
@@ -51,16 +50,10 @@ const steps = [
         heading: "GPS metadata",
         body: "If your images have GPS EXIF data, it is extracted automatically. If not, you can manually assign coordinates using the location patch tool before proceeding.",
       },
-      {
-        heading: "SRT telemetry (video only)",
-        body: "Upload a .srt telemetry file alongside your drone video to enable per-frame GPS location tagging in the final report.",
-        videoOnly: true,
-      },
     ],
     tips: [
       { text: "Use sharp, well-lit photos taken within 1–3 m of the surface for best results." },
       { text: "Avoid extreme glare or reflections — these reduce detection accuracy." },
-      { text: "For videos, ensure stable footage; shaky frames may be flagged as blurry.", videoOnly: true },
     ],
   },
   {
@@ -79,11 +72,6 @@ const steps = [
         body: "Feature Extraction → Cluster Assignment (K=3) → MOCS Optimization (finds optimal CLAHE parameters) → CLAHE Enhancement. Each cluster gets its own tuned parameters for precise enhancement.",
       },
       {
-        heading: "Video pipeline (5 steps)",
-        body: "Frame Sampling → Median Frame Construction → MOCS Optimization → Parallel Frame Processing → Save Output. MOCS runs once on a representative median frame, and the resulting parameters apply to all frames.",
-        videoOnly: true,
-      },
-      {
         heading: "Live progress",
         body: "A real-time pipeline stepper and terminal log stream progress as each step completes. You can watch individual step durations and see detailed output.",
       },
@@ -95,7 +83,6 @@ const steps = [
     tips: [
       { text: "You do not need to adjust any settings — MOCS finds the optimal parameters automatically." },
       { text: "Processing time scales with file count and image resolution. Large batches may take a few minutes." },
-      { text: "Video processing is parallelized — larger videos benefit from GPU availability on the server.", videoOnly: true },
     ],
   },
   {
@@ -116,11 +103,6 @@ const steps = [
       {
         heading: "Defect summary table",
         body: "A paginated table lists every detection across all files — including which image it appears in, the defect type, and confidence score. Click any row to jump directly to that image and highlight the defect.",
-      },
-      {
-        heading: "Video jobs",
-        body: "For video uploads, VISCRETE processes every frame and applies cross-frame deduplication (IoU > 0.4) to eliminate duplicate sightings of the same physical defect across consecutive frames.",
-        videoOnly: true,
       },
       {
         heading: "Stat cards",
@@ -171,7 +153,6 @@ const steps = [
 
 const fileRequirements = [
   { label: "Images", icon: ImageIcon, items: ["JPG / JPEG / PNG / BMP / TIFF", "Minimum 480 × 480 px recommended", "Multiple files supported per job", "Clear, in-focus shots within 1–3 m of surface"] },
-  { label: "Video", icon: Film, videoOnly: true, items: ["MP4 / AVI / MOV (one per job)", "H.264 encoding recommended for best compatibility", "Pair with a .srt telemetry file for GPS tagging", "Stable footage reduces blurry-frame rejections"] },
 ];
 
 const faqs = [
@@ -193,7 +174,7 @@ const faqs = [
   },
   {
     q: "What do the defect classes mean?",
-    a: "Crack: linear fractures in the concrete surface. Spalling: flaking or chipping of the surface layer. Peeling: paint or coating detachment. Algae: biological growth (green/dark staining from moisture).",
+    a: "Crack: linear fractures in the concrete surface. Spalling: flaking or chipping of the surface layer. Peeling: paint or coating detachment. Algae: biological growth from moisture.",
   },
   {
     q: "Why is the confidence score low for some detections?",
@@ -270,7 +251,7 @@ function StepCard({ step, index }: { step: typeof steps[number]; index: number }
         <div className={cn("border-t px-6 pb-6 pt-5 space-y-6", c.border.replace("border-", "border-t-"))}>
           {/* Detail list */}
           <div className="space-y-4">
-            {step.details.filter(d => !d.videoOnly).map(({ heading, body }) => (
+            {step.details.map(({ heading, body }) => (
               <div key={heading} className="flex gap-3">
                 <div className={cn("mt-1.5 w-1.5 h-1.5 rounded-full shrink-0", c.dot)} />
                 <div>
@@ -288,7 +269,7 @@ function StepCard({ step, index }: { step: typeof steps[number]; index: number }
               <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Tips</span>
             </div>
             <ul className="space-y-1.5">
-              {step.tips.filter(t => !t.videoOnly).map(tip => (
+              {step.tips.map(tip => (
                 <li key={tip.text} className="flex gap-2 text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
                   <CheckCircle2 className={cn("w-3.5 h-3.5 shrink-0 mt-0.5", c.num)} />
                   {tip.text}
@@ -427,7 +408,7 @@ export default function InstructionsPage() {
             File Requirements
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {fileRequirements.filter(r => !r.videoOnly).map(({ label, icon: Icon, items }) => (
+            {fileRequirements.map(({ label, icon: Icon, items }) => (
               <div key={label} className="bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm p-5">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center">

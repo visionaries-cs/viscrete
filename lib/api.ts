@@ -19,6 +19,7 @@ export interface JobStatusResponse {
   site_name?: string;
   site_location?: string; // backend may return either field name
   inspector_name?: string;
+  floor?: string | null;
   file_count?: number;
   total_defects?: number;
   created_at?: string;
@@ -209,10 +210,11 @@ export async function deleteJob(jobId: string): Promise<void> {
 
 /** POST /api/v1/jobs — create a new job */
 export async function createJob(
-  inputType: 'image' | 'video',
+  inputType: 'image',
   siteName: string,
   inspectorName: string,
   siteId?: string | null,
+  floor?: string | null,
 ): Promise<JobStatusResponse> {
   const res = await fetch(`${API_BASE_URL}/api/v1/jobs`, {
     method: 'POST',
@@ -222,6 +224,7 @@ export async function createJob(
       site_location: siteName,
       inspector_name: inspectorName,
       ...(siteId ? { site_id: siteId } : {}),
+      ...(floor ? { floor } : {}),
     }),
   });
   return handleResponse<JobStatusResponse>(res);
@@ -284,10 +287,28 @@ export async function preprocessJob(jobId: string): Promise<void> {
 
 // ─── Detect ───────────────────────────────────────────────────────────────────
 
-/** POST /api/v1/jobs/{job_id}/detect — queues detection in background, returns 202 */
-export async function detectJob(jobId: string): Promise<{ status: string; job_id: string }> {
+export type SensitivityLevel = 'conservative' | 'balanced' | 'aggressive';
+export interface PerClassSensitivity {
+  crack?: SensitivityLevel;
+  spalling?: SensitivityLevel;
+  peeling?: SensitivityLevel;
+  algae?: SensitivityLevel;
+}
+
+/** POST /api/v1/jobs/{job_id}/detect — queues detection in background, returns 202.
+ *  Pass per-class sensitivity levels to control confidence thresholds per defect class. */
+export async function detectJob(
+  jobId: string,
+  sensitivity?: PerClassSensitivity,
+): Promise<{ status: string; job_id: string }> {
+  const params = new URLSearchParams();
+  if (sensitivity?.crack)    params.set('crack',    sensitivity.crack);
+  if (sensitivity?.spalling) params.set('spalling', sensitivity.spalling);
+  if (sensitivity?.peeling)  params.set('peeling',  sensitivity.peeling);
+  if (sensitivity?.algae)    params.set('algae',    sensitivity.algae);
+  const query = params.size > 0 ? `?${params.toString()}` : '';
   const res = await fetch(
-    `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/detect`,
+    `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/detect${query}`,
     { method: 'POST' }
   );
   return handleResponse<{ status: string; job_id: string }>(res);
@@ -333,9 +354,9 @@ export interface RemarksResponse {
   remarks: Record<string, string>;
 }
 
-/** PATCH /api/v1/jobs/{job_id}/remarks — merge remarks keyed by file_id.
- *  PATCH is additive: sending one file_id preserves all others.
- *  Send empty string to clear a remark for a specific file. */
+/** PATCH /api/v1/jobs/{job_id}/remarks — merge remarks keyed by def_id (e.g. "DEF-001").
+ *  PATCH is additive: sending one def_id preserves all others.
+ *  Send empty string to clear a remark for a specific defect. */
 export async function patchRemarks(
   jobId: string,
   remarks: Record<string, string>,

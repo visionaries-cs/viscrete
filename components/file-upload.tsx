@@ -30,22 +30,12 @@ export default function FileUpload() {
   const [fileProgresses, setFileProgresses] = useState<Record<string, number>>(
     {}
   );
-  const [fileType, setFileType] = useState<'image' | 'video'>('image');
 
   const handleFileSelect = (files: FileList | null) => {
     if (!files) return;
 
-    const allFiles = Array.from(files);
-    
-    // Filter files based on selected type
-    const filteredFiles = allFiles.filter(file => {
-      if (fileType === 'image') {
-        return file.type.startsWith('image/');
-      } else {
-        return file.type.startsWith('video/');
-      }
-    });
-    
+    const filteredFiles = Array.from(files).filter(file => file.type.startsWith('image/'));
+
     setUploadedFiles((prev) => [...prev, ...filteredFiles]);
 
     // Simulate upload progress for each file
@@ -100,7 +90,7 @@ export default function FileUpload() {
           Upload your Folder
         </h1>
         <p className="text-lg sm:text-xl sm:text-center text-muted-foreground max-w-3xl mx-auto">
-          Select a folder containing {fileType}s for structural assessment using YOLOv11 and traditional processing.
+          Select a folder containing images for structural assessment using YOLOv11 and traditional processing.
         </p>
       </div>
       <Card className="w-full mx-auto max-w-6xl bg-background rounded-lg p-0 shadow-md">
@@ -176,22 +166,6 @@ export default function FileUpload() {
                 </Select>
               </div>
 
-              <div>
-                <Label htmlFor="fileType" className="mb-2">
-                  File Type
-                </Label>
-                <Select defaultValue="image" onValueChange={(value: 'image' | 'video') => setFileType(value)}>
-                  <SelectTrigger id="fileType" className="w-full">
-                    <SelectValue placeholder="Select file type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectItem value="image">Images</SelectItem>
-                      <SelectItem value="video">Videos</SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
           </div>
 
@@ -206,7 +180,7 @@ export default function FileUpload() {
                 <Upload className="h-5 w-5 text-muted-foreground" />
               </div>
               <p className="text-sm font-medium text-foreground">
-                Upload project folder ({fileType === 'image' ? 'Images only' : 'Videos only'})
+                Upload project folder (Images only)
               </p>
               <p className="text-sm text-muted-foreground mt-1">
                 or,{" "}
@@ -217,7 +191,7 @@ export default function FileUpload() {
                 >
                   click to browse
                 </label>{" "}
-                for folder (only {fileType}s will be loaded)
+                for folder (only images will be loaded)
               </p>
               <input
                 type="file"
@@ -239,7 +213,6 @@ export default function FileUpload() {
           >
             {uploadedFiles.map((file, index) => {
               const fileUrl = URL.createObjectURL(file);
-              const isVideo = file.type.startsWith('video/');
 
               return (
                 <div
@@ -251,18 +224,11 @@ export default function FileUpload() {
                 >
                   <div className="flex items-center gap-2">
                     <div className="w-18 h-14 bg-muted rounded-sm flex items-center justify-center self-start row-span-2 overflow-hidden">
-                      {isVideo ? (
-                        <video
-                          src={fileUrl}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <img
-                          src={fileUrl}
-                          alt={file.name}
-                          className="w-full h-full object-cover"
-                        />
-                      )}
+                      <img
+                        src={fileUrl}
+                        alt={file.name}
+                        className="w-full h-full object-cover"
+                      />
                     </div>
 
                     <div className="flex-1 pr-1">

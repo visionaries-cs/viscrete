@@ -50,7 +50,6 @@ const CLASS_CONFIG: { key: string; label: string; color: string; bg: string }[] 
   { key: "spalling", label: "Spalling", color: "bg-yellow-500", bg: "bg-yellow-500" },
   { key: "peeling",  label: "Peeling",  color: "bg-orange-500", bg: "bg-orange-500" },
   { key: "algae",    label: "Algae",    color: "bg-green-500",  bg: "bg-green-500" },
-  { key: "staining", label: "Staining", color: "bg-purple-500", bg: "bg-purple-500" },
 ];
 
 function DefectBreakdownCard({ total, classSummary }: { total: number; classSummary: Record<string, number> }) {

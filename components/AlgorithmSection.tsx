@@ -11,7 +11,6 @@ import {
   Workflow,
   Network,
   Camera,
-  Video,
   Layers,
   Cpu,
   GitMerge,
@@ -21,7 +20,6 @@ import {
 } from "lucide-react";
 
 type ArchType = "process" | "system";
-type BranchTab = "image" | "video";
 
 interface Step {
   num: number;
@@ -40,7 +38,6 @@ interface Stage {
   hasBranch: boolean;
   steps?: Step[];
   imagePipeline?: Step[];
-  videoPipeline?: Step[];
 }
 
 const STATUS_PILL: Record<string, string> = {
@@ -63,33 +60,28 @@ const stages: Stage[] = [
     label: "Input",
     icon: ImageUp,
     statusFlow: ["created", "validating", "validated"],
-    description: "Upload images or video, validate quality via Laplacian blur detection, and extract GPS metadata.",
+    description: "Upload images, validate quality via Laplacian blur detection, and extract GPS metadata.",
     hasBranch: false,
     steps: [
       {
         num: 1,
         title: "Job Creation",
-        detail: "A UUID job record is created and stored in metadata.json with status created. Accepts image batches (JPG/PNG/BMP/TIFF) or a single video (MP4/AVI/MOV) with an optional .srt telemetry file.",
+        detail: "A UUID job record is created and stored in metadata.json with status created. Accepts image batches (JPG/PNG/BMP/TIFF).",
         tag: "created",
       },
       {
         num: 2,
         title: "Blur Check — Laplacian Variance",
-        detail: "Images: Laplacian variance is computed on the full image. Videos: 10 evenly-spaced frames are sampled and their scores averaged. Any file with a score below the threshold (10.0) is marked invalid.",
+        detail: "Laplacian variance is computed on the full image. Any file with a score below the threshold (10.0) is marked invalid.",
         tag: "math",
       },
       {
         num: 3,
         title: "GPS Extraction",
-        detail: "EXIF GPS tags (latitude, longitude, altitude) are parsed from each image. Videos receive GPS from SRT telemetry at detection time rather than here.",
+        detail: "EXIF GPS tags (latitude, longitude, altitude) are parsed from each image.",
       },
       {
         num: 4,
-        title: "SRT Pairing",
-        detail: "If a .srt telemetry file was uploaded alongside a video, it is paired by filename stem — or auto-paired when there is exactly one video and one SRT. Stored for per-frame GPS + altitude during detection.",
-      },
-      {
-        num: 5,
         title: "Location Patch (optional)",
         detail: "Images lacking EXIF GPS can receive manually assigned coordinates: batch mode updates all files missing GPS, targeted mode updates specific file IDs.",
         tag: "optional",
@@ -102,7 +94,7 @@ const stages: Stage[] = [
     label: "Preprocessing",
     icon: SlidersHorizontal,
     statusFlow: ["validated", "preprocessing", "preprocessed"],
-    description: "MOCS-optimized CLAHE contrast enhancement. Branches on input type.",
+    description: "MOCS-optimized CLAHE contrast enhancement for image batches.",
     hasBranch: true,
     imagePipeline: [
       {
@@ -129,36 +121,6 @@ const stages: Stage[] = [
         tag: "LAB",
       },
     ],
-    videoPipeline: [
-      {
-        num: 1,
-        title: "Frame Sampling",
-        detail: "10 frames sampled evenly across the full video duration to capture representative scene diversity.",
-      },
-      {
-        num: 2,
-        title: "Median Frame Construction",
-        detail: "A pixel-wise median frame is computed across all 10 samples, producing a representative 'average scene' free of transient content. Used as the MOCS tuning target.",
-      },
-      {
-        num: 3,
-        title: "MOCS Optimization",
-        detail: "MOCS runs once on the median frame (same Cat Swarm algorithm as image pipeline) to derive a single global clip_limit + tile_grid_size applied uniformly to all frames.",
-        tag: "catswarm",
-      },
-      {
-        num: 4,
-        title: "Parallel Frame Processing",
-        detail: "Every frame processed with CLAHE. Frames run in a thread pool or CUDA kernel if available. Each frame downscaled to 75% during processing, then upscaled back to original resolution.",
-        tag: "parallel",
-      },
-      {
-        num: 5,
-        title: "Save Output",
-        detail: "Processed frames reassembled and written as an H.264 MP4 to processed/. CII (Contrast Improvement Index) is computed per file and stored in metadata.json.",
-        tag: "H.264",
-      },
-    ],
   },
   {
     id: "detection",
@@ -166,38 +128,19 @@ const stages: Stage[] = [
     label: "Detection",
     icon: ScanSearch,
     statusFlow: ["preprocessed", "detecting", "detected"],
-    description: "YOLOv11 inference with cross-frame deduplication for video.",
+    description: "YOLOv11 inference on preprocessed images.",
     hasBranch: true,
     imagePipeline: [
       {
         num: 1,
         title: "YOLOv11 Inference",
-        detail: "YOLO runs on the processed image and returns bounding boxes with class label and confidence score. Detects: crack, hairline_crack, structural_crack, spalling, peeling, algae/algae_growth, stain/staining.",
+        detail: "YOLO runs on the processed image and returns bounding boxes with class label and confidence score. Detects: crack, hairline_crack, structural_crack, spalling, peeling, algae/algae_growth.",
         tag: "YOLOv11",
       },
       {
         num: 2,
         title: "Annotation & Storage",
         detail: "YOLO draws bounding boxes with class labels onto the image and saves it to annotated/. Detection records (class, confidence, coordinates) are written to metadata.json.",
-      },
-    ],
-    videoPipeline: [
-      {
-        num: 1,
-        title: "SRT Telemetry Load",
-        detail: "Paired SRT file parsed to build a timestamp → {latitude, longitude, altitude} lookup for per-frame GPS resolution during detection.",
-      },
-      {
-        num: 2,
-        title: "YOLOv11 Frame Streaming",
-        detail: "YOLO streams every frame sequentially. A fully annotated output video is written to annotated/. Frames containing at least one detection are collected for deduplication.",
-        tag: "YOLOv11",
-      },
-      {
-        num: 3,
-        title: "Cross-Frame Deduplication",
-        detail: "Detections grouped by class, sorted by confidence (desc). A detection survives only if its bounding box does not overlap (IoU > 0.4) with any already-kept detection of the same class — eliminating repeated sightings of the same physical defect across consecutive frames.",
-        tag: "IoU > 0.4",
       },
     ],
   },
@@ -218,7 +161,7 @@ const stages: Stage[] = [
       {
         num: 2,
         title: "Summary Computation",
-        detail: "Total defect counts grouped by class (cracks, peeling, algae, spalling, staining). Severity counts computed (Low / Medium / High). Dominant severity determined as the highest-count bucket. Unique defect types present recorded.",
+        detail: "Total defect counts grouped by class (cracks, peeling, algae, spalling). Severity counts computed (Low / Medium / High). Dominant severity determined as the highest-count bucket. Unique defect types present recorded.",
         tag: "aggregate",
       },
       {
@@ -358,12 +301,9 @@ function StageNode({
 const AlgorithmSection = () => {
   const [archType, setArchType] = useState<ArchType>("process");
   const [activeIdx, setActiveIdx] = useState(0);
-  const [branch, setBranch] = useState<BranchTab>("image");
 
   const stage = stages[activeIdx];
-  const steps = stage.hasBranch
-    ? (branch === "image" ? stage.imagePipeline! : stage.videoPipeline!)
-    : stage.steps!;
+  const steps = stage.hasBranch ? stage.imagePipeline! : stage.steps!;
 
   return (
     <section className="w-full py-24 bg-gray-50 dark:bg-[#101115]" id="algorithm">
@@ -444,7 +384,7 @@ const AlgorithmSection = () => {
                     stage={s}
                     isActive={idx === activeIdx}
                     isLast={idx === stages.length - 1}
-                    onClick={() => { setActiveIdx(idx); setBranch("image"); }}
+                    onClick={() => { setActiveIdx(idx); }}
                   />
                 ))}
               </div>
@@ -485,32 +425,12 @@ const AlgorithmSection = () => {
                 </div>
                 {stage.hasBranch && (
                   <div className="flex items-center gap-1 shrink-0 rounded-lg border border-emerald-200 dark:border-[#1e4032] p-0.5 bg-white dark:bg-[#0c0e12]">
-                    <button
-                      onClick={() => setBranch("image")}
-                      className={cn(
-                        "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer",
-                        branch === "image"
-                          ? "bg-emerald-50 dark:bg-[#2ca75d]/15 text-emerald-700 dark:text-[#2ca75d] border border-emerald-200 dark:border-[#2ca75d]/30"
-                          : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-                      )}
+                    <div
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-emerald-50 dark:bg-[#2ca75d]/15 text-emerald-700 dark:text-[#2ca75d] border border-emerald-200 dark:border-[#2ca75d]/30"
                     >
                       <Camera className="w-3.5 h-3.5" />
                       Image
-                    </button>
-                    <span className="hidden">
-                      <button
-                        onClick={() => setBranch("video")}
-                        className={cn(
-                          "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer",
-                          branch === "video"
-                            ? "bg-emerald-50 dark:bg-[#2ca75d]/15 text-emerald-700 dark:text-[#2ca75d] border border-emerald-200 dark:border-[#2ca75d]/30"
-                            : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-                        )}
-                      >
-                        <Video className="w-3.5 h-3.5" />
-                        Video
-                      </button>
-                    </span>
+                    </div>
                   </div>
                 )}
               </div>
@@ -520,13 +440,13 @@ const AlgorithmSection = () => {
                 <p className="text-[10px] font-mono font-semibold uppercase tracking-widest
                                text-gray-400 dark:text-gray-600 mb-4">
                   {stage.hasBranch
-                    ? `${branch === "image" ? "Image" : "Video"} pipeline — ${steps.length} steps (click to expand)`
+                    ? `Image pipeline — ${steps.length} steps (click to expand)`
                     : `${steps.length} steps — click to expand`}
                 </p>
                 <div className="space-y-0">
                   {steps.map((step, idx) => (
                     <StepCard
-                      key={`${stage.id}-${branch}-${step.num}`}
+                      key={`${stage.id}-${step.num}`}
                       step={step}
                       isLast={idx === steps.length - 1}
                     />
@@ -540,7 +460,7 @@ const AlgorithmSection = () => {
               {stages.map((_, idx) => (
                 <button
                   key={idx}
-                  onClick={() => { setActiveIdx(idx); setBranch("image"); }}
+                  onClick={() => { setActiveIdx(idx); }}
                   className={cn(
                     "h-1.5 rounded-full transition-all cursor-pointer",
                     idx === activeIdx

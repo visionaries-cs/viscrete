@@ -31,7 +31,6 @@ import {
   Tag,
   Layers,
   ImageIcon,
-  Film,
   FileText,
   FileImage,
   MapPin,
@@ -39,20 +38,16 @@ import {
   Table2,
   RefreshCw,
   X,
+  Check,
+  ZoomIn,
+  Settings,
+  Calendar,
 } from "lucide-react";
-import SettingsIcon from '@mui/icons-material/Settings';
-import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import { ModeToggle } from "@/components/ui/mode-toggle";
 
 // ─── Types / Helpers ──────────────────────────────────────────────────────────
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://viscrete-core.shares.zrok.io";
-
-const VIDEO_EXTS = new Set(['.mp4', '.webm', '.mov', '.avi', '.mkv']);
-function isVideoPath(p: string) {
-  const ext = p.slice(p.lastIndexOf('.')).toLowerCase();
-  return VIDEO_EXTS.has(ext);
-}
 
 const REDIRECT_STATUSES = new Set(["detected", "reporting", "completed"]);
 
@@ -90,12 +85,16 @@ export default function ResultPage() {
   const [detectData, setDetectData] = useState<DetectResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPolling, setIsPolling] = useState(false);
-  const [isVideoJob, setIsVideoJob] = useState(false);
 
   const mountedRef = useRef(true);
   useEffect(() => {
     mountedRef.current = true;
-    return () => { mountedRef.current = false; };
+    return () => {
+      mountedRef.current = false;
+      if (remarkDebounceRef.current) clearTimeout(remarkDebounceRef.current);
+      if (remarkSavedTimerRef.current) clearTimeout(remarkSavedTimerRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Report state
@@ -128,9 +127,6 @@ export default function ResultPage() {
   const algaeCount    = flatDetections.filter(d => d.defect_type === 'algae').length;
   const totalDefectCount: number = flatData?.total_defects ?? (cracksCount + spallingCount + peelingCount + algaeCount);
 
-  // View mode — images (carousel) vs video player
-  const [viewMode, setViewMode] = useState<"images" | "video">("images");
-
   // Image carousel state
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [defectPage, setDefectPage] = useState(0);
@@ -158,29 +154,25 @@ export default function ResultPage() {
   const [highlightedDetection, setHighlightedDetection] = useState<Detection | null>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Per-image inspector remarks
+  // Per-defect inspector remarks
   const [remarks, setRemarks] = useState<Record<string, string>>({});
   const [remarkSaving, setRemarkSaving] = useState(false);
+  const [remarkSaved, setRemarkSaved] = useState(false);
   const [remarksChangedAfterReport, setRemarksChangedAfterReport] = useState(false);
   const remarkDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const remarkSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Confidence threshold
-  const [confThreshold, setConfThreshold] = useState(0.20);
-  const confDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [confInputStr, setConfInputStr] = useState('0.20');
-  const confFocusedRef = useRef(false);
+  // Lightbox
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
-  // Sync conf_threshold from API response whenever detectData changes
-  useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const threshold = (detectData as any)?.conf_threshold;
-    if (threshold != null) setConfThreshold(threshold);
-  }, [detectData]);
-
-  // Keep display string in sync when threshold changes externally (slider / API)
-  useEffect(() => {
-    if (!confFocusedRef.current) setConfInputStr(confThreshold.toFixed(2));
-  }, [confThreshold]);
+  // Per-class sensitivity selector
+  type SensitivityLevel = 'conservative' | 'balanced' | 'aggressive';
+  type SensMap = Record<string, SensitivityLevel>;
+  const [sensitivity, setSensitivity] = useState<SensMap>({
+    crack: 'balanced', spalling: 'balanced', peeling: 'balanced', algae: 'balanced',
+  });
+  const [readyToRun, setReadyToRun] = useState(false);
+  const [sensitivityOpen, setSensitivityOpen] = useState(false);
 
   // Extract detection duration from detection response
   useEffect(() => {
@@ -242,7 +234,6 @@ export default function ResultPage() {
         const res = await fetch(`${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}`);
         if (res.ok) {
           const job = await res.json();
-          console.log('[GET /jobs/:id]', job);
           if (job.site_location) {
             setProjectName(job.site_location);
             setSiteLocation(job.site_location);
@@ -266,11 +257,9 @@ export default function ResultPage() {
                 gps_longitude: f.gps_longitude ?? null,
                 location_label: f.location_label ?? null,
               };
-              if (!isVideoPath(f.filename ?? '')) {
-                const idx = carouselIdx++;
-                indexMap[f.file_id] = idx;
-                if (f.processed_path) processedPathMap[idx] = f.processed_path;
-              }
+              const idx = carouselIdx++;
+              indexMap[f.file_id] = idx;
+              if (f.processed_path) processedPathMap[idx] = f.processed_path;
             }
             setFileGpsMap(gpsMap);
             setFileIdToCarouselIndex(indexMap);
@@ -280,12 +269,9 @@ export default function ResultPage() {
           if (job.remarks && typeof job.remarks === 'object') {
             setRemarks(job.remarks as Record<string, string>);
           }
-          // Detect video job from uploaded filenames
-          if (Array.isArray(job.files) && job.files.some((f: { filename: string }) => isVideoPath(f.filename))) {
-            setIsVideoJob(true);
-            setShowBoundingBoxes(false);
-            setShowLabels(false);
-            setShowColorOverlay(false);
+          // Restore sensitivity levels from the last detection run
+          if (job.per_class_sensitivity && typeof job.per_class_sensitivity === 'object') {
+            setSensitivity(prev => ({ ...prev, ...(job.per_class_sensitivity as Record<string, SensitivityLevel>) }));
           }
           if (REDIRECT_STATUSES.has(job.status)) {
             // Already detected — fetch cached results directly
@@ -315,14 +301,14 @@ export default function ResultPage() {
             return;
           }
           if (job.status === "preprocessed") {
-            runDetection();
+            setReadyToRun(true);
             return;
           }
         }
       } catch {
-        // Fall through and attempt detection
+        // Fall through and show selector
       }
-      runDetection();
+      setReadyToRun(true);
     }
     init();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -334,7 +320,6 @@ export default function ResultPage() {
     try {
       const { getDetectResults } = await import("@/lib/api");
       const data = await getDetectResults(jobId);
-      console.log('[Detection result (cached)]', JSON.stringify(data, null, 2));
       setDetectData(data);
       setDefectPage(0);
       setHasRun(true);
@@ -394,19 +379,29 @@ export default function ResultPage() {
     tick();
   }
 
-  async function runDetection(conf?: number) {
+  async function runDetection(sens?: SensMap) {
+    const activeSens = sens ?? sensitivity;
     setIsRunning(true);
+    setReadyToRun(false);
     setHasRun(false);
     setError(null);
     try {
-      const confParam = conf !== undefined ? `?conf=${conf}` : '';
+      const params = new URLSearchParams();
+      if (activeSens.crack)    params.set('crack',    activeSens.crack);
+      if (activeSens.spalling) params.set('spalling', activeSens.spalling);
+      if (activeSens.peeling)  params.set('peeling',  activeSens.peeling);
+      if (activeSens.algae)    params.set('algae',    activeSens.algae);
+      const query = params.size > 0 ? `?${params.toString()}` : '';
       const res = await fetch(
-        `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/detect${confParam}`,
+        `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/detect${query}`,
         { method: "POST" }
       );
       if (!mountedRef.current) return;
       if (res.status === 404) { setError("Job not found."); setIsRunning(false); return; }
       if (!res.ok && res.status !== 409) { setError(`Detection failed (HTTP ${res.status})`); setIsRunning(false); return; }
+      // Clear stale remarks — def_ids will change after re-detection
+      setRemarks({});
+      setRemarksChangedAfterReport(false);
       // 202 = inference started; 409 = already detecting — poll until resolved
       pollForDetection();
     } catch (e: unknown) {
@@ -414,12 +409,6 @@ export default function ResultPage() {
       setError(e instanceof Error ? e.message : "Detection failed");
       setIsRunning(false);
     }
-  }
-
-  function handleConfChange(val: number) {
-    setConfThreshold(val);
-    if (confDebounceRef.current) clearTimeout(confDebounceRef.current);
-    confDebounceRef.current = setTimeout(() => runDetection(val), 600);
   }
 
   // ── Report generation ───────────────────────────────────────────────────────
@@ -437,14 +426,18 @@ export default function ResultPage() {
     }
   }
 
-  function handleRemarkChange(fileId: string, value: string) {
-    setRemarks(prev => ({ ...prev, [fileId]: value }));
+  function handleRemarkChange(defId: string, value: string) {
+    setRemarks(prev => ({ ...prev, [defId]: value }));
     if (reportGenerated) setRemarksChangedAfterReport(true);
+    if (remarkSaved) setRemarkSaved(false);
     if (remarkDebounceRef.current) clearTimeout(remarkDebounceRef.current);
     remarkDebounceRef.current = setTimeout(async () => {
       setRemarkSaving(true);
       try {
-        await patchRemarks(jobId, { [fileId]: value });
+        await patchRemarks(jobId, { [defId]: value });
+        setRemarkSaved(true);
+        if (remarkSavedTimerRef.current) clearTimeout(remarkSavedTimerRef.current);
+        remarkSavedTimerRef.current = setTimeout(() => setRemarkSaved(false), 2000);
       } finally {
         setRemarkSaving(false);
       }
@@ -511,33 +504,8 @@ export default function ResultPage() {
 
   // ── Image carousel ──────────────────────────────────────────────────────────
 
-  // For video jobs, build the per-frame path array from per-detection annotated_path fields.
-  // The top-level annotated_paths[] may only contain the annotated video file, not frame snapshots.
-  // frame_index is guaranteed 0-based and maps directly to the frame snapshot path on each detection.
-  const annotatedPaths: string[] = (() => {
-    if (isVideoJob && flatDetections.length > 0) {
-      const frameMap: Record<number, string> = {};
-      for (const d of flatDetections) {
-        const fi = d.frame_index;
-        const path = (d as any).annotated_path as string | undefined;
-        if (fi != null && path) frameMap[Number(fi)] = path;
-      }
-      if (Object.keys(frameMap).length > 0) {
-        const maxIdx = Math.max(...Object.keys(frameMap).map(Number));
-        return Array.from({ length: maxIdx + 1 }, (_, i) => frameMap[i] ?? '');
-      }
-    }
-    return flatData?.annotated_paths ?? [];
-  })();
-  // For image jobs, filter out any video files that may appear in annotated_paths.
-  // For video jobs, annotatedPaths is already the frame snapshot array.
-  const imageAnnotatedPaths = annotatedPaths.filter(p => !isVideoPath(p));
-  // Navigation counts: video uses the full annotated_paths (all snapshots);
-  // image uses the filtered list.
-  const totalImages = isVideoJob ? annotatedPaths.length : imageAnnotatedPaths.length;
-
-  // Use annotated_video_path directly from the detection response — do not construct manually
-  const annotatedVideoPath: string | null = flatData?.annotated_video_path ?? null;
+  const annotatedPaths: string[] = flatData?.annotated_paths ?? [];
+  const totalImages = annotatedPaths.length;
 
   const goToPrevious = () => setCurrentImageIndex(prev => (prev === 0 ? totalImages - 1 : prev - 1));
   const goToNext = () => setCurrentImageIndex(prev => (prev === totalImages - 1 ? 0 : prev + 1));
@@ -560,18 +528,12 @@ export default function ResultPage() {
     });
   };
 
-  // frame_index directly indexes annotated_paths[] (unfiltered).
-  // image file_id indexes imageAnnotatedPaths[] (filtered, video files excluded).
-  const currentAnnotatedPath = isVideoJob
-    ? annotatedPaths[currentImageIndex]
-    : imageAnnotatedPaths[currentImageIndex];
+  const currentAnnotatedPath = annotatedPaths[currentImageIndex];
 
-  // Video: show the annotated snapshot directly (backend burned boxes in).
-  // Image: use processed_path from job status (exact extension); fall back to
+  // Use processed_path from job status (exact extension); fall back to
   // string-derived path only when the map hasn't populated yet.
   const currentImageSrc = currentAnnotatedPath
     ? (() => {
-        if (isVideoJob) return `${API_BASE_URL}/static/${currentAnnotatedPath}`;
         const processedPath = carouselIndexToProcessedPath[currentImageIndex];
         if (processedPath) return `${API_BASE_URL}/static/${processedPath}?w=1280`;
         return `${API_BASE_URL}/static/${
@@ -591,23 +553,17 @@ export default function ResultPage() {
   // Prefetch the next and previous images so navigation feels instant
   useEffect(() => {
     if (totalImages < 2) return;
-    const paths = isVideoJob ? annotatedPaths : imageAnnotatedPaths;
     const indices = [
       (currentImageIndex + 1) % totalImages,
       (currentImageIndex - 1 + totalImages) % totalImages,
     ];
     for (const idx of indices) {
-      const path = paths[idx];
+      const path = annotatedPaths[idx];
       if (!path) continue;
-      let src: string;
-      if (isVideoJob) {
-        src = `${API_BASE_URL}/static/${path}`;
-      } else {
-        const processedPath = carouselIndexToProcessedPath[idx];
-        src = processedPath
-          ? `${API_BASE_URL}/static/${processedPath}?w=1280`
-          : `${API_BASE_URL}/static/${path.replace('/annotated/', '/processed/').replace(/_annotated(\.[^.]+)$/, '$1')}?w=1280`;
-      }
+      const processedPath = carouselIndexToProcessedPath[idx];
+      const src = processedPath
+        ? `${API_BASE_URL}/static/${processedPath}?w=1280`
+        : `${API_BASE_URL}/static/${path.replace('/annotated/', '/processed/').replace(/_annotated(\.[^.]+)$/, '$1')}?w=1280`;
       const img = new Image();
       img.src = src;
     }
@@ -636,34 +592,30 @@ export default function ResultPage() {
   // Load original (full-res) dimensions in background so overlay scale factors
   // use the original coordinate space, not the downscaled ?w=1280 dimensions.
   useEffect(() => {
-    if (!currentImageSrc || isVideoJob) { setOrigSize(null); return; }
+    if (!currentImageSrc) { setOrigSize(null); return; }
     setOrigSize(null);
     const fullResUrl = currentImageSrc.replace(/\?w=\d+$/, '');
     const img = new Image();
     img.onload = () => setOrigSize({ w: img.naturalWidth, h: img.naturalHeight });
     img.src = fullResUrl;
-  }, [currentImageSrc, isVideoJob]);
+  }, [currentImageSrc]);
 
-  // Resolve the file_id of whichever image is currently shown (image jobs only)
-  const currentFileId = imageAnnotatedPaths.length === 1
+  // Resolve the file_id of whichever image is currently shown
+  const currentFileId = annotatedPaths.length === 1
     ? flatData?.file_id
     : Object.entries(fileIdToCarouselIndex).find(([, idx]) => idx === currentImageIndex)?.[0];
 
   // While a highlight is active, show only that exact detection (reference equality).
-  // Otherwise filter by current image/frame and visible defect classes.
+  // Otherwise filter by current image and visible defect classes.
   const getCurrentDetections = (): Detection[] => {
     if (highlightedDetection) {
       return flatDetections.filter(d => d === highlightedDetection);
     }
     return flatDetections.filter(d => {
       if (!visibleDefects.has(d.defect_type as DefectClass)) return false;
-      if (d.frame_index != null) {
-        // Video: filter by frame position in annotated_paths[]
-        return Number(d.frame_index) === currentImageIndex;
-      }
-      // Image (or old cached record with null frame_index): filter by file_id
+      // Filter by file_id
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const detFileId = (d as any).file_id ?? (imageAnnotatedPaths.length === 1 ? flatData?.file_id : undefined);
+      const detFileId = (d as any).file_id ?? (annotatedPaths.length === 1 ? flatData?.file_id : undefined);
       if (currentFileId && detFileId && detFileId !== currentFileId) return false;
       return true;
     });
@@ -695,38 +647,6 @@ export default function ResultPage() {
   const allDetections: Detection[] = flatDetections;
   const tableFilteredDetections = allDetections.filter(d => tableVisibleDefects.has(d.defect_type));
 
-  // ── Debug: log carousel mapping when detection data arrives ─────────────────
-  useEffect(() => {
-    if (!flatDetections.length) return;
-    console.log('[carousel debug] annotated_paths:', annotatedPaths);
-    console.log('[carousel debug] imageAnnotatedPaths:', imageAnnotatedPaths);
-    console.log('[carousel debug] fileIdToCarouselIndex:', fileIdToCarouselIndex);
-    console.log('[carousel debug] detections[0]:', flatDetections[0]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flatDetections.length]);
-
-  // ── Debug: log location data per defect ─────────────────────────────────────
-  useEffect(() => {
-    if (allDetections.length === 0) return;
-    allDetections.forEach((d, i) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const det = d as any;
-      const loc = det.location;
-      const isSingleFile = Object.keys(fileGpsMap).length <= 1;
-      const fileId = det.file_id ?? (isSingleFile ? flatData?.file_id : undefined);
-      const file = fileId ? fileGpsMap[fileId] : undefined;
-      let coords: string;
-      if (loc?.type === 'geo' && loc.latitude != null && loc.longitude != null) {
-        coords = `${loc.latitude}, ${loc.longitude} (defect-level)`;
-      } else if (file?.gps_latitude != null && file?.gps_longitude != null) {
-        coords = `${file.gps_latitude}, ${file.gps_longitude} (file-level)`;
-      } else {
-        coords = 'none';
-      }
-      console.log(`[Defect ${i + 1}] type=${d.defect_type} | site=${siteLocation ?? '—'} | coords=${coords}`);
-    });
-  }, [allDetections, siteLocation, fileGpsMap]);
-
   // ── Location resolution — builds composite display segments ────────────────
   type ResolvedLocation = {
     siteLabel: string;
@@ -757,14 +677,22 @@ export default function ResultPage() {
     };
   }
 
+  // ── Lightbox Escape key listener ─────────────────────────────────────────────
+  useEffect(() => {
+    if (!lightboxSrc) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setLightboxSrc(null); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [lightboxSrc]);
+
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
     <div className="flex flex-col min-h-screen overflow-hidden">
       {/* HEADER */}
       <header className="fixed top-0 left-0 right-0 z-50
-                         border-b border-emerald-100 dark:border-[#2ca75d]/10
-                         bg-white/80 dark:bg-[#14171e]/80 backdrop-blur-md">
+                         border-b border-gray-200 dark:border-gray-800
+                         bg-white/80 dark:bg-gray-950/80 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
           {/* Left — brand + back + title */}
           <div className="flex items-center gap-4">
@@ -775,10 +703,10 @@ export default function ResultPage() {
                 viscrete
               </span>
             </Link>
-            <div className="border-l border-emerald-100 dark:border-[#2ca75d]/20 pl-4 flex items-center gap-3">
+            <div className="border-l border-gray-200 dark:border-gray-800 pl-4 flex items-center gap-3">
               <button
-                className="text-gray-400 hover:text-[#2ca75d] dark:hover:text-[#2ca75d] transition-colors cursor-pointer"
-                onClick={() => router.back()}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer"
+                onClick={() => router.push('/upload')}
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
@@ -793,11 +721,11 @@ export default function ResultPage() {
           {/* Right — model + date + toggle */}
           <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
             <span className="flex items-center gap-1">
-              <SettingsIcon fontSize="small" />
+              <Settings className="w-4 h-4" />
               {modelName}
             </span>
             <span className="hidden sm:flex items-center gap-1">
-              <CalendarMonthIcon fontSize="small" />
+              <Calendar className="w-4 h-4" />
               {projectDate}
             </span>
             <ModeToggle />
@@ -806,6 +734,81 @@ export default function ResultPage() {
       </header>
       {/* Spacer for fixed header */}
       <div className="h-12 shrink-0" />
+
+      {/* Pre-detection sensitivity selector */}
+      {readyToRun && !isRunning && !hasRun && (
+        <div className="flex flex-col items-center justify-center flex-1 bg-gray-100 dark:bg-gray-900 p-6">
+          <div className="bg-white dark:bg-gray-950 rounded-2xl border border-gray-200 dark:border-gray-800 w-full max-w-lg overflow-hidden">
+            {/* Header */}
+            <div className="px-6 pt-6 pb-4 border-b border-gray-100 dark:border-gray-800">
+              <h2 className="text-base font-bold text-gray-900 dark:text-white">Detection Sensitivity</h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                Set how aggressively the model flags each defect class before running inference.
+              </p>
+            </div>
+            {/* 2-column × 2-row grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-x divide-gray-100 dark:divide-gray-800">
+              {([
+                { cls: 'crack',    label: 'Crack',    dot: 'bg-red-500' },
+                { cls: 'spalling', label: 'Spalling', dot: 'bg-yellow-500' },
+                { cls: 'peeling',  label: 'Peeling',  dot: 'bg-orange-500' },
+                { cls: 'algae',    label: 'Algae',    dot: 'bg-green-500' },
+              ] as const).map(({ cls, label, dot }) => (
+                <div key={cls} className="p-4 flex flex-col gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className={cn('w-2 h-2 rounded-full shrink-0', dot)} />
+                    <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{label}</span>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    {(['conservative','balanced','aggressive'] as const).map(level => {
+                      const active = sensitivity[cls] === level;
+                      const activeStyle: Record<string,string> = {
+                        conservative: 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-950/40 dark:border-blue-400 dark:text-blue-300',
+                        balanced:     'bg-emerald-50 border-emerald-500 text-emerald-700 dark:bg-emerald-950/40 dark:border-emerald-400 dark:text-emerald-300',
+                        aggressive:   'bg-orange-50 border-orange-500 text-orange-700 dark:bg-orange-950/40 dark:border-orange-400 dark:text-orange-300',
+                      };
+                      const levelDesc: Record<string,string> = {
+                        conservative: 'High confidence only',
+                        balanced:     'Standard detection',
+                        aggressive:   'Maximum coverage',
+                      };
+                      return (
+                        <button
+                          key={level}
+                          onClick={() => setSensitivity(prev => ({ ...prev, [cls]: level }))}
+                          className={cn(
+                            'w-full text-left px-3 py-2 rounded-lg border text-xs transition cursor-pointer',
+                            active
+                              ? activeStyle[level]
+                              : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-900',
+                          )}
+                        >
+                          <span className="font-semibold capitalize">{level}</span>
+                          {active && <span className="ml-2 opacity-70">— {levelDesc[level]}</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-800">
+              {error && (
+                <div className="flex items-center gap-2 mb-3 p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-600 dark:text-red-400">
+                  <AlertCircle className="w-4 h-4 shrink-0" />{error}
+                </div>
+              )}
+              <button
+                onClick={() => runDetection(sensitivity)}
+                className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold transition cursor-pointer"
+              >
+                Run Detection
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Loading */}
       {isRunning && (
@@ -846,85 +849,91 @@ export default function ResultPage() {
           <div className="flex-1 min-w-0 bg-gray-100 dark:bg-gray-900 flex flex-col">
             {/* Overlay Controls */}
             <div className="flex justify-center pt-4 md:pt-6 px-4 md:px-6">
-              <div className="bg-white/90 backdrop-blur-sm border border-gray-200 dark:bg-gray-950/90 dark:border-gray-700 rounded-lg px-4 sm:px-6 py-3 flex flex-col gap-3 w-full max-w-2xl">
+              <div className="bg-white/90 backdrop-blur-sm border border-gray-200 dark:bg-gray-950/90 dark:border-gray-700 rounded-lg px-4 sm:px-6 py-3 flex flex-col gap-3 w-full max-w-2xl max-h-[60vh] overflow-y-auto">
 
-                {/* Video / Images toggle — shown only for video jobs */}
-                {isVideoJob && (
-                  <div className="flex items-center gap-3">
-                    <span className="text-gray-500 dark:text-gray-400 text-sm uppercase tracking-wider">View</span>
-                    <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-full p-0.5 gap-0.5">
-                      <button
-                        onClick={() => setViewMode("images")}
-                        className={cn(
-                          'flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer',
-                          viewMode === "images"
-                            ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
-                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200',
-                        )}
-                      >
-                        <ImageIcon className="w-3.5 h-3.5" />
-                        Images
-                      </button>
-                      <button
-                        onClick={() => setViewMode("video")}
-                        className={cn(
-                          'flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer',
-                          viewMode === "video"
-                            ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
-                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200',
-                        )}
-                      >
-                        <Film className="w-3.5 h-3.5" />
-                        Video
-                      </button>
+                {/* Per-class sensitivity selector — collapsible accordion */}
+                <div className="w-full">
+                  {/* Accordion header */}
+                  <button
+                    onClick={() => setSensitivityOpen(o => !o)}
+                    className="w-full flex items-center justify-between gap-2 cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-500 dark:text-gray-400 text-sm uppercase tracking-wider shrink-0">Sensitivity</span>
+                      {isRunning && <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500 shrink-0" />}
                     </div>
-                  </div>
-                )}
+                    <div className="flex items-center gap-2 shrink-0">
+                      {!sensitivityOpen && (
+                        <span className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">
+                          {Object.values(sensitivity).every(v => v === Object.values(sensitivity)[0])
+                            ? `All ${(Object.values(sensitivity)[0] as string).charAt(0).toUpperCase() + (Object.values(sensitivity)[0] as string).slice(1)}`
+                            : 'Custom'}
+                        </span>
+                      )}
+                      <ChevronDown className={cn('w-3.5 h-3.5 text-gray-400 transition-transform', sensitivityOpen && 'rotate-180')} />
+                    </div>
+                  </button>
 
-                {/* Confidence threshold slider */}
-                <div className="flex items-center gap-3 w-full">
-                  <span className="text-gray-500 dark:text-gray-400 text-sm uppercase tracking-wider shrink-0">Conf</span>
-                  <input
-                    type="range"
-                    min={0.01}
-                    max={1.0}
-                    step={0.01}
-                    value={confThreshold}
-                    disabled={isRunning}
-                    onChange={e => handleConfChange(parseFloat(e.target.value))}
-                    className="flex-1 min-w-0 accent-blue-500 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
-                  />
-                  <input
-                    type="number"
-                    min={0.01}
-                    max={1.0}
-                    step={0.01}
-                    value={confInputStr}
-                    disabled={isRunning}
-                    onFocus={() => { confFocusedRef.current = true; }}
-                    onChange={e => {
-                      setConfInputStr(e.target.value);
-                      const raw = parseFloat(e.target.value);
-                      if (!isNaN(raw) && raw >= 0.01 && raw <= 1.0) {
-                        handleConfChange(Math.round(raw * 100) / 100);
-                      }
-                    }}
-                    onBlur={e => {
-                      confFocusedRef.current = false;
-                      const raw = parseFloat(e.target.value);
-                      const val = isNaN(raw) ? confThreshold : Math.max(0.01, Math.min(1.0, Math.round(raw * 100) / 100));
-                      setConfInputStr(val.toFixed(2));
-                      setConfThreshold(val);
-                      if (confDebounceRef.current) clearTimeout(confDebounceRef.current);
-                      runDetection(val);
-                    }}
-                    className="w-14 shrink-0 px-2 py-1 rounded-lg text-xs text-center border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition disabled:opacity-50 disabled:cursor-not-allowed tabular-nums"
-                  />
-                  {isRunning && <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500 shrink-0" />}
+                  {/* Accordion body */}
+                  {sensitivityOpen && (
+                    <div className="mt-3 space-y-2">
+                      {([
+                        { cls: 'crack',    label: 'Crack',    dot: 'bg-red-500' },
+                        { cls: 'spalling', label: 'Spalling', dot: 'bg-yellow-500' },
+                        { cls: 'peeling',  label: 'Peeling',  dot: 'bg-orange-500' },
+                        { cls: 'algae',    label: 'Algae',    dot: 'bg-green-500' },
+                      ] as const).map(({ cls, label, dot }) => (
+                        <div key={cls} className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5 w-16 shrink-0">
+                            <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', dot)} />
+                            <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-300">{label}</span>
+                          </div>
+                          <div className="flex flex-1 gap-1">
+                            {(['conservative','balanced','aggressive'] as const).map(level => {
+                              const active = sensitivity[cls] === level;
+                              const activeStyle: Record<string,string> = {
+                                conservative: 'bg-blue-600 border-blue-600 text-white',
+                                balanced:     'bg-emerald-600 border-emerald-600 text-white',
+                                aggressive:   'bg-orange-500 border-orange-500 text-white',
+                              };
+                              return (
+                                <button
+                                  key={level}
+                                  disabled={isRunning}
+                                  onClick={() => setSensitivity(prev => ({ ...prev, [cls]: level }))}
+                                  className={cn(
+                                    'flex-1 py-1 rounded text-[10px] font-semibold border transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed capitalize',
+                                    active
+                                      ? activeStyle[level]
+                                      : 'border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:border-gray-400 dark:hover:border-gray-500',
+                                  )}
+                                >
+                                  {level}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                      <button
+                        disabled={isRunning}
+                        onClick={() => runDetection(sensitivity)}
+                        className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold transition cursor-pointer mt-1"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        Re-run Detection
+                      </button>
+                      {Object.values(remarks).some(v => v) && (
+                        <p className="text-[10px] text-amber-600 dark:text-amber-400 text-center mt-1">
+                          Re-running will clear all saved notes.
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
 
-                {/* Overlay toggles + class pills — hidden for video jobs */}
-                {!isVideoJob && viewMode === "images" && (
+                {/* Overlay toggles + class pills */}
+                {(
                 <>
                 <div className="flex items-center flex-wrap gap-x-6 gap-y-2">
                   <span className="text-gray-500 dark:text-gray-400 text-sm uppercase tracking-wider shrink-0">Overlays</span>
@@ -994,38 +1003,11 @@ export default function ResultPage() {
               </div>
             </div>
 
-            {/* Image Carousel / Video Player */}
+            {/* Image Carousel */}
             <div ref={carouselRef} className="flex-1 flex flex-col p-4 md:p-8 min-h-0">
 
-              {/* ── Video player ─────────────────────────────────────────────── */}
-              {viewMode === "video" && isVideoJob && (
-                <>
-                  <div className="bg-gray-200/40 border-2 border-dashed border-gray-300 dark:bg-gray-800/30 dark:border-gray-700/50 rounded-lg mb-3 flex items-center justify-center" style={{ height: 'clamp(280px, 50vh, 480px)' }}>
-                    {annotatedVideoPath ? (
-                      <video
-                        key={annotatedVideoPath}
-                        src={`${API_BASE_URL}/static/${annotatedVideoPath}`}
-                        controls
-                        className="max-w-full max-h-full rounded"
-                        style={{ maxHeight: 'clamp(264px, calc(50vh - 16px), 464px)' }}
-                      />
-                    ) : (
-                      <div className="flex flex-col items-center gap-3 text-gray-400 dark:text-gray-600">
-                        <Film className="w-12 h-12" />
-                        <p className="text-sm">Annotated video not available</p>
-                      </div>
-                    )}
-                  </div>
-                  {annotatedVideoPath && (
-                    <p className="text-center text-xs font-mono text-gray-500 dark:text-gray-400 mb-4 truncate">
-                      {annotatedVideoPath.split('/').pop()}
-                    </p>
-                  )}
-                </>
-              )}
-
               {/* ── Image carousel ───────────────────────────────────────────── */}
-              {viewMode === "images" && (
+              {(
               <>
               <div className="bg-gray-200/40 border-2 border-dashed border-gray-300 dark:bg-gray-800/30 dark:border-gray-700/50 rounded-lg mb-4 p-8" style={{ height: 'clamp(280px, 50vh, 480px)' }}>
                 {!currentImageSrc ? (
@@ -1050,10 +1032,17 @@ export default function ResultPage() {
                       alt={`Detection Result ${currentImageIndex + 1}`}
                       decoding="async"
                       fetchPriority="high"
-                      className={cn("w-full h-full object-contain transition-opacity", imageLoading ? "opacity-0" : "opacity-100")}
+                      className={cn("w-full h-full object-contain transition-opacity cursor-zoom-in", imageLoading ? "opacity-0" : "opacity-100")}
                       onLoad={handleImageLoad}
                       onError={() => setImageLoading(false)}
+                      onClick={() => !imageLoading && setLightboxSrc(currentImageSrc)}
                     />
+                    {/* Zoom hint */}
+                    {!imageLoading && (
+                      <div className="absolute bottom-2 right-2 flex items-center gap-1 px-2 py-1 rounded-md bg-black/50 text-white text-[10px] pointer-events-none select-none">
+                        <ZoomIn className="w-3 h-3" /> Click to zoom
+                      </div>
+                    )}
                     {/* Overlay container — positioned at the actual rendered image rect.
                         No overflow-hidden so labels near the top edge aren't clipped. */}
                     {hasValidDimensions && !imageLoading && (
@@ -1163,41 +1152,6 @@ export default function ResultPage() {
                 </div>
               )}
 
-              {/* Inspector's Observation — per image, image jobs only */}
-              {!isVideoJob && currentFileId && (
-                <div className="mt-5">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                      Inspector&apos;s Observation
-                    </label>
-                    {remarkSaving && (
-                      <span className="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
-                        <Loader2 className="w-3 h-3 animate-spin" /> Saving…
-                      </span>
-                    )}
-                  </div>
-                  <textarea
-                    value={remarks[currentFileId] ?? ''}
-                    onChange={e => handleRemarkChange(currentFileId, e.target.value)}
-                    placeholder="Add observation for this image…"
-                    rows={3}
-                    className="w-full px-3 py-2 rounded-lg text-sm border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition resize-none"
-                  />
-                  {remarksChangedAfterReport && (
-                    <div className="flex items-center gap-2 mt-2 p-2.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg text-xs text-amber-700 dark:text-amber-400">
-                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                      <span className="flex-1">Remarks updated after report was generated.</span>
-                      <button
-                        onClick={handleRegenerateReport}
-                        disabled={isGenerating}
-                        className="underline hover:no-underline shrink-0 cursor-pointer disabled:opacity-50"
-                      >
-                        Regenerate
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
               </>
               )}
 
@@ -1253,35 +1207,36 @@ export default function ResultPage() {
                             <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Defect Type</th>
                             <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Confidence</th>
                             <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Location</th>
+                            <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                              <span className="flex items-center gap-1">
+                                Note
+                                {remarkSaving && <Loader2 className="w-3 h-3 animate-spin text-blue-500" />}
+                                {!remarkSaving && remarkSaved && <Check className="w-3 h-3 text-emerald-500" />}
+                              </span>
+                            </th>
                           </tr>
                         </thead>
                         <tbody>
                           {tableFilteredDetections.slice(defectPage * DEFECT_PAGE_SIZE, (defectPage + 1) * DEFECT_PAGE_SIZE).map((d, i) => {
                             const i_global = defectPage * DEFECT_PAGE_SIZE + i;
+                            // Use the backend-assigned def_id (stored at detection time).
+                            // Fall back to position for jobs detected before this field was added.
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            const defId: string = (d as any).def_id ?? `DEF-${String(i_global + 1).padStart(3, '0')}`;
                             // eslint-disable-next-line @typescript-eslint/no-explicit-any
                             const det = d as any;
                             // Use job.files count (not annotated_paths length) to detect single-file jobs.
                             // annotated_paths may be empty even when there is exactly one image.
-                            const nonVideoFileCount = Object.keys(fileIdToCarouselIndex).length;
-                            const isSingleFile = nonVideoFileCount <= 1;
+                            const fileCount = Object.keys(fileIdToCarouselIndex).length;
+                            const isSingleFile = fileCount <= 1;
                             const fileId = det.file_id ?? (isSingleFile ? flatData?.file_id : undefined);
                             const filename = fileId ? fileGpsMap[fileId]?.filename : undefined;
-                            const annotatedPath = det.annotated_path as string | undefined;
-                            const frameFilename = annotatedPath ? annotatedPath.split('/').pop() : undefined;
 
-                            // frame_index (non-null) → video: direct position in annotated_paths[].
-                            // null → image/old cache: resolve via file_id → fileIdToCarouselIndex.
-                            const frameIdx = d.frame_index != null ? Number(d.frame_index) : null;
-                            const carouselIndex = frameIdx !== null && !isNaN(frameIdx)
-                              ? frameIdx
-                              : isSingleFile
-                                ? 0
-                                : (fileId !== undefined ? (fileIdToCarouselIndex[fileId] ?? -1) : -1);
-                            // Do not gate on imageAnnotatedPaths.length — that array may be empty
-                            // even when images exist (annotated_paths population is a separate concern).
-                            const isClickable = frameIdx !== null
-                              ? !isNaN(frameIdx) && frameIdx >= 0
-                              : carouselIndex >= 0;
+                            // Resolve via file_id → fileIdToCarouselIndex.
+                            const carouselIndex = isSingleFile
+                              ? 0
+                              : (fileId !== undefined ? (fileIdToCarouselIndex[fileId] ?? -1) : -1);
+                            const isClickable = carouselIndex >= 0;
 
                             return (
                             <tr
@@ -1294,7 +1249,6 @@ export default function ResultPage() {
                               )}
                               onClick={() => {
                                 if (!isClickable) return;
-                                setViewMode("images");
                                 setCurrentImageIndex(carouselIndex);
                                 highlightDetection(d);
                                 setTimeout(() => {
@@ -1303,32 +1257,15 @@ export default function ResultPage() {
                               }}
                             >
                               <td className="px-4 py-3">
-                                {isVideoJob && frameIdx !== null ? (
-                                  <div className="flex flex-col gap-0.5 min-w-0">
-                                    <span
-                                      className={cn(
-                                        "font-mono text-xs truncate max-w-[160px] block",
-                                        isClickable ? "text-blue-600 dark:text-blue-400" : "text-gray-600 dark:text-gray-400"
-                                      )}
-                                      title={frameFilename}
-                                    >
-                                      {frameFilename ?? "—"}
-                                    </span>
-                                    <span className="text-[10px] font-semibold text-gray-400 dark:text-gray-500">
-                                      Frame {frameIdx}
-                                    </span>
-                                  </div>
-                                ) : (
-                                  <span
-                                    className={cn(
-                                      "font-mono text-xs truncate max-w-[140px] block",
-                                      isClickable ? "text-blue-600 dark:text-blue-400" : "text-gray-600 dark:text-gray-400"
-                                    )}
-                                    title={filename}
-                                  >
-                                    {filename ?? "—"}
-                                  </span>
-                                )}
+                                <span
+                                  className={cn(
+                                    "font-mono text-xs truncate max-w-[140px] block",
+                                    isClickable ? "text-blue-600 dark:text-blue-400" : "text-gray-600 dark:text-gray-400"
+                                  )}
+                                  title={filename}
+                                >
+                                  {filename ?? "—"}
+                                </span>
                               </td>
                               <td className="px-4 py-3 font-medium text-gray-800 dark:text-gray-200 capitalize">{d.defect_type}</td>
                               <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{Math.round(d.confidence * 100)}%</td>
@@ -1362,6 +1299,16 @@ export default function ResultPage() {
                                     </div>
                                   );
                                 })()}
+                              </td>
+                              <td className="px-4 py-2" onClick={e => e.stopPropagation()}>
+                                <textarea
+                                  value={remarks[defId] ?? ''}
+                                  onChange={e => handleRemarkChange(defId, e.target.value)}
+                                  placeholder="Note…"
+                                  rows={1}
+                                  className="w-full px-2 py-1 rounded text-xs border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 placeholder-gray-300 dark:placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-400 focus:border-transparent transition resize-none"
+                                  style={{ minWidth: '140px' }}
+                                />
                               </td>
                             </tr>
                             );
@@ -1485,6 +1432,21 @@ export default function ResultPage() {
               <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 dark:bg-red-950/30 dark:border-red-800 rounded-xl text-sm text-red-600 dark:text-red-400 mb-4">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 {reportError}
+              </div>
+            )}
+
+            {/* Remarks changed warning */}
+            {remarksChangedAfterReport && (
+              <div className="flex items-center gap-2 mb-4 p-2.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg text-xs text-amber-700 dark:text-amber-400">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                <span className="flex-1">Notes updated after report was generated.</span>
+                <button
+                  onClick={handleRegenerateReport}
+                  disabled={isGenerating}
+                  className="underline hover:no-underline shrink-0 cursor-pointer disabled:opacity-50"
+                >
+                  Regenerate
+                </button>
               </div>
             )}
 
@@ -1648,6 +1610,28 @@ export default function ResultPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Lightbox */}
+      {lightboxSrc && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-sm"
+          onClick={() => setLightboxSrc(null)}
+        >
+          <button
+            onClick={() => setLightboxSrc(null)}
+            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={lightboxSrc}
+            alt="Zoomed detection result"
+            className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          />
         </div>
       )}
     </div>

@@ -56,8 +56,6 @@ export default function DetectPage() {
   const [result, setResult] = useState<DetectResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
-  const [isVideo, setIsVideo] = useState(false);
-
   const [isGenerating, setIsGenerating] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
 
@@ -111,7 +109,6 @@ export default function DetectPage() {
         const res = await fetch(`${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(job_id)}`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const job = await res.json();
-        if (job.input_type === "video") setIsVideo(true);
         if (REDIRECT_STATUSES.has(job.status)) {
           router.replace(`/results/${encodeURIComponent(job_id)}`);
           return;
@@ -230,11 +227,7 @@ export default function DetectPage() {
               Running YOLOv11 inference…{" "}
               <span className="font-mono text-blue-500">({formatElapsed(elapsed)})</span>
             </p>
-            {isVideo ? (
-              <p className="text-sm text-gray-400">Video inference typically takes 2–5 minutes</p>
-            ) : (
-              <p className="text-sm text-gray-400">This may take a moment</p>
-            )}
+            <p className="text-sm text-gray-400">This may take a moment</p>
           </div>
         )}
 

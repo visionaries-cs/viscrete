@@ -15,7 +15,6 @@ import {
   ChevronDown,
   ChevronUp,
   Terminal,
-  Video,
   Copy,
   Trash2,
   // ChevronDown and ChevronUp used by PreprocessingTerminal
@@ -63,7 +62,7 @@ interface FileStatusItem {
 interface JobStatus {
   job_id: string;
   status: string;
-  input_type: "image" | "video";
+  input_type: string;
   file_count: number;
   files: FileStatusItem[];
   preprocessing_result?: PreprocessResult | null;
@@ -98,12 +97,11 @@ interface CiiScoreEntry {
 interface PreprocessResult {
   job_id: string;
   status: string;
-  pipeline_type: "image" | "video";
+  pipeline_type: string;
   total_processed: number;
   pipeline_steps: PipelineStep[];
   cluster_info: ClusterInfo[];
   cii_scores?: CiiScoreEntry[];
-  output_video_path?: string | null;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -125,13 +123,6 @@ const IMAGE_STEPS = [
   "Cluster Assignment",
   "MOCS Optimization",
   "CLAHE Enhancement",
-];
-const VIDEO_STEPS = [
-  "Frame Sampling",
-  "Median Frame Construction",
-  "MOCS Optimization",
-  "Frame Processing",
-  "Save Output",
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -276,15 +267,12 @@ function ClusterCard({ info }: { info: ClusterInfo }) {
         <span
           className={cn(
             "px-2 py-0.5 rounded-full text-[11px] font-semibold",
-            info.clahe_params.source === "mocs" ||
-              info.clahe_params.source === "mocs_video_median"
+            info.clahe_params.source === "mocs"
               ? "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300"
               : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
           )}
         >
-          {info.clahe_params.source === "mocs_video_median"
-            ? "MOCS Video"
-            : info.clahe_params.source.toUpperCase()}
+          {info.clahe_params.source.toUpperCase()}
         </span>
       </div>
       <div className="grid grid-cols-2 gap-2 text-xs text-gray-500 dark:text-gray-400">
@@ -306,103 +294,6 @@ function ClusterCard({ info }: { info: ClusterInfo }) {
             {info.clahe_params.tile_grid_size[0]} ×{" "}
             {info.clahe_params.tile_grid_size[1]}
           </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── VideoPlayer ──────────────────────────────────────────────────────────────
-
-function VideoPlayer({
-  src,
-  totalFrames,
-  steps,
-}: {
-  src: string;
-  totalFrames: number;
-  steps: PipelineStep[];
-}) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [hasError, setHasError] = useState(false);
-  const totalSec = steps.reduce((s, p) => s + p.duration_sec, 0);
-
-  return (
-    <div className="w-full">
-      <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-        <Video className="w-4 h-4" />
-        Preprocessed Video Output
-      </h2>
-      <div className="w-full bg-white dark:bg-gray-950 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
-        <div
-          className="relative w-full bg-black flex items-center justify-center"
-          style={{ minHeight: 320 }}
-        >
-          {isLoading && !hasError && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-gray-400 z-10">
-              <Loader2 className="w-8 h-8 animate-spin" />
-              <span className="text-sm">Loading video…</span>
-            </div>
-          )}
-          {hasError ? (
-            <div className="flex flex-col items-center gap-3 py-12 px-6 text-gray-500 dark:text-gray-400 w-full">
-              <Video className="w-12 h-12 text-gray-400 dark:text-gray-600" />
-              <p className="text-sm font-medium">Video preview unavailable</p>
-              <p className="text-xs text-gray-400 dark:text-gray-500 text-center">
-                The browser could not load the video. Check that the path exists and the format is browser-compatible (H.264 MP4 recommended).
-              </p>
-              <code className="text-[10px] font-mono bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-3 py-1.5 rounded-lg break-all max-w-full">
-                {src}
-              </code>
-              <a
-                href={src}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-blue-500 hover:underline"
-              >
-                Try opening directly ↗
-              </a>
-            </div>
-          ) : (
-            <video
-              ref={videoRef}
-              src={src}
-              controls
-              className="w-full max-h-[480px] object-contain"
-              onLoadedData={() => setIsLoading(false)}
-              onError={() => {
-                setIsLoading(false);
-                setHasError(true);
-              }}
-            />
-          )}
-        </div>
-        <div className="grid grid-cols-3 divide-x divide-gray-100 dark:divide-gray-800 border-t border-gray-100 dark:border-gray-800">
-          <div className="px-5 py-3">
-            <p className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-0.5">
-              Frames processed
-            </p>
-            <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">
-              {totalFrames}
-            </p>
-          </div>
-          <div className="px-5 py-3">
-            <p className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-0.5">
-              Pipeline steps
-            </p>
-            <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">
-              {steps.length}
-            </p>
-          </div>
-          <div className="px-5 py-3">
-            <p className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-0.5">
-              Total time
-            </p>
-            <p className="text-sm font-semibold font-mono text-gray-800 dark:text-gray-100">
-              {totalSec.toFixed(2)}s
-            </p>
-          </div>
         </div>
       </div>
     </div>
@@ -488,7 +379,7 @@ function StepItem({ step, isLast }: { step: StepState; isLast: boolean }) {
           </p>
         )}
 
-        {/* Video frame progress bar — only shown for in_progress steps with a percent */}
+        {/* Step progress bar — only shown for in_progress steps with a percent */}
         {step.status === "in_progress" && step.progress != null && (
           <div className="mt-2 max-w-sm">
             <div className="flex items-center justify-between text-xs mb-1">
@@ -1024,7 +915,7 @@ export default function PreprocessPage() {
         }
 
         case "step_progress": {
-          // No terminal output — only update progress bar for video step 4
+          // No terminal output — only update progress bar
           const step = msg.step as number;
           const percent = msg.percent as number;
           const detail = (msg.detail as string | null) ?? null;
@@ -1123,11 +1014,9 @@ export default function PreprocessPage() {
 
     // ── Start WebSocket connection ─────────────────────────────────────────────
 
-    function startWS(inputType: "image" | "video") {
+    function startWS(inputType: string) {
       // Pre-populate with fallback step names (overwritten once pipeline_init fires)
-      const fallbackNames =
-        inputType === "video" ? VIDEO_STEPS : IMAGE_STEPS;
-      setStepStates(makePendingSteps(fallbackNames));
+      setStepStates(makePendingSteps(IMAGE_STEPS));
 
       const wsBase = API_BASE_URL.replace(/^http:\/\//i, "ws://").replace(
         /^https:\/\//i,
@@ -1257,10 +1146,8 @@ export default function PreprocessPage() {
       if (cancelled) return;
 
       // Fallback: show step names without timing data
-      const fallbackNames =
-        data.input_type === "video" ? VIDEO_STEPS : IMAGE_STEPS;
       setStepStates(
-        makePendingSteps(fallbackNames).map((s) => ({
+        makePendingSteps(IMAGE_STEPS).map((s) => ({
           ...s,
           status: "completed" as StepStatus,
         }))
@@ -1354,13 +1241,13 @@ export default function PreprocessPage() {
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
       {/* Header */}
       <header className="fixed top-0 left-0 right-0 z-50
-                         border-b border-emerald-100 dark:border-[#2ca75d]/10
-                         bg-white/80 dark:bg-[#14171e]/80 backdrop-blur-md">
+                         border-b border-gray-200 dark:border-gray-800
+                         bg-white/80 dark:bg-gray-950/80 backdrop-blur-md">
         <div className="container max-w-5xl mx-auto px-6 py-3 flex items-center gap-4">
           <button
-            onClick={() => router.back()}
-            className="text-gray-500 hover:text-[#2ca75d] dark:hover:text-[#2ca75d] transition cursor-pointer shrink-0"
-            aria-label="Go back"
+            onClick={() => router.push('/upload')}
+            className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition cursor-pointer shrink-0"
+            aria-label="Back to upload"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
@@ -1429,32 +1316,6 @@ export default function PreprocessPage() {
             </div>
           )}
 
-          {/* Video processing placeholder while running */}
-          {isRunning && jobMeta?.input_type === "video" && (
-            <div className="mt-6">
-              <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                <Video className="w-4 h-4" />
-                Preprocessed Video Output
-              </h2>
-              <div className="w-full bg-white dark:bg-gray-950 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
-                <div className="w-full bg-gray-100 dark:bg-gray-900 flex flex-col items-center justify-center gap-3 py-14">
-                  <Loader2 className="w-9 h-9 text-emerald-500 animate-spin" />
-                  <p className="text-sm font-medium text-gray-600 dark:text-gray-300">
-                    Processing video…
-                  </p>
-                  <p className="text-xs text-gray-400 dark:text-gray-500">
-                    The processed output will appear here once the pipeline completes.
-                  </p>
-                </div>
-                <div className="border-t border-gray-100 dark:border-gray-800 px-5 py-3 flex items-center gap-2">
-                  <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                  <p className="text-xs text-amber-600 dark:text-amber-400">
-                    This may take several minutes for large videos.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* ── Section 2: Terminal log ──────────────────────────────────── */}
@@ -1532,27 +1393,8 @@ export default function PreprocessPage() {
               </div>
             )}
 
-            {/* Video output */}
-            {jobMeta?.input_type === "video" &&
-              (() => {
-                const videoFile = jobMeta.files[0];
-                const ext = videoFile?.filename.split(".").pop() ?? "mp4";
-                const videoSrc = videoFile?.processed_path
-                  ? `${API_BASE_URL}/static/${videoFile.processed_path}`
-                  : `${API_BASE_URL}/static/${encodeURIComponent(
-                      job_id
-                    )}/processed/${videoFile?.file_id}.${ext}`;
-                return (
-                  <VideoPlayer
-                    src={videoSrc}
-                    totalFrames={result?.total_processed ?? 0}
-                    steps={result?.pipeline_steps ?? []}
-                  />
-                );
-              })()}
-
             {/* Before / After image comparisons */}
-            {jobMeta?.input_type !== "video" && imageFiles.length > 0 && (
+            {imageFiles.length > 0 && (
               <div>
                 <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">
                   Before / After Comparison

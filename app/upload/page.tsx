@@ -35,7 +35,6 @@ import {
   ArrowRight,
   Trash2,
   FileImage,
-  FileVideo,
   Clock,
   AlertCircle,
   AlertTriangle,
@@ -152,7 +151,7 @@ function SitePickerModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-200 dark:border-gray-700 shadow-2xl w-full max-w-sm">
+      <div className="bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-700 shadow-2xl w-full max-w-sm">
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100 dark:border-gray-800">
@@ -185,7 +184,7 @@ function SitePickerModal({
               <select
                 value={selectedId}
                 onChange={e => setSelectedId(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#222] text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
               >
                 <option value="">— Choose a site —</option>
                 {sites.map(s => (
@@ -218,7 +217,7 @@ function SitePickerModal({
               value={createName}
               onChange={e => setCreateName(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleCreate(); } }}
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#222] text-gray-900 dark:text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
             />
             <button
               type="button"
@@ -275,7 +274,7 @@ export default function UploadPage() {
   // ── Form state
   const [siteName, setSiteName] = useState("");
   const [inspectorName, setInspectorName] = useState("");
-  const [mediaType, setMediaType] = useState<"image" | "video">("image");
+  const [floor, setFloor] = useState("");
 
   // ── Site linkage
   const [activeSiteId, setActiveSiteId] = useState<string | null>(siteId);
@@ -285,8 +284,6 @@ export default function UploadPage() {
 
   // ── File state
   const [files, setFiles] = useState<File[]>([]);
-  // srtMap: video filename → paired SRT File (video mode only)
-  const [srtMap, setSrtMap] = useState<Record<string, File>>({});
   const [isDragging, setIsDragging] = useState(false);
 
   // ── Upload / validation state
@@ -336,14 +333,6 @@ export default function UploadPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<ModalContext>(null);
-
-  // Reset files when media type changes
-  useEffect(() => {
-    setFiles([]);
-    setSrtMap({});
-    setValidationResults(null);
-    setUploadError(null);
-  }, [mediaType]);
 
   // Reset results page + carousel index when filters or results change
   useEffect(() => { setResultsPage(1); setCarouselIndex(0); }, [gpsFilter, blurFilter, validationResults]);
@@ -461,14 +450,12 @@ export default function UploadPage() {
   };
 
   const IMAGE_TYPES = ["image/jpeg", "image/png", "image/bmp", "image/tiff"];
-  const VIDEO_TYPES = ["video/mp4", "video/avi", "video/quicktime", "video/x-msvideo"];
   const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
-  const MAX_VIDEO_BYTES = 500 * 1024 * 1024;
 
   function addFiles(fileList: FileList | null) {
     if (!fileList) return;
-    const allowed = mediaType === "image" ? IMAGE_TYPES : VIDEO_TYPES;
-    const maxSize = mediaType === "image" ? MAX_IMAGE_BYTES : MAX_VIDEO_BYTES;
+    const allowed = IMAGE_TYPES;
+    const maxSize = MAX_IMAGE_BYTES;
 
     const valid: File[] = [];
     for (const f of Array.from(fileList)) {
@@ -490,27 +477,13 @@ export default function UploadPage() {
   }
 
   function removeFile(idx: number) {
-    const removed = files[idx];
     setFiles(prev => prev.filter((_, i) => i !== idx));
-    if (removed) setSrtMap(prev => { const n = { ...prev }; delete n[removed.name]; return n; });
     setValidationResults(null);
-  }
-
-  function attachSrt(videoName: string, srtFile: File) {
-    if (!srtFile.name.toLowerCase().endsWith(".srt")) {
-      showToast("Only .srt files are accepted.", "warn");
-      return;
-    }
-    setSrtMap(prev => ({ ...prev, [videoName]: srtFile }));
-  }
-
-  function removeSrt(videoName: string) {
-    setSrtMap(prev => { const n = { ...prev }; delete n[videoName]; return n; });
   }
 
   // Derived: true once at least one file is valid (includes overridden files)
   const canProceed = !!(validationResults && validationResults.some(r => r.is_valid) && jobId && !isUploading);
-  const replaceAccept = mediaType === "image" ? ".jpg,.jpeg,.png,.bmp,.tiff" : ".mp4,.avi,.mov";
+  const replaceAccept = ".jpg,.jpeg,.png,.bmp,.tiff";
 
   const canUpload =
     siteName.trim().length > 0 &&
@@ -523,10 +496,9 @@ export default function UploadPage() {
     setIsUploading(true);
     setValidationResults(null);
     try {
-      const job = await createJob(mediaType, siteName.trim(), inspectorName.trim(), activeSiteId);
+      const job = await createJob('image', siteName.trim(), inspectorName.trim(), activeSiteId, floor.trim() || null);
       setJobId(job.job_id);
-      const srtFiles = Object.values(srtMap);
-      const results = await validateFiles(job.job_id, [...files, ...srtFiles]);
+      const results = await validateFiles(job.job_id, files);
       setValidationResults(results);
       const hasValid = results.some(r => r.is_valid);
       if (!hasValid) setUploadError("All files failed validation. Use 'Proceed Anyway' on individual files or replace them.");
@@ -723,7 +695,7 @@ export default function UploadPage() {
   const pagedResults = filteredResults.slice((resultsPage - 1) * RESULTS_PER_PAGE, resultsPage * RESULTS_PER_PAGE);
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#0a0a0a]">
       {/* Site Picker Modal */}
       <SitePickerModal
         open={sitePickerOpen}
@@ -780,8 +752,8 @@ export default function UploadPage() {
 
       {/* Header */}
       <header className="fixed top-0 left-0 right-0 z-50
-                         border-b border-emerald-100 dark:border-[#2ca75d]/10
-                         bg-white/80 dark:bg-[#14171e]/80 backdrop-blur-md">
+                         border-b border-gray-200 dark:border-gray-800
+                         bg-white/80 dark:bg-[#111]/80 backdrop-blur-md">
         <div className="container max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
           <Link href="/" className="flex items-center gap-2 select-none">
             <span className="text-sm font-bold font-mono tracking-tight
@@ -799,7 +771,7 @@ export default function UploadPage() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-16 pb-6">
         <div className="mb-4">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">New Inspection Job</h2>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">New Inspection Job</h2>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Complete each step below to start the inspection pipeline.</p>
         </div>
 
@@ -809,7 +781,7 @@ export default function UploadPage() {
           <div className="flex flex-col gap-4">
 
             {/* Step 1 — Job Details */}
-            <div className="bg-white dark:bg-[#161616] rounded-xl border border-gray-200 dark:border-gray-800 p-4 shadow-sm">
+            <div className="bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800 p-4 shadow-sm">
               <div className="flex items-center gap-2 mb-3">
                 <span className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-[11px] font-bold shrink-0">1</span>
                 <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Job Details</h3>
@@ -867,38 +839,25 @@ export default function UploadPage() {
                   />
                 </div>
 
-                {/* Media type toggle hidden — images only */}
-                <div className="hidden">
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Media Type <span className="text-red-500">*</span>
+                <div>
+                  <label htmlFor="floor" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Floor / Level <span className="text-gray-400 font-normal">(optional)</span>
                   </label>
-                  <div className="flex gap-3">
-                    {(["image", "video"] as const).map(t => (
-                      <label key={t} className={cn(
-                        "flex-1 flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 cursor-pointer text-sm font-medium transition",
-                        mediaType === t
-                          ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300"
-                          : "border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600"
-                      )}>
-                        <input
-                          type="radio"
-                          name="mediaType"
-                          value={t}
-                          checked={mediaType === t}
-                          onChange={() => setMediaType(t)}
-                          className="sr-only"
-                        />
-                        {t === "image" ? <FileImage className="w-4 h-4" /> : <FileVideo className="w-4 h-4" />}
-                        {t === "image" ? "Images" : "Videos"}
-                      </label>
-                    ))}
-                  </div>
+                  <input
+                    id="floor"
+                    type="text"
+                    placeholder="e.g. 3, Ground, Rooftop"
+                    value={floor}
+                    onChange={e => setFloor(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                  />
                 </div>
+
               </div>
             </div>
 
             {/* Step 2 — Upload & Validate */}
-            <div className="bg-white dark:bg-[#161616] rounded-xl border border-gray-200 dark:border-gray-800 p-4 shadow-sm">
+            <div className="bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800 p-4 shadow-sm">
               <div className="flex items-center gap-2 mb-3">
                 <span className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-[11px] font-bold shrink-0">2</span>
                 <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Upload & Validate</h3>
@@ -915,7 +874,7 @@ export default function UploadPage() {
                   "border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all",
                   isDragging
                     ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30"
-                    : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 bg-gray-50 dark:bg-gray-900/50"
+                    : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 bg-gray-50 dark:bg-[#111]/60"
                 )}
               >
                 <input
@@ -959,39 +918,6 @@ export default function UploadPage() {
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
-                        </div>
-                        {/* SRT attachment hidden — video mode disabled */}
-                        <div className="hidden">
-                          <div className="px-3 pb-2">
-                            {srtMap[f.name] ? (
-                              <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 text-xs">
-                                <FileText className="w-3 h-3 text-purple-500 shrink-0" />
-                                <span className="flex-1 truncate text-purple-700 dark:text-purple-300">{srtMap[f.name].name}</span>
-                                <button
-                                  onClick={e => { e.stopPropagation(); removeSrt(f.name); }}
-                                  className="text-purple-400 hover:text-red-500 transition shrink-0"
-                                  aria-label="Remove SRT"
-                                >
-                                  <X className="w-3 h-3" />
-                                </button>
-                              </div>
-                            ) : (
-                              <label className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500 cursor-pointer hover:text-purple-500 dark:hover:text-purple-400 transition">
-                                <input
-                                  type="file"
-                                  accept=".srt"
-                                  className="hidden"
-                                  onChange={e => {
-                                    const srt = e.target.files?.[0];
-                                    if (srt) attachSrt(f.name, srt);
-                                    e.target.value = "";
-                                  }}
-                                />
-                                <Plus className="w-3 h-3" />
-                                Attach SRT telemetry (optional)
-                              </label>
-                            )}
-                          </div>
                         </div>
                       </div>
                     ))}
@@ -1156,9 +1082,15 @@ export default function UploadPage() {
                             </div>
                             <div className="flex items-center gap-3 text-xs text-gray-400">
                               <span className="flex items-center gap-1">
-                                {job.input_type === "image" ? <FileImage className="w-3 h-3" /> : <FileVideo className="w-3 h-3" />}
+                                <FileImage className="w-3 h-3" />
                                 {job.input_type}
                               </span>
+                              {job.floor && (
+                                <span className="flex items-center gap-1">
+                                  <Layers className="w-3 h-3" />
+                                  {job.floor}
+                                </span>
+                              )}
                               {job.file_count != null && (
                                 <span>{job.file_count} file{job.file_count !== 1 ? "s" : ""}</span>
                               )}

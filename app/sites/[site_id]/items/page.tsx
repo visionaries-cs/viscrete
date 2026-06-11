@@ -17,7 +17,6 @@ const DEFECT_COLORS: Record<string, string> = {
   spalling: "bg-yellow-100 text-yellow-700 dark:bg-yellow-950/50 dark:text-yellow-300",
   peeling:  "bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300",
   algae:    "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-300",
-  staining: "bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300",
 };
 
 const SEVERITY_COLORS: Record<string, string> = {
