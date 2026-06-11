@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -265,7 +265,7 @@ function SitePickerModal({
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export default function UploadPage() {
+function UploadPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const siteId = searchParams.get("site_id");
@@ -1404,6 +1404,14 @@ export default function UploadPage() {
         <ImagePreviewModal result={previewResult} onClose={() => setPreviewFilename(null)} />
       )}
     </div>
+  );
+}
+
+export default function UploadPage() {
+  return (
+    <Suspense>
+      <UploadPageInner />
+    </Suspense>
   );
 }
 
