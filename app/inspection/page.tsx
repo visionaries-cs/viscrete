@@ -119,7 +119,6 @@ export default function InspectionPage() {
   // ── Select + delete
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([]);
-  const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   function toggleSelect(id: string) {
@@ -164,17 +163,18 @@ export default function InspectionPage() {
 
   async function handleDelete() {
     if (!pendingDeleteIds.length) return;
-    setDeleting(true);
+    // Optimistic: snapshot → apply → fire → rollback on error
+    const snapshot = sites.filter(s => pendingDeleteIds.includes(s.site_id));
+    setSites(prev => prev.filter(s => !pendingDeleteIds.includes(s.site_id)));
+    setSelectedIds(prev => { const n = new Set(prev); pendingDeleteIds.forEach(id => n.delete(id)); return n; });
+    setPendingDeleteIds([]);
     setDeleteError(null);
     try {
-      await Promise.all(pendingDeleteIds.map(id => deleteSite(id)));
-      setSites(prev => prev.filter(s => !pendingDeleteIds.includes(s.site_id)));
-      setSelectedIds(prev => { const n = new Set(prev); pendingDeleteIds.forEach(id => n.delete(id)); return n; });
-      setPendingDeleteIds([]);
+      await Promise.all(snapshot.map(s => deleteSite(s.site_id)));
     } catch (e) {
-      setDeleteError(e instanceof Error ? e.message : "Failed to delete site");
-    } finally {
-      setDeleting(false);
+      // Rollback
+      setSites(prev => [...snapshot, ...prev]);
+      setDeleteError(e instanceof Error ? e.message : "Failed to delete — items restored.");
     }
   }
 
@@ -318,7 +318,7 @@ export default function InspectionPage() {
                     className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold transition cursor-pointer shrink-0"
                   >
                     <Trash2 className="w-3 h-3" />
-                    Delete ({selectedIds.size})
+                    Delete selected ({selectedIds.size})
                   </button>
                 )}
               </div>
@@ -332,6 +332,14 @@ export default function InspectionPage() {
                 />
               </div>
             </div>
+
+            {deleteError && (
+              <div className="flex items-center gap-2 p-3 mb-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-600 dark:text-red-400">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                {deleteError}
+                <button onClick={() => setDeleteError(null)} className="ml-auto shrink-0"><X className="w-3.5 h-3.5" /></button>
+              </div>
+            )}
 
             {loading && (
               <div className="flex items-center justify-center py-20 text-gray-400">
@@ -377,7 +385,7 @@ export default function InspectionPage() {
       {pendingDeleteIds.length > 0 && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-          onClick={() => { if (!deleting) { setPendingDeleteIds([]); setDeleteError(null); } }}
+          onClick={() => { setPendingDeleteIds([]); setDeleteError(null); }}
         >
           <div
             className="w-full max-w-sm bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xl overflow-hidden"
@@ -394,8 +402,7 @@ export default function InspectionPage() {
               </div>
               <button
                 onClick={() => { setPendingDeleteIds([]); setDeleteError(null); }}
-                disabled={deleting}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition cursor-pointer disabled:opacity-40"
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -413,27 +420,19 @@ export default function InspectionPage() {
               <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                 Site records will be removed. Existing jobs will not be affected.
               </p>
-              {deleteError && (
-                <p className="mt-3 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2">
-                  {deleteError}
-                </p>
-              )}
             </div>
             <div className="flex items-center gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-800">
               <button
                 onClick={() => { setPendingDeleteIds([]); setDeleteError(null); }}
-                disabled={deleting}
-                className="flex-1 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-sm font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer disabled:opacity-40"
+                className="flex-1 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-sm font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDelete}
-                disabled={deleting}
-                className="flex-1 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
+                className="flex-1 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition cursor-pointer"
               >
-                {deleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                {deleting ? "Deleting…" : "Delete"}
+                Delete
               </button>
             </div>
           </div>

@@ -317,41 +317,58 @@ export default function SiteDetailPage() {
 
   async function handleConfirmDelete() {
     if (!pendingDelete) return;
-    setDeleting(true);
-    setDeleteError(null);
-    try {
-      if (pendingDelete.type === "job") {
-        await deleteJob(pendingDelete.id);
-        setJobs(prev => prev.filter(j => j.job_id !== (pendingDelete as { type: "job"; id: string }).id));
-        setSelectedJobIds(prev => { const n = new Set(prev); n.delete((pendingDelete as { type: "job"; id: string }).id); return n; });
-        setPendingDelete(null);
-      } else if (pendingDelete.type === "jobs") {
-        const ids = (pendingDelete as { type: "jobs"; ids: string[] }).ids;
-        await Promise.all(ids.map(id => deleteJob(id)));
-        setJobs(prev => prev.filter(j => !ids.includes(j.job_id)));
-        setSelectedJobIds(new Set());
-        setPendingDelete(null);
-      } else {
-        await deleteSite(site_id);
-        router.push("/inspection");
+
+    if (pendingDelete.type === "job") {
+      // Optimistic: remove immediately, rollback on error
+      const id = (pendingDelete as { type: "job"; id: string }).id;
+      const snapshot = jobs.find(j => j.job_id === id);
+      setJobs(prev => prev.filter(j => j.job_id !== id));
+      setSelectedJobIds(prev => { const n = new Set(prev); n.delete(id); return n; });
+      setPendingDelete(null);
+      try {
+        await deleteJob(id);
+      } catch (e) {
+        if (snapshot) setJobs(prev => [snapshot, ...prev]);
+        setDeleteError(e instanceof Error ? e.message : "Failed to delete — item restored.");
       }
-    } catch (e) {
-      setDeleteError(e instanceof Error ? e.message : "Deletion failed. Please try again.");
-    } finally {
-      setDeleting(false);
+
+    } else if (pendingDelete.type === "jobs") {
+      // Optimistic: remove all immediately, rollback on error
+      const ids = (pendingDelete as { type: "jobs"; ids: string[] }).ids;
+      const snapshot = jobs.filter(j => ids.includes(j.job_id));
+      setJobs(prev => prev.filter(j => !ids.includes(j.job_id)));
+      setSelectedJobIds(new Set());
+      setPendingDelete(null);
+      try {
+        await Promise.all(ids.map(id => deleteJob(id)));
+      } catch (e) {
+        setJobs(prev => [...snapshot, ...prev]);
+        setDeleteError(e instanceof Error ? e.message : "Failed to delete — items restored.");
+      }
+
+    } else {
+      // Site delete: navigate immediately (no rollback needed)
+      setPendingDelete(null);
+      router.push("/inspection");
+      try {
+        await deleteSite(site_id);
+      } catch {
+        // already navigated away — nothing to rollback
+      }
     }
   }
 
   async function handleAddressSave(address: string) {
-    setSavingAddress(true);
+    const previousAddress = site?.address ?? '';
+    // Optimistic: update immediately, rollback on error
+    setSite(prev => prev ? { ...prev, address } : prev);
+    setEditingAddress(false);
     try {
       const updated = await updateSite(site_id, { address });
       setSite(updated);
-      setEditingAddress(false);
     } catch {
-      // keep dialog open on error
-    } finally {
-      setSavingAddress(false);
+      setSite(prev => prev ? { ...prev, address: previousAddress } : prev);
+      setEditingAddress(true); // reopen with error
     }
   }
 
@@ -454,6 +471,14 @@ export default function SiteDetailPage() {
 
           {/* Jobs */}
           <div className="lg:col-span-2 space-y-3">
+            {deleteError && (
+              <div className="flex items-center gap-2 p-3 mb-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-600 dark:text-red-400">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                {deleteError}
+                <button onClick={() => setDeleteError(null)} className="ml-auto shrink-0"><X className="w-3.5 h-3.5" /></button>
+              </div>
+            )}
+
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -645,7 +670,7 @@ export default function SiteDetailPage() {
               </div>
               <button
                 onClick={() => { setPendingDelete(null); setDeleteError(null); }}
-                disabled={deleting}
+
                 className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition cursor-pointer disabled:opacity-40"
               >
                 <X className="w-4 h-4" />
@@ -684,29 +709,22 @@ export default function SiteDetailPage() {
                   </p>
                 </>
               )}
-              {deleteError && (
-                <p className="mt-3 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2">
-                  {deleteError}
-                </p>
-              )}
             </div>
 
             {/* Footer */}
             <div className="flex items-center gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-800">
               <button
                 onClick={() => { setPendingDelete(null); setDeleteError(null); }}
-                disabled={deleting}
+
                 className="flex-1 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-sm font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer disabled:opacity-40"
               >
                 Cancel
               </button>
               <button
                 onClick={handleConfirmDelete}
-                disabled={deleting}
-                className="flex-1 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
+                className="flex-1 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition cursor-pointer"
               >
-                {deleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                {deleting ? "Deleting…" : "Delete"}
+                Delete
               </button>
             </div>
           </div>
