@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Building2, Plus, Search, Loader2, AlertCircle, MapPin, User, Calendar, ChevronRight, LogOut } from "lucide-react";
+import { Building2, Plus, Search, Loader2, AlertCircle, MapPin, User, Calendar, ChevronRight, LogOut, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 import { getSupabase } from "@/lib/supabase";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { listSites, createSite, type SiteResponse } from "@/lib/api";
+import { listSites, createSite, deleteSite, type SiteResponse } from "@/lib/api";
 import LocationPicker from "@/components/LocationPicker";
 
 function formatDate(iso: string): string {
@@ -22,10 +22,19 @@ function formatDate(iso: string): string {
   });
 }
 
-function SiteCard({ site }: { site: SiteResponse }) {
+function SiteCard({ site, onDeleteRequest }: { site: SiteResponse; onDeleteRequest: (id: string) => void }) {
   return (
-    <Link href={`/sites/${site.site_id}`}>
-      <div className="group cursor-pointer rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#161616] hover:border-blue-300 dark:hover:border-blue-700 transition-all p-4 flex flex-col gap-3">
+    <div className="group relative rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#161616] hover:border-blue-300 dark:hover:border-blue-700 transition-all">
+      {/* Delete button */}
+      <button
+        onClick={e => { e.preventDefault(); onDeleteRequest(site.site_id); }}
+        className="absolute top-2 right-2 z-10 p-1.5 rounded-lg text-gray-300 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 opacity-0 group-hover:opacity-100 transition cursor-pointer"
+        title="Delete site"
+      >
+        <Trash2 className="w-3.5 h-3.5" />
+      </button>
+
+      <Link href={`/sites/${site.site_id}`} className="block p-4 flex flex-col gap-3">
         <div className="flex items-start justify-between gap-2">
           <div className="w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-950/50 flex items-center justify-center shrink-0">
             <Building2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
@@ -52,8 +61,8 @@ function SiteCard({ site }: { site: SiteResponse }) {
             {formatDate(site.created_at)}
           </span>
         </div>
-      </div>
-    </Link>
+      </Link>
+    </div>
   );
 }
 
@@ -73,6 +82,13 @@ export default function InspectionPage() {
   const [inspectorName, setInspectorName] = useState("");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+
+  // ── Delete
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const pendingSite = sites.find(s => s.site_id === pendingDeleteId);
 
   useEffect(() => {
     loadSites();
@@ -107,6 +123,21 @@ export default function InspectionPage() {
     } catch (e) {
       setCreateError(e instanceof Error ? e.message : "Failed to create site");
       setCreating(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!pendingDeleteId) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteSite(pendingDeleteId);
+      setSites(prev => prev.filter(s => s.site_id !== pendingDeleteId));
+      setPendingDeleteId(null);
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : "Failed to delete site");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -266,13 +297,72 @@ export default function InspectionPage() {
             {!loading && !error && filteredSites.length > 0 && (
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                 {filteredSites.map(site => (
-                  <SiteCard key={site.site_id} site={site} />
+                  <SiteCard key={site.site_id} site={site} onDeleteRequest={id => { setDeleteError(null); setPendingDeleteId(id); }} />
                 ))}
               </div>
             )}
           </div>
         </div>
       </main>
+
+      {/* ── Delete confirmation modal ── */}
+      {pendingDeleteId && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          onClick={() => { if (!deleting) { setPendingDeleteId(null); setDeleteError(null); } }}
+        >
+          <div
+            className="w-full max-w-sm bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xl overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-red-50 dark:bg-red-950/40 flex items-center justify-center shrink-0">
+                  <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                </div>
+                <h2 className="text-sm font-bold text-gray-900 dark:text-white">Delete Site</h2>
+              </div>
+              <button
+                onClick={() => { setPendingDeleteId(null); setDeleteError(null); }}
+                disabled={deleting}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition cursor-pointer disabled:opacity-40"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="px-6 py-5">
+              <p className="text-sm text-gray-700 dark:text-gray-300">
+                Delete site <span className="font-semibold text-gray-900 dark:text-white">{pendingSite?.name}</span>?
+              </p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                The site record will be removed. Existing jobs will not be affected.
+              </p>
+              {deleteError && (
+                <p className="mt-3 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2">
+                  {deleteError}
+                </p>
+              )}
+            </div>
+            <div className="flex items-center gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-800">
+              <button
+                onClick={() => { setPendingDeleteId(null); setDeleteError(null); }}
+                disabled={deleting}
+                className="flex-1 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-sm font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer disabled:opacity-40"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="flex-1 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {deleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                {deleting ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <footer className="border-t border-gray-200 dark:border-gray-800 mt-16">
         <div className="max-w-7xl mx-auto px-6 py-4">
