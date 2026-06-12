@@ -7,8 +7,8 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
   // Dynamic import keeps api.ts usable outside the browser (e.g. during SSR)
   if (typeof window === 'undefined') return {};
   try {
-    const { supabase } = await import('@/lib/supabase');
-    const { data: { session } } = await supabase.auth.getSession();
+    const { getSupabase } = await import('@/lib/supabase');
+    const { data: { session } } = await getSupabase().auth.getSession();
     if (session?.access_token) {
       return { Authorization: `Bearer ${session.access_token}` };
     }

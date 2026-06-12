@@ -6,7 +6,7 @@ import { Eye, EyeOff } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ModeToggle } from '@/components/ui/mode-toggle';
 import { cn } from '@/lib/utils';
-import { supabase } from '@/lib/supabase';
+import { getSupabase } from '@/lib/supabase';
 
 const inputCls = `w-full px-4 py-3 rounded-xl text-sm
   border border-gray-200 dark:border-gray-700
@@ -48,7 +48,7 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     setIsLoading(true);
-    const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+    const { error: authError } = await getSupabase().auth.signInWithPassword({ email, password });
     if (authError) {
       setError(authError.message);
       setIsLoading(false);
@@ -65,7 +65,7 @@ export default function LoginPage() {
       return;
     }
     setIsLoading(true);
-    const { error: authError } = await supabase.auth.signUp({
+    const { error: authError } = await getSupabase().auth.signUp({
       email: suEmail,
       password: suPassword,
       options: { data: { inspector_name: name } },
