@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { getJob, generateReport, getAuthHeaders, API_BASE_URL } from "@/lib/api";
+import { getJob, generateReport, getReportUrl } from "@/lib/api";
 import { Loader2, AlertCircle, FileText } from "lucide-react";
 
 type PageState = "checking" | "detected" | "generating" | "loading-pdf" | "completed" | "error";
@@ -14,9 +14,6 @@ export default function ReportPage() {
   const [state, setState] = useState<PageState>("checking");
   const [error, setError] = useState<string | null>(null);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
-  const blobUrlRef = useRef<string | null>(null);
-
-  const apiUrl = `${API_BASE_URL}/api/v1/jobs/${job_id}/report`;
 
   async function checkJobStatus() {
     setState("checking");
@@ -40,10 +37,7 @@ export default function ReportPage() {
   async function loadPdf() {
     setState("loading-pdf");
     try {
-      const res = await fetch(apiUrl, { headers: await getAuthHeaders() });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const blob = await res.blob();
-      const url = URL.createObjectURL(new Blob([blob], { type: "application/pdf" }));
+      const url = await getReportUrl(job_id);
       blobUrlRef.current = url;
       setBlobUrl(url);
       setState("completed");
@@ -67,9 +61,6 @@ export default function ReportPage() {
 
   useEffect(() => {
     checkJobStatus();
-    return () => {
-      if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [job_id]);
 
