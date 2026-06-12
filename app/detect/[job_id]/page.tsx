@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useSignedUrl } from "@/hooks/useSignedUrl";
 import { getSupabase } from "@/lib/supabase";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useParams, useRouter } from "next/navigation";
 import {
   detectJob,
@@ -53,6 +54,7 @@ function formatElapsed(seconds: number): string {
 export default function DetectPage() {
   const { job_id } = useParams<{ job_id: string }>();
   const router = useRouter();
+  const { email } = useCurrentUser();
 
   const [isRunning, setIsRunning] = useState(false);
   const [hasRun, setHasRun] = useState(false);
@@ -216,6 +218,11 @@ export default function DetectPage() {
                 : <><FileText className="w-4 h-4" /> Generate Report</>
               }
             </button>
+          )}
+          {email && (
+            <span className="hidden sm:block text-xs text-gray-400 dark:text-gray-500 font-mono truncate max-w-[180px]">
+              {email}
+            </span>
           )}
           <button
             onClick={async () => { await getSupabase().auth.signOut(); router.push('/login'); }}

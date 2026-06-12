@@ -27,7 +27,7 @@ export default function LoginPage() {
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get('redirectedFrom') ?? '/upload';
+  const redirectTo = searchParams.get('redirectedFrom') ?? '/inspection';
   const [mode, setMode] = useState<'login' | 'signup'>('login');
 
   // Login fields
@@ -78,13 +78,11 @@ function LoginContent() {
       password: suPassword,
       options: { data: { inspector_name: name } },
     });
+    setIsLoading(false);
     if (authError) {
       setError(authError.message);
-      setIsLoading(false);
     } else {
-      setError('');
-      setMode('login');
-      setIsLoading(false);
+      router.push('/inspection');
     }
   };
 

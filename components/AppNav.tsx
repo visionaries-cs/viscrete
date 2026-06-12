@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { LogOut } from 'lucide-react';
 import { ModeToggle } from '@/components/ui/mode-toggle';
 import { getSupabase } from '@/lib/supabase';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 interface AppNavProps {
   /** Extra content (e.g. back button) to render between the logo and the right actions */
@@ -14,6 +15,7 @@ interface AppNavProps {
 
 export default function AppNav({ left, subtitle = '/ concrete inspection' }: AppNavProps) {
   const router = useRouter();
+  const { email } = useCurrentUser();
 
   async function handleLogout() {
     await getSupabase().auth.signOut();
@@ -42,8 +44,13 @@ export default function AppNav({ left, subtitle = '/ concrete inspection' }: App
           </Link>
         </div>
 
-        {/* Right: theme toggle + logout */}
+        {/* Right: email + theme toggle + logout */}
         <div className="flex items-center gap-2 shrink-0">
+          {email && (
+            <span className="hidden sm:block text-xs text-gray-400 dark:text-gray-500 font-mono truncate max-w-[180px]">
+              {email}
+            </span>
+          )}
           <ModeToggle />
           <button
             onClick={handleLogout}

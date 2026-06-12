@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 import { getSupabase } from "@/lib/supabase";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { cn } from "@/lib/utils";
 import {
   getSite, getJobsForSite, getSiteItems, deleteSite, deleteJob,
@@ -235,6 +236,7 @@ type PendingDelete =
 export default function SiteDetailPage() {
   const { site_id } = useParams<{ site_id: string }>();
   const router = useRouter();
+  const { email } = useCurrentUser();
 
   const [site, setSite] = useState<SiteResponse | null>(null);
   const [jobs, setJobs] = useState<JobStatusResponse[]>([]);
@@ -385,6 +387,11 @@ export default function SiteDetailPage() {
               <Layers className="w-4 h-4" />
               View All Defects
             </Link>
+            {email && (
+              <span className="hidden sm:block text-xs text-gray-400 dark:text-gray-500 font-mono truncate max-w-[180px]">
+                {email}
+              </span>
+            )}
             <ModeToggle />
             <button
               onClick={async () => { await getSupabase().auth.signOut(); router.push('/login'); }}

@@ -47,6 +47,7 @@ import {
 } from "lucide-react";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 import { getSupabase } from "@/lib/supabase";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 // ─── Types / Helpers ──────────────────────────────────────────────────────────
 
@@ -81,6 +82,7 @@ export default function ResultPage() {
   const params = useParams();
   const jobId = params.job_id as string;
   const router = useRouter();
+  const { email } = useCurrentUser();
 
   // Detection state
   const [isRunning, setIsRunning] = useState(false);
@@ -749,6 +751,11 @@ export default function ResultPage() {
               <Calendar className="w-4 h-4" />
               {projectDate}
             </span>
+            {email && (
+              <span className="hidden sm:block text-xs text-gray-400 dark:text-gray-500 font-mono truncate max-w-[180px]">
+                {email}
+              </span>
+            )}
             <ModeToggle />
             <button
               onClick={async () => { await getSupabase().auth.signOut(); router.push('/login'); }}

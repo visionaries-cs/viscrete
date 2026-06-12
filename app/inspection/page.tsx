@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 import { getSupabase } from "@/lib/supabase";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { cn } from "@/lib/utils";
 import { listSites, createSite, type SiteResponse } from "@/lib/api";
 
@@ -58,6 +59,7 @@ function SiteCard({ site }: { site: SiteResponse }) {
 
 export default function InspectionPage() {
   const router = useRouter();
+  const { email } = useCurrentUser();
 
   // ── Site list
   const [sites, setSites] = useState<SiteResponse[]>([]);
@@ -131,6 +133,11 @@ export default function InspectionPage() {
             </span>
           </Link>
           <div className="flex items-center gap-2">
+            {email && (
+              <span className="hidden sm:block text-xs text-gray-400 dark:text-gray-500 font-mono truncate max-w-[180px]">
+                {email}
+              </span>
+            )}
             <ModeToggle />
             <button
               onClick={async () => { await getSupabase().auth.signOut(); router.push('/login'); }}
