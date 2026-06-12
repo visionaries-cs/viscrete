@@ -6,6 +6,7 @@ import { MapPin, X } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -56,6 +57,9 @@ export default function LocationPicker({ value, onChange }: Props) {
               <MapPin className="w-4 h-4 text-blue-500" />
               Pick Inspection Location
             </DialogTitle>
+            <DialogDescription className="sr-only">
+              Search for an address or click the map to drop a pin, then confirm your selection.
+            </DialogDescription>
           </DialogHeader>
           <LocationPickerMap onConfirm={handleConfirm} />
         </DialogContent>
