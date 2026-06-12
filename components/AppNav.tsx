@@ -26,7 +26,7 @@ export default function AppNav({ left, subtitle = '/ concrete inspection' }: App
     <header className="fixed top-0 left-0 right-0 z-50
                        border-b border-gray-200 dark:border-gray-800
                        bg-white/80 dark:bg-[#111]/80 backdrop-blur-md">
-      <div className="container max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
+      <div className="container max-w-7xl mx-auto px-3 sm:px-6 py-3 flex items-center justify-between gap-2 sm:gap-4">
         {/* Left: logo + optional slot */}
         <div className="flex items-center gap-3 min-w-0">
           {left}
@@ -45,9 +45,9 @@ export default function AppNav({ left, subtitle = '/ concrete inspection' }: App
         </div>
 
         {/* Right: email + theme toggle + logout */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {email && (
-            <span className="hidden sm:block text-xs text-gray-400 dark:text-gray-500 font-mono truncate max-w-[180px]">
+            <span className="hidden md:block text-xs text-gray-400 dark:text-gray-500 font-mono truncate max-w-[160px]">
               {email}
             </span>
           )}

@@ -353,9 +353,8 @@ function UploadPageInner() {
     return () => window.removeEventListener("keydown", onKey);
   }, [viewMode]);
 
-  // Load previous jobs and available sites on mount
+  // Load available sites on mount
   useEffect(() => {
-    loadJobs();
     (async () => {
       setSitesLoading(true);
       try {
@@ -502,8 +501,6 @@ function UploadPageInner() {
       setValidationResults(results);
       const hasValid = results.some(r => r.is_valid);
       if (!hasValid) setUploadError("All files failed validation. Use 'Proceed Anyway' on individual files or replace them.");
-      // Refresh previous jobs list
-      loadJobs();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Unknown error";
       if (msg.toLowerCase().includes("unavailable") || msg.toLowerCase().includes("fetch")) {
@@ -753,9 +750,9 @@ function UploadPageInner() {
 
       <AppNav />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-16 pb-6">
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 pt-16 pb-6">
         <div className="mb-4">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">New Inspection Job</h2>
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">New Inspection Job</h2>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Complete each step below to start the inspection pipeline.</p>
         </div>
 
@@ -933,7 +930,7 @@ function UploadPageInner() {
                   {isUploading ? (
                     <><Loader2 className="w-4 h-4 animate-spin" /> Validating…</>
                   ) : (
-                    <><Upload className="w-4 h-4" /> Upload & Validate</>
+                    <><Upload className="w-4 h-4" /> <span className="hidden sm:inline">Upload &amp; </span>Validate</>
                   )}
                 </button>
 
@@ -943,194 +940,11 @@ function UploadPageInner() {
                     onClick={handleProceed}
                     className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition"
                   >
-                    Proceed to Preprocessing
+                    Proceed
                     <ArrowRight className="w-4 h-4" />
                   </button>
                 )}
               </div>
-            </div>
-
-            {/* Previous Jobs — utility section, no step number */}
-            <div className="bg-white dark:bg-[#161616] rounded-xl border border-gray-200 dark:border-gray-800 p-4 shadow-sm order-last lg:order-none">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Previous Jobs</h3>
-                <div className="flex items-center gap-3">
-                  {selectedJobIds.size > 0 && (
-                    <button
-                      onClick={handleBatchDelete}
-                      disabled={isBatchDeleting}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-600 hover:bg-red-700 text-white transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                    >
-                      {isBatchDeleting
-                        ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Deleting…</>
-                        : <><Trash2 className="w-3.5 h-3.5" /> Delete {selectedJobIds.size} selected</>}
-                    </button>
-                  )}
-                  <button onClick={loadJobs} className="text-xs text-blue-500 hover:underline">Refresh</button>
-                </div>
-              </div>
-
-              {/* Search + Sort controls */}
-              {!jobsLoading && !jobsError && jobs.length > 0 && (
-                <div className="flex items-center gap-2 mb-3">
-                  <input
-                    type="text"
-                    placeholder="Search site or inspector…"
-                    value={jobSearch}
-                    onChange={e => setJobSearch(e.target.value)}
-                    className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg text-xs border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                  />
-                  <select
-                    value={jobSort}
-                    onChange={e => setJobSort(e.target.value as typeof jobSort)}
-                    className="shrink-0 px-2 py-1.5 rounded-lg text-xs border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition cursor-pointer"
-                  >
-                    <option value="date_desc">Newest first</option>
-                    <option value="date_asc">Oldest first</option>
-                    <option value="site_asc">Site A → Z</option>
-                    <option value="site_desc">Site Z → A</option>
-                    <option value="inspector_asc">Inspector A → Z</option>
-                    <option value="inspector_desc">Inspector Z → A</option>
-                  </select>
-                </div>
-              )}
-
-              {jobsLoading ? (
-                <div className="flex items-center gap-2 text-gray-400 text-sm py-4">
-                  <Loader2 className="w-4 h-4 animate-spin" /> Loading…
-                </div>
-              ) : jobsError ? (
-                <p className="text-sm text-red-500">{jobsError}</p>
-              ) : jobs.length === 0 ? (
-                <p className="text-sm text-gray-400">No previous jobs found.</p>
-              ) : (
-                <>
-                  {/* Select-all row */}
-                  <div className="flex items-center gap-2 mb-2 px-1">
-                    <input
-                      type="checkbox"
-                      checked={selectedJobIds.size === filteredSortedJobs.length && filteredSortedJobs.length > 0}
-                      ref={el => { if (el) el.indeterminate = selectedJobIds.size > 0 && selectedJobIds.size < filteredSortedJobs.length; }}
-                      onChange={toggleSelectAll}
-                      className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
-                      aria-label="Select all jobs"
-                    />
-                    <span className="text-xs text-gray-400">
-                      {selectedJobIds.size > 0
-                        ? `${selectedJobIds.size} of ${filteredSortedJobs.length} selected`
-                        : filteredSortedJobs.length < jobs.length
-                          ? `${filteredSortedJobs.length} of ${jobs.length} jobs`
-                          : `Select all (${jobs.length})`}
-                    </span>
-                  </div>
-                  {filteredSortedJobs.length === 0 && (
-                    <p className="text-xs text-gray-400 py-2 text-center">No jobs match your search.</p>
-                  )}
-
-                  <div className="space-y-2 overflow-y-auto max-h-52 pr-0.5">
-                    {pagedJobs.map(job => {
-                      const isSelected = selectedJobIds.has(job.job_id);
-                      return (
-                        <div
-                          key={job.job_id}
-                          onClick={() => router.push(routeForJob(job))}
-                          className={cn(
-                            "w-full flex items-center gap-3 px-3 py-3 rounded-xl border transition group cursor-pointer",
-                            isSelected
-                              ? "border-blue-400 dark:border-blue-600 bg-blue-50/60 dark:bg-blue-950/30"
-                              : "border-gray-100 dark:border-gray-800 hover:border-blue-300 dark:hover:border-blue-700 hover:bg-blue-50/50 dark:hover:bg-blue-950/20"
-                          )}
-                        >
-                          {/* Checkbox */}
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => {}}
-                            onClick={e => toggleSelectJob(e, job.job_id)}
-                            className="w-4 h-4 rounded accent-blue-600 cursor-pointer shrink-0"
-                            aria-label={`Select job ${job.job_id}`}
-                          />
-
-                          {/* Job info */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                                {job.site_name ?? job.site_location ?? `Job ${job.job_id.slice(0, 8)}`}
-                              </span>
-                              <span className={cn(
-                                "px-2 py-0.5 rounded text-[11px] font-semibold shrink-0",
-                                STATUS_COLORS[job.status] ?? "bg-gray-100 text-gray-600"
-                              )}>
-                                {job.status}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-3 text-xs text-gray-400">
-                              <span className="flex items-center gap-1">
-                                <FileImage className="w-3 h-3" />
-                                {job.input_type}
-                              </span>
-                              {job.floor && (
-                                <span className="flex items-center gap-1">
-                                  <Layers className="w-3 h-3" />
-                                  {job.floor}
-                                </span>
-                              )}
-                              {job.file_count != null && (
-                                <span>{job.file_count} file{job.file_count !== 1 ? "s" : ""}</span>
-                              )}
-                              {job.inspector_name && (
-                                <span className="flex items-center gap-1">
-                                  <User className="w-3 h-3" />
-                                  {toInitials(job.inspector_name)}
-                                </span>
-                              )}
-                              <span className="flex items-center gap-1">
-                                <Clock className="w-3 h-3" />
-                                {formatDate(job.created_at)}
-                              </span>
-                            </div>
-                          </div>
-
-                          <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-blue-500 transition shrink-0" />
-
-                          {/* Individual delete */}
-                          <button
-                            onClick={e => handleDeleteJob(e, job.job_id)}
-                            disabled={deletingJobId === job.job_id || isBatchDeleting}
-                            className="ml-1 p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition shrink-0 disabled:opacity-40 cursor-pointer"
-                            aria-label="Delete job"
-                          >
-                            {deletingJobId === job.job_id
-                              ? <Loader2 className="w-4 h-4 animate-spin" />
-                              : <Trash2 className="w-4 h-4" />}
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Pagination */}
-                  {totalPages > 1 && (
-                    <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
-                      <button
-                        onClick={() => setJobsPage(p => Math.max(1, p - 1))}
-                        disabled={jobsPage === 1}
-                        className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition"
-                      >
-                        <ChevronLeft className="w-4 h-4" /> Previous
-                      </button>
-                      <span className="text-xs text-gray-400">Page {jobsPage} of {totalPages}</span>
-                      <button
-                        onClick={() => setJobsPage(p => Math.min(totalPages, p + 1))}
-                        disabled={jobsPage === totalPages}
-                        className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition"
-                      >
-                        Next <ChevronRight className="w-4 h-4" />
-                      </button>
-                    </div>
-                  )}
-                </>
-              )}
             </div>
 
           </div>{/* end left column */}

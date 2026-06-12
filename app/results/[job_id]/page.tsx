@@ -736,43 +736,45 @@ export default function ResultPage() {
       <header className="fixed top-0 left-0 right-0 z-50
                          border-b border-gray-200 dark:border-gray-800
                          bg-white/80 dark:bg-gray-950/80 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 flex items-center justify-between gap-2 sm:gap-4">
           {/* Left — brand + back + title */}
-          <div className="flex items-center gap-4">
-            <Link href="/" className="flex items-center gap-2 select-none">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+            <Link href="/" className="flex items-center gap-2 select-none shrink-0">
               <span className="text-sm font-bold font-mono tracking-tight
                                bg-gradient-to-r from-[#2ca75d] to-[#0da6f2]
                                bg-clip-text text-transparent">
                 viscrete
               </span>
             </Link>
-            <div className="border-l border-gray-200 dark:border-gray-800 pl-4 flex items-center gap-3">
+            <div className="border-l border-gray-200 dark:border-gray-800 pl-2 sm:pl-4 flex items-center gap-2 sm:gap-3 min-w-0">
               <button
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer"
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer shrink-0"
                 onClick={() => router.push('/upload')}
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
-              <div>
-                <h1 className="text-sm font-bold text-gray-900 dark:text-white tracking-wide">DETECTION RESULTS</h1>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {projectName !== "—" ? projectName : `Job: ${jobId}`}
+              <div className="min-w-0">
+                <h1 className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white tracking-wide truncate">
+                  <span className="hidden sm:inline">DETECTION </span>RESULTS
+                </h1>
+                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                  {projectName !== "—" ? projectName : `Job: ${jobId.slice(0, 8)}`}
                 </p>
               </div>
             </div>
           </div>
           {/* Right — model + date + toggle */}
-          <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
-            <span className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5 sm:gap-4 text-xs text-gray-500 dark:text-gray-400 shrink-0">
+            <span className="hidden lg:flex items-center gap-1">
               <Settings className="w-4 h-4" />
               {modelName}
             </span>
-            <span className="hidden sm:flex items-center gap-1">
+            <span className="hidden md:flex items-center gap-1">
               <Calendar className="w-4 h-4" />
               {projectDate}
             </span>
             {email && (
-              <span className="hidden sm:block text-xs text-gray-400 dark:text-gray-500 font-mono truncate max-w-[180px]">
+              <span className="hidden lg:block text-xs text-gray-400 dark:text-gray-500 font-mono truncate max-w-[160px]">
                 {email}
               </span>
             )}
@@ -904,7 +906,7 @@ export default function ResultPage() {
           <div className="flex-1 min-w-0 bg-gray-100 dark:bg-gray-900 flex flex-col">
             {/* Overlay Controls */}
             <div className="flex justify-center pt-4 md:pt-6 px-4 md:px-6">
-              <div className="bg-white/90 backdrop-blur-sm border border-gray-200 dark:bg-gray-950/90 dark:border-gray-700 rounded-lg px-4 sm:px-6 py-3 flex flex-col gap-3 w-full max-w-2xl max-h-[60vh] overflow-y-auto">
+              <div className="bg-white/90 backdrop-blur-sm border border-gray-200 dark:bg-gray-950/90 dark:border-gray-700 rounded-lg px-3 sm:px-6 py-3 flex flex-col gap-3 w-full max-w-2xl max-h-[60vh] overflow-y-auto">
 
                 {/* Per-class sensitivity selector — collapsible accordion */}
                 <div className="w-full">
@@ -1410,7 +1412,7 @@ export default function ResultPage() {
           </div>
 
           {/* Right Sidebar */}
-          <div className="lg:w-96 bg-white border-t lg:border-t-0 lg:border-l border-gray-200 dark:bg-gray-950 dark:border-gray-800 p-6 overflow-y-auto">
+          <div className="lg:w-96 bg-white border-t lg:border-t-0 lg:border-l border-gray-200 dark:bg-gray-950 dark:border-gray-800 p-4 sm:p-6 overflow-y-auto">
             {/* Defect Type Cards Grid */}
             <div className="grid grid-cols-2 gap-3 mb-6">
               <div className="bg-blue-50 border border-blue-200 dark:bg-blue-950/30 dark:border-blue-900/50 rounded-lg p-4">

@@ -170,11 +170,10 @@ export default function LocationPickerModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4 pt-[72px] sm:pt-4"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col"
-        style={{ maxHeight: "90vh" }}
+      <div className="bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[calc(100dvh-80px)] sm:max-h-[90vh]"
       >
         {/* ── Header ────────────────────────────────────────────────────── */}
         <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 dark:border-gray-800 shrink-0">
@@ -240,7 +239,7 @@ export default function LocationPickerModal({
           {tab === "map" && (
             <>
               {/* Interactive map */}
-              <div className="relative" style={{ height: 360 }}>
+              <div className="relative h-[220px] sm:h-[360px]">
                 <LocationMapInner
                   lat={parsedLat}
                   lng={parsedLng}

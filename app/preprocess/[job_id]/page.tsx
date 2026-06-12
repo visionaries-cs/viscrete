@@ -1264,7 +1264,7 @@ export default function PreprocessPage() {
         }
       />
 
-      <main className="max-w-5xl mx-auto px-6 py-8 pt-20 space-y-6">
+      <main className="max-w-5xl mx-auto px-3 sm:px-6 py-8 pt-20 space-y-6">
         {/* Meta fetch error */}
         {metaError && (
           <div className="flex items-center gap-2 p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl text-sm text-amber-700 dark:text-amber-300">
@@ -1319,7 +1319,7 @@ export default function PreprocessPage() {
             {/* Cluster summary + step timing — always expanded */}
             {result && (result.cluster_info?.length > 0 || result.pipeline_steps?.length > 0) && (
               <div className="bg-white dark:bg-gray-950 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
-                <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100 dark:border-gray-800">
+                <div className="flex items-center gap-3 px-4 sm:px-6 py-4 border-b border-gray-100 dark:border-gray-800">
                   <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Cluster Summary
                   </h2>
@@ -1339,7 +1339,7 @@ export default function PreprocessPage() {
                   )}
                 </div>
 
-                <div className="px-6 pb-6 space-y-4 pt-4">
+                <div className="px-4 sm:px-6 pb-6 space-y-4 pt-4">
                   {result.cluster_info?.length > 0 && (
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                       {result.cluster_info.map((c) => (

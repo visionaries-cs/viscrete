@@ -229,7 +229,7 @@ export default function UploadReviewPage() {
             className="bg-blue-600 hover:bg-blue-700 text-white font-semibold cursor-pointer"
             onClick={() => router.push(`/preprocess/${jobId}`)}
           >
-            Proceed to Preprocessing
+            Proceed
             <ArrowRight className="w-4 h-4 ml-2" />
           </Button>
         </div>

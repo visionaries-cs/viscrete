@@ -195,47 +195,47 @@ export default function DetectPage() {
     <div className="min-h-screen bg-gray-50 dark:bg-[#0a0a0a]">
       {/* Header */}
       <header className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#111]">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center gap-4">
+        <div className="max-w-6xl mx-auto px-3 sm:px-6 py-3 sm:py-4 flex items-center gap-2 sm:gap-4">
           <button
             onClick={() => router.back()}
-            className="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 transition"
+            className="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 transition shrink-0"
             aria-label="Go back"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <div className="flex-1">
-            <h1 className="text-base font-bold text-gray-900 dark:text-white">Detection Results</h1>
-            <p className="text-xs text-gray-400 font-mono">Job: {job_id}</p>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-sm sm:text-base font-bold text-gray-900 dark:text-white truncate">Detection Results</h1>
+            <p className="text-xs text-gray-400 font-mono truncate">Job: {job_id.slice(0, 8)}…</p>
           </div>
           {hasRun && (
             <button
               id="btn-generate-report"
               onClick={handleGenerateReport}
               disabled={isGenerating}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold transition"
+              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs sm:text-sm font-semibold transition shrink-0"
             >
               {isGenerating
-                ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating…</>
-                : <><FileText className="w-4 h-4" /> Generate Report</>
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> <span className="hidden sm:inline">Generating…</span></>
+                : <><FileText className="w-4 h-4" /> <span className="hidden sm:inline">Generate </span>Report</>
               }
             </button>
           )}
           {email && (
-            <span className="hidden sm:block text-xs text-gray-400 dark:text-gray-500 font-mono truncate max-w-[180px]">
+            <span className="hidden lg:block text-xs text-gray-400 dark:text-gray-500 font-mono truncate max-w-[160px]">
               {email}
             </span>
           )}
           <button
             onClick={async () => { await getSupabase().auth.signOut(); router.push('/login'); }}
             title="Sign out"
-            className="p-2 rounded-lg text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer"
+            className="p-2 rounded-lg text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer shrink-0"
           >
             <LogOut className="w-4 h-4" />
           </button>
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-6 py-8 space-y-8">
+      <main className="max-w-6xl mx-auto px-3 sm:px-6 py-8 space-y-8">
 
         {/* Loading state */}
         {isRunning && (
