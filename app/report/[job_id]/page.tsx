@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { getJob, generateReport, API_BASE_URL } from "@/lib/api";
+import { getJob, generateReport, getAuthHeaders, API_BASE_URL } from "@/lib/api";
 import { Loader2, AlertCircle, FileText } from "lucide-react";
 
 type PageState = "checking" | "detected" | "generating" | "loading-pdf" | "completed" | "error";
@@ -40,7 +40,7 @@ export default function ReportPage() {
   async function loadPdf() {
     setState("loading-pdf");
     try {
-      const res = await fetch(apiUrl);
+      const res = await fetch(apiUrl, { headers: await getAuthHeaders() });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
       const url = URL.createObjectURL(new Blob([blob], { type: "application/pdf" }));

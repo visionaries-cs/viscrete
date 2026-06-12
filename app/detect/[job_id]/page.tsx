@@ -11,6 +11,7 @@ import {
   generateReport,
   getJobFiles,
   setFileLocation,
+  getAuthHeaders,
   API_BASE_URL,
   type Detection,
   type FileStatusItem,
@@ -86,7 +87,7 @@ export default function DetectPage() {
   function startPolling() {
     pollRef.current = setInterval(async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(job_id)}`);
+        const res = await fetch(`${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(job_id)}`, { headers: await getAuthHeaders() });
         if (!res.ok) return;
         const job = await res.json();
         if (job.status === "detected" || job.status === "reporting" || job.status === "completed") {
@@ -111,7 +112,7 @@ export default function DetectPage() {
   useEffect(() => {
     async function init() {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(job_id)}`);
+        const res = await fetch(`${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(job_id)}`, { headers: await getAuthHeaders() });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const job = await res.json();
         if (REDIRECT_STATUSES.has(job.status)) {

@@ -8,6 +8,7 @@ import {
   generateReport,
   patchRemarks,
   getJobStorageUrl,
+  getAuthHeaders,
   type DetectResponse,
   type Detection,
 } from "@/lib/api";
@@ -237,7 +238,7 @@ export default function ResultPage() {
   useEffect(() => {
     async function init() {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}`);
+        const res = await fetch(`${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}`, { headers: await getAuthHeaders() });
         if (res.ok) {
           const job = await res.json();
           if (job.site_location) {
@@ -283,7 +284,7 @@ export default function ResultPage() {
             // Already detected — fetch cached results directly
             await fetchCachedResults();
             // Non-blocking: fetch preprocessing timing for sidebar display
-            fetch(`${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/preprocess`)
+            getAuthHeaders().then(h => fetch(`${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/preprocess`, { headers: h }))
               .then(r => r.ok ? r.json() : null)
               .catch(() => null)
               .then((pp: { pipeline_steps?: Array<{ duration_sec: number }> } | null) => {
@@ -344,7 +345,7 @@ export default function ResultPage() {
     const tick = async () => {
       if (!mountedRef.current) return;
       try {
-        const res = await fetch(`${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}`);
+        const res = await fetch(`${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}`, { headers: await getAuthHeaders() });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const job = await res.json();
         if (!mountedRef.current) return;
@@ -400,7 +401,7 @@ export default function ResultPage() {
       const query = params.size > 0 ? `?${params.toString()}` : '';
       const res = await fetch(
         `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/detect${query}`,
-        { method: "POST" }
+        { method: "POST", headers: await getAuthHeaders() }
       );
       if (!mountedRef.current) return;
       if (res.status === 404) { setError("Job not found."); setIsRunning(false); return; }

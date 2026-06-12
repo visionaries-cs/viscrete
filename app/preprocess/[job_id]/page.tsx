@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useSignedUrl } from "@/hooks/useSignedUrl";
+import { getAuthHeaders } from "@/lib/api";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -725,7 +726,8 @@ export default function PreprocessPage() {
         if (cancelled) return;
         try {
           const res = await fetch(
-            `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(job_id)}/preprocess`
+            `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(job_id)}/preprocess`,
+            { headers: await getAuthHeaders() }
           );
           if (cancelled) return;
           if (res.status === 404) continue; // not persisted yet — retry
@@ -761,7 +763,8 @@ export default function PreprocessPage() {
         if (cancelled) return;
         try {
           const res = await fetch(
-            `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(job_id)}`
+            `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(job_id)}`,
+            { headers: await getAuthHeaders() }
           );
           if (!res.ok || cancelled) return;
           const data: JobStatus = await res.json();
@@ -1051,7 +1054,7 @@ export default function PreprocessPage() {
               `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(
                 job_id
               )}/preprocess`,
-              { method: "POST" }
+              { method: "POST", headers: await getAuthHeaders() }
             );
             if (cancelled) return;
             if (res.status === 409) {
@@ -1113,7 +1116,8 @@ export default function PreprocessPage() {
       // Fetch from the dedicated endpoint (always authoritative)
       try {
         const res = await fetch(
-          `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(job_id)}/preprocess`
+          `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(job_id)}/preprocess`,
+          { headers: await getAuthHeaders() }
         );
         if (!cancelled && res.ok) {
           const r: PreprocessResult = await res.json();
@@ -1187,7 +1191,8 @@ export default function PreprocessPage() {
     async function fetchJob() {
       try {
         const res = await fetch(
-          `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(job_id)}`
+          `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(job_id)}`,
+          { headers: await getAuthHeaders() }
         );
         if (cancelled) return;
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
