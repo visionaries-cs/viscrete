@@ -6,9 +6,10 @@ import Link from "next/link";
 import {
   ArrowLeft, Building2, Plus, Layers, Loader2, AlertCircle,
   MapPin, User, Calendar, ChevronRight, Trash2, ExternalLink, X,
-  ImageIcon, AlertTriangle,
+  ImageIcon, AlertTriangle, LogOut,
 } from "lucide-react";
 import { ModeToggle } from "@/components/ui/mode-toggle";
+import { getSupabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import {
   getSite, getJobsForSite, getSiteItems, deleteSite, deleteJob,
@@ -385,6 +386,13 @@ export default function SiteDetailPage() {
               View All Defects
             </Link>
             <ModeToggle />
+            <button
+              onClick={async () => { await getSupabase().auth.signOut(); router.push('/login'); }}
+              title="Sign out"
+              className="p-2 rounded-lg text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </header>

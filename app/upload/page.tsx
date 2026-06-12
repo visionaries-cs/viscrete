@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, Suspense } from "react";
 import { useFileUrl } from "@/hooks/useSignedUrl";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import AppNav from "@/components/AppNav";
 import { cn } from "@/lib/utils";
 import {
   createJob,
@@ -52,7 +53,6 @@ import {
   User,
   Building2,
 } from "lucide-react";
-import { ModeToggle } from "@/components/ui/mode-toggle";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -750,24 +750,7 @@ function UploadPageInner() {
         </div>
       )}
 
-      {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50
-                         border-b border-gray-200 dark:border-gray-800
-                         bg-white/80 dark:bg-[#111]/80 backdrop-blur-md">
-        <div className="container max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
-          <Link href="/" className="flex items-center gap-2 select-none">
-            <span className="text-sm font-bold font-mono tracking-tight
-                             bg-gradient-to-r from-[#2ca75d] to-[#0da6f2]
-                             bg-clip-text text-transparent">
-              viscrete
-            </span>
-            <span className="hidden sm:inline text-xs text-gray-400 dark:text-gray-500 font-mono">
-              / concrete inspection
-            </span>
-          </Link>
-          <ModeToggle />
-        </div>
-      </header>
+      <AppNav />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-16 pb-6">
         <div className="mb-4">

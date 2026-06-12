@@ -43,8 +43,10 @@ import {
   ZoomIn,
   Settings,
   Calendar,
+  LogOut,
 } from "lucide-react";
 import { ModeToggle } from "@/components/ui/mode-toggle";
+import { getSupabase } from "@/lib/supabase";
 
 // ─── Types / Helpers ──────────────────────────────────────────────────────────
 
@@ -748,6 +750,13 @@ export default function ResultPage() {
               {projectDate}
             </span>
             <ModeToggle />
+            <button
+              onClick={async () => { await getSupabase().auth.signOut(); router.push('/login'); }}
+              title="Sign out"
+              className="p-2 rounded-lg text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </header>

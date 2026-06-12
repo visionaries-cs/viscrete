@@ -20,7 +20,7 @@ import {
   Trash2,
   // ChevronDown and ChevronUp used by PreprocessingTerminal
 } from "lucide-react";
-import { ModeToggle } from "@/components/ui/mode-toggle";
+import AppNav from "@/components/AppNav";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1247,11 +1247,8 @@ export default function PreprocessPage() {
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
-      {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50
-                         border-b border-gray-200 dark:border-gray-800
-                         bg-white/80 dark:bg-gray-950/80 backdrop-blur-md">
-        <div className="container max-w-5xl mx-auto px-6 py-3 flex items-center gap-4">
+      <AppNav
+        left={
           <button
             onClick={() => router.push('/upload')}
             className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition cursor-pointer shrink-0"
@@ -1259,26 +1256,8 @@ export default function PreprocessPage() {
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <Link href="/" className="flex items-center gap-2 select-none">
-            <span className="text-sm font-bold font-mono tracking-tight
-                             bg-gradient-to-r from-[#2ca75d] to-[#0da6f2]
-                             bg-clip-text text-transparent">
-              viscrete
-            </span>
-            <span className="hidden sm:inline text-xs text-gray-400 dark:text-gray-500 font-mono">
-              / concrete inspection
-            </span>
-          </Link>
-          <div className="ml-auto flex items-center gap-2">
-            {jobMeta && (
-              <span className="text-xs px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 font-medium capitalize">
-                {jobMeta.input_type} pipeline
-              </span>
-            )}
-            <ModeToggle />
-          </div>
-        </div>
-      </header>
+        }
+      />
 
       <main className="max-w-5xl mx-auto px-6 py-8 pt-20 space-y-6">
         {/* Meta fetch error */}

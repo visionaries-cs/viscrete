@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useSignedUrl } from "@/hooks/useSignedUrl";
+import { getSupabase } from "@/lib/supabase";
 import { useParams, useRouter } from "next/navigation";
 import {
   detectJob,
@@ -25,6 +26,7 @@ import {
   ChevronUp,
   Save,
   CheckCircle2,
+  LogOut,
 } from "lucide-react";
 
 // Actual API shape (api.ts DetectResponse is outdated — flat, not per-file array)
@@ -215,6 +217,13 @@ export default function DetectPage() {
               }
             </button>
           )}
+          <button
+            onClick={async () => { await getSupabase().auth.signOut(); router.push('/login'); }}
+            title="Sign out"
+            className="p-2 rounded-lg text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
         </div>
       </header>
 

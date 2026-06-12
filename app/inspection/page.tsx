@@ -3,12 +3,13 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Building2, Plus, Search, Loader2, AlertCircle, MapPin, User, Calendar, ChevronRight } from "lucide-react";
+import { Building2, Plus, Search, Loader2, AlertCircle, MapPin, User, Calendar, ChevronRight, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ModeToggle } from "@/components/ui/mode-toggle";
+import { getSupabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { listSites, createSite, type SiteResponse } from "@/lib/api";
 
@@ -129,7 +130,16 @@ export default function InspectionPage() {
               / concrete inspection
             </span>
           </Link>
-          <ModeToggle />
+          <div className="flex items-center gap-2">
+            <ModeToggle />
+            <button
+              onClick={async () => { await getSupabase().auth.signOut(); router.push('/login'); }}
+              title="Sign out"
+              className="p-2 rounded-lg text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </header>
 
