@@ -735,6 +735,7 @@ function UploadPageInner() {
             modalCtx === "select" ? `Apply to ${selectedFilenames.size} selected file${selectedFilenames.size !== 1 ? "s" : ""}` :
             modalCtx
           }
+          siteAddress={availableSites.find(s => s.site_id === activeSiteId)?.address || undefined}
           onConfirm={handleLocationConfirm}
           onClose={() => { setModalCtx(null); setSaveError(null); }}
         />

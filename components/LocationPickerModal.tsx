@@ -13,6 +13,7 @@ import {
   Tag,
   Loader2,
   MousePointerClick,
+  Building2,
 } from "lucide-react";
 
 // Load Leaflet only on the client — it accesses `window` at import time
@@ -45,6 +46,8 @@ interface Props {
   initialLng?: string;
   initialAlt?: string;
   initialLabel?: string;
+  /** If set, shows a "Use Site Location" shortcut button that geocodes this address */
+  siteAddress?: string;
   onConfirm: (result: LocationPickerResult) => void;
   onClose: () => void;
 }
@@ -70,6 +73,7 @@ export default function LocationPickerModal({
   initialLng = "",
   initialAlt = "",
   initialLabel = "",
+  siteAddress,
   onConfirm,
   onClose,
 }: Props) {
@@ -84,6 +88,7 @@ export default function LocationPickerModal({
   const [label, setLabel] = useState(initialLabel);
 
   const [error, setError] = useState<string | null>(null);
+  const [siteGeoLoading, setSiteGeoLoading] = useState(false);
 
   // Map receives parsed numbers; null means no pin
   const parsedLat = parseDeg(lat);
@@ -95,6 +100,27 @@ export default function LocationPickerModal({
     setLng(fmtDeg(clickLng));
     setError(null);
   }, []);
+
+  async function useSiteLocation() {
+    if (!siteAddress) return;
+    setSiteGeoLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(siteAddress)}&format=json&limit=1`,
+        { headers: { 'Accept-Language': 'en' } },
+      );
+      const data = await res.json();
+      if (!data.length) { setError("Could not find coordinates for the site address."); return; }
+      setLat(fmtDeg(parseFloat(data[0].lat)));
+      setLng(fmtDeg(parseFloat(data[0].lon)));
+      setTab("map");
+    } catch {
+      setError("Failed to geocode site address.");
+    } finally {
+      setSiteGeoLoading(false);
+    }
+  }
 
   // Close on Escape
   useEffect(() => {
@@ -163,6 +189,22 @@ export default function LocationPickerModal({
             <X className="w-4 h-4" />
           </button>
         </div>
+
+        {/* ── Site location shortcut ────────────────────────────────────── */}
+        {siteAddress && (
+          <div className="px-5 pt-4 shrink-0">
+            <button
+              onClick={useSiteLocation}
+              disabled={siteGeoLoading}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 text-xs font-semibold hover:bg-blue-100 dark:hover:bg-blue-950/50 transition cursor-pointer disabled:opacity-60"
+            >
+              {siteGeoLoading
+                ? <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                : <Building2 className="w-3.5 h-3.5 shrink-0" />}
+              <span className="truncate">Use Site Location — {siteAddress}</span>
+            </button>
+          </div>
+        )}
 
         {/* ── Tab switcher ──────────────────────────────────────────────── */}
         <div className="flex items-center gap-1 px-5 pt-4 shrink-0">
