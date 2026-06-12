@@ -22,36 +22,69 @@ function formatDate(iso: string): string {
   });
 }
 
-function SiteCard({ site, onDeleteRequest }: { site: SiteResponse; onDeleteRequest: (id: string) => void }) {
+function SiteCard({
+  site,
+  selected,
+  onSelect,
+  onDeleteRequest,
+}: {
+  site: SiteResponse;
+  selected: boolean;
+  onSelect: (id: string) => void;
+  onDeleteRequest: (id: string) => void;
+}) {
   return (
-    <div className="group relative rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#161616] hover:border-blue-300 dark:hover:border-blue-700 transition-all">
-      {/* Delete button */}
-      <button
-        onClick={e => { e.preventDefault(); onDeleteRequest(site.site_id); }}
-        className="absolute top-2 right-2 z-10 p-1.5 rounded-lg text-gray-300 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 opacity-0 group-hover:opacity-100 transition cursor-pointer"
-        title="Delete site"
-      >
-        <Trash2 className="w-3.5 h-3.5" />
-      </button>
+    <div className={`group relative rounded-xl border transition-all bg-white dark:bg-[#161616] flex flex-col ${
+      selected
+        ? "border-blue-400 dark:border-blue-600 bg-blue-50/40 dark:bg-blue-950/10"
+        : "border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700"
+    }`}>
+      {/* Top action row — checkbox left, trash right */}
+      <div className="flex items-center justify-between px-3 pt-3 pb-0">
+        {/* Checkbox */}
+        <button
+          onClick={() => onSelect(site.site_id)}
+          className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition cursor-pointer ${
+            selected
+              ? "border-blue-500 bg-blue-500"
+              : "border-gray-300 dark:border-gray-600 hover:border-blue-400"
+          }`}
+          aria-label={selected ? "Deselect" : "Select"}
+        >
+          {selected && (
+            <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 10 8">
+              <path d="M1 4l3 3 5-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
+        </button>
 
-      <Link href={`/sites/${site.site_id}`} className="block p-4 flex flex-col gap-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-950/50 flex items-center justify-center shrink-0">
+        {/* Trash — visible on hover or when selected */}
+        <button
+          onClick={() => onDeleteRequest(site.site_id)}
+          className="p-1.5 rounded-lg text-gray-300 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 opacity-0 group-hover:opacity-100 transition cursor-pointer"
+          title="Delete site"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {/* Card body — navigates to site */}
+      <Link href={`/sites/${site.site_id}`} className="flex flex-col gap-2 px-4 pb-4 pt-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/50 flex items-center justify-center shrink-0">
             <Building2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
           </div>
-          <ChevronRight className="w-4 h-4 text-gray-300 dark:text-gray-600 group-hover:text-blue-500 transition shrink-0 mt-1" />
+          <div className="min-w-0">
+            <p className="font-semibold text-sm text-gray-900 dark:text-white truncate">{site.name}</p>
+            {site.address && (
+              <p className="text-xs text-gray-500 dark:text-gray-400 truncate flex items-center gap-1">
+                <MapPin className="w-3 h-3 shrink-0" />{site.address}
+              </p>
+            )}
+          </div>
         </div>
 
-        <div className="min-w-0">
-          <p className="font-semibold text-sm text-gray-900 dark:text-white truncate">{site.name}</p>
-          {site.address && (
-            <p className="text-xs text-gray-500 dark:text-gray-400 truncate flex items-center gap-1 mt-0.5">
-              <MapPin className="w-3 h-3 shrink-0" />{site.address}
-            </p>
-          )}
-        </div>
-
-        <div className="flex items-center justify-between text-xs text-gray-400 dark:text-gray-500 pt-1 border-t border-gray-100 dark:border-gray-800">
+        <div className="flex items-center justify-between text-xs text-gray-400 dark:text-gray-500 pt-2 border-t border-gray-100 dark:border-gray-800">
           <span className="flex items-center gap-1">
             <User className="w-3 h-3" />
             {site.inspector_name || "—"}
@@ -83,12 +116,15 @@ export default function InspectionPage() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  // ── Delete
-  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  // ── Select + delete
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([]);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const pendingSite = sites.find(s => s.site_id === pendingDeleteId);
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
 
   useEffect(() => {
     loadSites();
@@ -127,13 +163,14 @@ export default function InspectionPage() {
   }
 
   async function handleDelete() {
-    if (!pendingDeleteId) return;
+    if (!pendingDeleteIds.length) return;
     setDeleting(true);
     setDeleteError(null);
     try {
-      await deleteSite(pendingDeleteId);
-      setSites(prev => prev.filter(s => s.site_id !== pendingDeleteId));
-      setPendingDeleteId(null);
+      await Promise.all(pendingDeleteIds.map(id => deleteSite(id)));
+      setSites(prev => prev.filter(s => !pendingDeleteIds.includes(s.site_id)));
+      setSelectedIds(prev => { const n = new Set(prev); pendingDeleteIds.forEach(id => n.delete(id)); return n; });
+      setPendingDeleteIds([]);
     } catch (e) {
       setDeleteError(e instanceof Error ? e.message : "Failed to delete site");
     } finally {
@@ -146,6 +183,12 @@ export default function InspectionPage() {
     s.address.toLowerCase().includes(search.toLowerCase()) ||
     s.inspector_name.toLowerCase().includes(search.toLowerCase()),
   );
+
+  const allSelected = filteredSites.length > 0 && selectedIds.size === filteredSites.length;
+
+  function toggleSelectAll() {
+    setSelectedIds(prev => prev.size === filteredSites.length ? new Set() : new Set(filteredSites.map(s => s.site_id)));
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#0a0a0a]">
@@ -255,18 +298,37 @@ export default function InspectionPage() {
 
           {/* Right — Site List */}
           <div className="lg:col-span-2">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-bold text-gray-900 dark:text-white">
-                Inspection Sites
-                {!loading && <span className="ml-2 text-sm font-normal text-gray-400">({filteredSites.length})</span>}
-              </h2>
-              <div className="relative">
+            <div className="flex items-center justify-between mb-4 gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <h2 className="text-base font-bold text-gray-900 dark:text-white shrink-0">
+                  Inspection Sites
+                  {!loading && <span className="ml-2 text-sm font-normal text-gray-400">({filteredSites.length})</span>}
+                </h2>
+                {!loading && filteredSites.length > 0 && (
+                  <button
+                    onClick={toggleSelectAll}
+                    className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition cursor-pointer shrink-0"
+                  >
+                    {allSelected ? "Deselect all" : "Select all"}
+                  </button>
+                )}
+                {selectedIds.size > 0 && (
+                  <button
+                    onClick={() => { setDeleteError(null); setPendingDeleteIds([...selectedIds]); }}
+                    className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold transition cursor-pointer shrink-0"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    Delete ({selectedIds.size})
+                  </button>
+                )}
+              </div>
+              <div className="relative shrink-0">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <Input
                   placeholder="Search sites…"
                   value={search}
                   onChange={e => setSearch(e.target.value)}
-                  className="pl-9 w-52 border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] text-sm"
+                  className="pl-9 w-44 border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] text-sm"
                 />
               </div>
             </div>
@@ -297,7 +359,13 @@ export default function InspectionPage() {
             {!loading && !error && filteredSites.length > 0 && (
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                 {filteredSites.map(site => (
-                  <SiteCard key={site.site_id} site={site} onDeleteRequest={id => { setDeleteError(null); setPendingDeleteId(id); }} />
+                  <SiteCard
+                    key={site.site_id}
+                    site={site}
+                    selected={selectedIds.has(site.site_id)}
+                    onSelect={toggleSelect}
+                    onDeleteRequest={id => { setDeleteError(null); setPendingDeleteIds([id]); }}
+                  />
                 ))}
               </div>
             )}
@@ -306,10 +374,10 @@ export default function InspectionPage() {
       </main>
 
       {/* ── Delete confirmation modal ── */}
-      {pendingDeleteId && (
+      {pendingDeleteIds.length > 0 && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-          onClick={() => { if (!deleting) { setPendingDeleteId(null); setDeleteError(null); } }}
+          onClick={() => { if (!deleting) { setPendingDeleteIds([]); setDeleteError(null); } }}
         >
           <div
             className="w-full max-w-sm bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xl overflow-hidden"
@@ -320,10 +388,12 @@ export default function InspectionPage() {
                 <div className="w-7 h-7 rounded-lg bg-red-50 dark:bg-red-950/40 flex items-center justify-center shrink-0">
                   <Trash2 className="w-3.5 h-3.5 text-red-500" />
                 </div>
-                <h2 className="text-sm font-bold text-gray-900 dark:text-white">Delete Site</h2>
+                <h2 className="text-sm font-bold text-gray-900 dark:text-white">
+                  {pendingDeleteIds.length === 1 ? "Delete Site" : `Delete ${pendingDeleteIds.length} Sites`}
+                </h2>
               </div>
               <button
-                onClick={() => { setPendingDeleteId(null); setDeleteError(null); }}
+                onClick={() => { setPendingDeleteIds([]); setDeleteError(null); }}
                 disabled={deleting}
                 className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition cursor-pointer disabled:opacity-40"
               >
@@ -331,11 +401,17 @@ export default function InspectionPage() {
               </button>
             </div>
             <div className="px-6 py-5">
-              <p className="text-sm text-gray-700 dark:text-gray-300">
-                Delete site <span className="font-semibold text-gray-900 dark:text-white">{pendingSite?.name}</span>?
-              </p>
+              {pendingDeleteIds.length === 1 ? (
+                <p className="text-sm text-gray-700 dark:text-gray-300">
+                  Delete site <span className="font-semibold text-gray-900 dark:text-white">{sites.find(s => s.site_id === pendingDeleteIds[0])?.name}</span>?
+                </p>
+              ) : (
+                <p className="text-sm text-gray-700 dark:text-gray-300">
+                  Delete <span className="font-semibold text-gray-900 dark:text-white">{pendingDeleteIds.length} sites</span>?
+                </p>
+              )}
               <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                The site record will be removed. Existing jobs will not be affected.
+                Site records will be removed. Existing jobs will not be affected.
               </p>
               {deleteError && (
                 <p className="mt-3 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2">
@@ -345,7 +421,7 @@ export default function InspectionPage() {
             </div>
             <div className="flex items-center gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-800">
               <button
-                onClick={() => { setPendingDeleteId(null); setDeleteError(null); }}
+                onClick={() => { setPendingDeleteIds([]); setDeleteError(null); }}
                 disabled={deleting}
                 className="flex-1 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-sm font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer disabled:opacity-40"
               >
