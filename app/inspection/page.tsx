@@ -76,6 +76,7 @@ export default function InspectionPage() {
 
   useEffect(() => {
     loadSites();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function loadSites() {

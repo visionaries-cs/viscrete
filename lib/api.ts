@@ -4,14 +4,29 @@ export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'https://viscrete
 
 /** Returns Authorization header with the current Supabase JWT, or empty object. */
 export async function getAuthHeaders(): Promise<Record<string, string>> {
-  // Dynamic import keeps api.ts usable outside the browser (e.g. during SSR)
   if (typeof window === 'undefined') return {};
   try {
     const { getSupabase } = await import('@/lib/supabase');
-    const { data: { session } } = await getSupabase().auth.getSession();
+    const supabase = getSupabase();
+
+    // Fast path — session already in memory
+    const { data: { session } } = await supabase.auth.getSession();
     if (session?.access_token) {
       return { Authorization: `Bearer ${session.access_token}` };
     }
+
+    // Slow path — session not yet restored from cookies; wait up to 3 s
+    const token = await new Promise<string | null>(resolve => {
+      const timer = setTimeout(() => { sub.unsubscribe(); resolve(null); }, 3000);
+      const { data: { subscription: sub } } = supabase.auth.onAuthStateChange((_e, s) => {
+        if (s?.access_token) {
+          clearTimeout(timer);
+          sub.unsubscribe();
+          resolve(s.access_token);
+        }
+      });
+    });
+    if (token) return { Authorization: `Bearer ${token}` };
   } catch {
     // supabase not configured — gracefully degrade
   }
