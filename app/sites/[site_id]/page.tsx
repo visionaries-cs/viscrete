@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft, Building2, Plus, Layers, Loader2, AlertCircle,
   MapPin, User, Calendar, ChevronRight, Trash2, ExternalLink, X,
-  ImageIcon, AlertTriangle, LogOut, Pencil,
+  ImageIcon, AlertTriangle, LogOut, Pencil, Users, UserPlus,
 } from "lucide-react";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 import { getSupabase } from "@/lib/supabase";
@@ -35,6 +35,19 @@ function routeForJob(job: JobStatusResponse): string {
   if (["reporting", "completed"].includes(s))          return `/results/${job.job_id}`;
   return `/upload`;
 }
+
+function getInitials(name: string): string {
+  return name.trim().split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase() || "?";
+}
+
+const AVATAR_COLORS = [
+  "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300",
+  "bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300",
+  "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300",
+  "bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300",
+  "bg-pink-100 text-pink-700 dark:bg-pink-900/50 dark:text-pink-300",
+  "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/50 dark:text-cyan-300",
+];
 
 const STATUS_COLORS: Record<string, string> = {
   created:      "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
@@ -71,7 +84,6 @@ function DefectBreakdownCard({ total, classSummary }: { total: number; classSumm
 
       {total > 0 ? (
         <>
-          {/* Stacked bar */}
           <div className="flex h-2 w-full rounded-full overflow-hidden gap-px">
             {CLASS_CONFIG.map(c => {
               const count = classSummary[c.key] ?? 0;
@@ -87,8 +99,6 @@ function DefectBreakdownCard({ total, classSummary }: { total: number; classSumm
               );
             })}
           </div>
-
-          {/* Legend */}
           <div className="flex flex-wrap gap-x-2 gap-y-0.5">
             {present.map(c => (
               <span key={c.key} className="inline-flex items-center gap-1 text-[10px] text-gray-500 dark:text-gray-400">
@@ -131,7 +141,6 @@ function JobCard({
         ? "border-blue-400 dark:border-blue-600 bg-blue-50 dark:bg-blue-950/20"
         : "border-gray-200 dark:border-gray-800 bg-white dark:bg-[#161616] hover:border-blue-300 dark:hover:border-blue-700",
     )}>
-      {/* Checkbox */}
       <button
         onClick={() => onSelect(job.job_id)}
         className="shrink-0 w-4 h-4 rounded border-2 flex items-center justify-center transition cursor-pointer"
@@ -148,9 +157,7 @@ function JobCard({
         )}
       </button>
 
-      {/* Card body — navigates to job */}
       <Link href={href} className="flex-1 min-w-0 flex items-center justify-between gap-4">
-        {/* Left: name + meta + bar */}
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
             {job.site_location || "Unnamed job"}
@@ -177,10 +184,8 @@ function JobCard({
             )}
           </div>
 
-          {/* Stacked bar + legend */}
           {hasBreakdown && (
             <div className="mt-2 space-y-1">
-              {/* Bar */}
               <div className="flex h-1.5 w-full rounded-full overflow-hidden gap-px">
                 {CLASS_CONFIG.map(c => {
                   const count = classBreakdown[c.key] ?? 0;
@@ -195,7 +200,6 @@ function JobCard({
                   );
                 })}
               </div>
-              {/* Legend */}
               <div className="flex flex-wrap gap-x-2.5 gap-y-0.5">
                 {CLASS_CONFIG.filter(c => (classBreakdown[c.key] ?? 0) > 0).map(c => (
                   <span key={c.key} className="inline-flex items-center gap-1 text-[10px] text-gray-500 dark:text-gray-400">
@@ -208,7 +212,6 @@ function JobCard({
           )}
         </div>
 
-        {/* Right: status + date + chevron */}
         <div className="flex items-center gap-3 shrink-0">
           <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", STATUS_COLORS[job.status] ?? STATUS_COLORS.created)}>
             {job.status}
@@ -218,7 +221,6 @@ function JobCard({
         </div>
       </Link>
 
-      {/* Delete button */}
       <button
         onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDeleteRequest(job.job_id); }}
         className="shrink-0 p-1.5 rounded-lg text-gray-300 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition cursor-pointer"
@@ -226,6 +228,199 @@ function JobCard({
       >
         <Trash2 className="w-3.5 h-3.5" />
       </button>
+    </div>
+  );
+}
+
+// ─── Inspector Modal ──────────────────────────────────────────────────────────
+
+function InspectorModal({
+  allInspectors,
+  jobInspectorMap,
+  siteInspectorNames,
+  onAdd,
+  onRemove,
+  onClose,
+  saving,
+}: {
+  allInspectors: string[];
+  jobInspectorMap: Record<string, number>;
+  siteInspectorNames: string[];
+  onAdd: (name: string) => void;
+  onRemove: (name: string) => void;
+  onClose: () => void;
+  saving: boolean;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (adding) inputRef.current?.focus();
+  }, [adding]);
+
+  // Close on Escape
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  function handleAdd() {
+    const name = draft.trim();
+    if (!name) return;
+    onAdd(name);
+    setDraft("");
+    setAdding(false);
+  }
+
+  const isDuplicate = draft.trim() !== "" && allInspectors.map(n => n.toLowerCase()).includes(draft.trim().toLowerCase());
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full sm:max-w-md bg-white dark:bg-[#161616] rounded-t-2xl sm:rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xl flex flex-col max-h-[85dvh] sm:max-h-[80vh]"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 dark:border-gray-800 shrink-0">
+          <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center shrink-0">
+            <Users className="w-4 h-4 text-blue-500" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-bold text-gray-900 dark:text-white">Inspectors</h2>
+              {allInspectors.length > 0 && (
+                <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-blue-100 dark:bg-blue-900/50 text-[10px] font-bold text-blue-700 dark:text-blue-300">
+                  {allInspectors.length}
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+              People who have inspected this site
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Inspector list */}
+        <div className="flex-1 overflow-y-auto min-h-0 px-3 py-3 space-y-0.5">
+          {allInspectors.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+              <Users className="w-9 h-9 mb-3 opacity-30" />
+              <p className="text-sm font-medium">No inspectors yet</p>
+              <p className="text-xs mt-1 text-gray-300 dark:text-gray-600">
+                Inspectors appear from jobs or can be added below
+              </p>
+            </div>
+          ) : (
+            allInspectors.map((name, i) => {
+              const fromJob  = name in jobInspectorMap;
+              const fromSite = siteInspectorNames.includes(name);
+              const jobCount = jobInspectorMap[name] ?? 0;
+              const colorCls = AVATAR_COLORS[i % AVATAR_COLORS.length];
+
+              return (
+                <div
+                  key={name}
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50 transition group"
+                >
+                  {/* Avatar */}
+                  <div className={cn(
+                    "w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0 select-none",
+                    colorCls,
+                  )}>
+                    {getInitials(name)}
+                  </div>
+
+                  {/* Name + meta */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{name}</p>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      {fromJob ? (
+                        <span className="text-[10px] text-gray-400 dark:text-gray-500">
+                          {jobCount} job{jobCount !== 1 ? "s" : ""}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500">
+                          added manually
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Remove — only for manually-added, not from jobs */}
+                  {fromSite && !fromJob && (
+                    <button
+                      onClick={() => onRemove(name)}
+                      disabled={saving}
+                      title="Remove inspector"
+                      className="shrink-0 p-1.5 rounded-lg text-gray-300 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition cursor-pointer opacity-0 group-hover:opacity-100 disabled:opacity-30"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Footer — add inspector */}
+        <div className="shrink-0 px-5 py-4 border-t border-gray-100 dark:border-gray-800">
+          {adding ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <input
+                  ref={inputRef}
+                  value={draft}
+                  onChange={e => setDraft(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === "Enter") handleAdd();
+                    if (e.key === "Escape") { setAdding(false); setDraft(""); }
+                  }}
+                  placeholder="Inspector full name…"
+                  className="flex-1 px-3 py-2 rounded-lg text-sm border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                />
+                <button
+                  onClick={handleAdd}
+                  disabled={!draft.trim() || isDuplicate || saving}
+                  className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                >
+                  Add
+                </button>
+                <button
+                  onClick={() => { setAdding(false); setDraft(""); }}
+                  className="p-2 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              {isDuplicate && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 px-1">
+                  This inspector is already on the list.
+                </p>
+              )}
+            </div>
+          ) : (
+            <button
+              onClick={() => setAdding(true)}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 text-sm text-gray-400 hover:border-blue-400 hover:text-blue-500 dark:hover:border-blue-600 dark:hover:text-blue-400 transition cursor-pointer"
+            >
+              <UserPlus className="w-4 h-4" />
+              Add Inspector
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -258,6 +453,9 @@ export default function SiteDetailPage() {
   const [editingAddress, setEditingAddress] = useState(false);
   const [addressDraft, setAddressDraft] = useState('');
   const [savingAddress, setSavingAddress] = useState(false);
+
+  const [inspectorModalOpen, setInspectorModalOpen] = useState(false);
+  const [savingInspector, setSavingInspector] = useState(false);
 
   useEffect(() => {
     load();
@@ -319,7 +517,6 @@ export default function SiteDetailPage() {
     if (!pendingDelete) return;
 
     if (pendingDelete.type === "job") {
-      // Optimistic: remove immediately, rollback on error
       const id = (pendingDelete as { type: "job"; id: string }).id;
       const snapshot = jobs.find(j => j.job_id === id);
       setJobs(prev => prev.filter(j => j.job_id !== id));
@@ -333,7 +530,6 @@ export default function SiteDetailPage() {
       }
 
     } else if (pendingDelete.type === "jobs") {
-      // Optimistic: remove all immediately, rollback on error
       const ids = (pendingDelete as { type: "jobs"; ids: string[] }).ids;
       const snapshot = jobs.filter(j => ids.includes(j.job_id));
       setJobs(prev => prev.filter(j => !ids.includes(j.job_id)));
@@ -347,20 +543,18 @@ export default function SiteDetailPage() {
       }
 
     } else {
-      // Site delete: navigate immediately (no rollback needed)
       setPendingDelete(null);
       router.push("/inspection");
       try {
         await deleteSite(site_id);
       } catch {
-        // already navigated away — nothing to rollback
+        // already navigated away
       }
     }
   }
 
   async function handleAddressSave(address: string) {
     const previousAddress = site?.address ?? '';
-    // Optimistic: update immediately, rollback on error
     setSite(prev => prev ? { ...prev, address } : prev);
     setEditingAddress(false);
     try {
@@ -368,9 +562,58 @@ export default function SiteDetailPage() {
       setSite(updated);
     } catch {
       setSite(prev => prev ? { ...prev, address: previousAddress } : prev);
-      setEditingAddress(true); // reopen with error
+      setEditingAddress(true);
     }
   }
+
+  async function handleAddInspector(name: string) {
+    if (!site) return;
+    const currentNames = site.inspector_name
+      ? site.inspector_name.split(",").map(s => s.trim()).filter(Boolean)
+      : [];
+    // Avoid duplicates (case-insensitive)
+    if (currentNames.map(n => n.toLowerCase()).includes(name.toLowerCase())) return;
+    const newCsv = [...currentNames, name].join(", ");
+    const previousCsv = site.inspector_name;
+    setSite(prev => prev ? { ...prev, inspector_name: newCsv } : prev);
+    setSavingInspector(true);
+    try {
+      const updated = await updateSite(site_id, { inspector_name: newCsv });
+      setSite(updated);
+    } catch {
+      setSite(prev => prev ? { ...prev, inspector_name: previousCsv } : prev);
+    } finally {
+      setSavingInspector(false);
+    }
+  }
+
+  async function handleRemoveInspector(name: string) {
+    if (!site) return;
+    const previousCsv = site.inspector_name;
+    const newNames = site.inspector_name
+      .split(",").map(s => s.trim()).filter(s => s && s !== name);
+    const newCsv = newNames.join(", ");
+    setSite(prev => prev ? { ...prev, inspector_name: newCsv } : prev);
+    try {
+      const updated = await updateSite(site_id, { inspector_name: newCsv });
+      setSite(updated);
+    } catch {
+      setSite(prev => prev ? { ...prev, inspector_name: previousCsv } : prev);
+    }
+  }
+
+  // ── Derived inspector data ───────────────────────────────────────────────────
+  const jobInspectorMap: Record<string, number> = {};
+  jobs.forEach(j => {
+    if (j.inspector_name) {
+      jobInspectorMap[j.inspector_name] = (jobInspectorMap[j.inspector_name] ?? 0) + 1;
+    }
+  });
+  const siteInspectorNames = site
+    ? site.inspector_name.split(",").map(s => s.trim()).filter(Boolean)
+    : [];
+  const allInspectors = [...new Set([...Object.keys(jobInspectorMap), ...siteInspectorNames])];
+  const inspectorCount = allInspectors.length;
 
   const totalDefects = Object.values(floorSummary).reduce((a, b) => a + b, 0);
   const maxFloorCount = Math.max(...Object.values(floorSummary), 1);
@@ -396,17 +639,12 @@ export default function SiteDetailPage() {
     );
   }
 
-  const inspectorLabel =
-    [...new Set(jobs.map(j => j.inspector_name).filter(Boolean))].join(", ") ||
-    site.inspector_name ||
-    "—";
-
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#0a0a0a]">
       {/* Header */}
       <header className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#111]">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center gap-4">
-          <Link href="/inspection" className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 flex items-center gap-3 sm:gap-4">
+          <Link href="/inspection" className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition shrink-0">
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div className="flex-1 min-w-0">
@@ -416,20 +654,20 @@ export default function SiteDetailPage() {
               className="inline-flex items-center gap-1 mt-0.5 text-xs text-gray-400 hover:text-blue-500 transition group cursor-pointer"
             >
               <MapPin className="w-3 h-3 shrink-0" />
-              <span className="truncate max-w-xs">{site.address || 'Add location…'}</span>
+              <span className="truncate max-w-[160px] sm:max-w-xs">{site.address || 'Add location…'}</span>
               <Pencil className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition shrink-0" />
             </button>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <Link
               href={`/sites/${site_id}/items`}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-300 hover:border-blue-300 dark:hover:border-blue-700 transition"
+              className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-xs sm:text-sm text-gray-600 dark:text-gray-300 hover:border-blue-300 dark:hover:border-blue-700 transition"
             >
-              <Layers className="w-4 h-4" />
-              View All Defects
+              <Layers className="w-4 h-4 shrink-0" />
+              <span className="hidden sm:inline">View All Defects</span>
             </Link>
             {email && (
-              <span className="hidden sm:block text-xs text-gray-400 dark:text-gray-500 font-mono truncate max-w-[180px]">
+              <span className="hidden md:block text-xs text-gray-400 dark:text-gray-500 font-mono truncate max-w-[160px]">
                 {email}
               </span>
             )}
@@ -445,29 +683,51 @@ export default function SiteDetailPage() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-6 py-8 space-y-8">
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 py-6 sm:py-8 space-y-6 sm:space-y-8">
 
-        {/* Site Info */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          {[
-            { label: "Inspector", value: inspectorLabel, icon: User },
-            { label: "Created",   value: formatDate(site.created_at), icon: Calendar },
-            { label: "Jobs",      value: String(jobs.length), icon: ExternalLink },
-          ].map(({ label, value, icon: Icon }) => (
-            <div key={label} className="bg-white dark:bg-[#161616] rounded-xl border border-gray-200 dark:border-gray-800 p-4">
-              <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">{label}</p>
-              <div className="flex items-center gap-2">
-                <Icon className="w-4 h-4 text-gray-400 shrink-0" />
-                <span className="text-sm font-semibold text-gray-900 dark:text-white truncate">{value}</span>
-              </div>
+        {/* Site Info stat cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+
+          {/* Inspector card — clickable, shows count */}
+          <button
+            onClick={() => setInspectorModalOpen(true)}
+            className="bg-white dark:bg-[#161616] rounded-xl border border-gray-200 dark:border-gray-800 p-4 text-left hover:border-blue-300 dark:hover:border-blue-600 transition group cursor-pointer"
+          >
+            <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Inspectors</p>
+            <div className="flex items-center gap-2">
+              <Users className="w-4 h-4 text-gray-400 group-hover:text-blue-500 transition shrink-0" />
+              <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                {inspectorCount > 0 ? inspectorCount : "—"}
+              </span>
             </div>
-          ))}
+            <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1.5 group-hover:text-blue-400 transition">
+              tap to view
+            </p>
+          </button>
+
+          {/* Created */}
+          <div className="bg-white dark:bg-[#161616] rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+            <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Created</p>
+            <div className="flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
+              <span className="text-sm font-semibold text-gray-900 dark:text-white truncate">{formatDate(site.created_at)}</span>
+            </div>
+          </div>
+
+          {/* Jobs */}
+          <div className="bg-white dark:bg-[#161616] rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+            <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Jobs</p>
+            <div className="flex items-center gap-2">
+              <ExternalLink className="w-4 h-4 text-gray-400 shrink-0" />
+              <span className="text-sm font-semibold text-gray-900 dark:text-white">{jobs.length}</span>
+            </div>
+          </div>
 
           {/* Defect breakdown card */}
           <DefectBreakdownCard total={totalDefects} classSummary={classSummary} />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
 
           {/* Jobs */}
           <div className="lg:col-span-2 space-y-3">
@@ -484,7 +744,6 @@ export default function SiteDetailPage() {
                 <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Inspection Jobs
                 </h2>
-                {/* Select-all toggle */}
                 {jobs.length > 0 && (
                   <button
                     onClick={toggleSelectAll}
@@ -495,14 +754,14 @@ export default function SiteDetailPage() {
                 )}
               </div>
               <div className="flex items-center gap-2">
-                {/* Delete selected */}
                 {selectedJobIds.size > 0 && (
                   <button
                     onClick={() => openDeleteModal({ type: "jobs", ids: [...selectedJobIds] })}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold transition cursor-pointer"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
-                    Delete Selected ({selectedJobIds.size})
+                    <span className="hidden sm:inline">Delete Selected ({selectedJobIds.size})</span>
+                    <span className="sm:hidden">{selectedJobIds.size}</span>
                   </button>
                 )}
                 <Link
@@ -510,10 +769,11 @@ export default function SiteDetailPage() {
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  New Job
+                  <span className="hidden sm:inline">New Job</span>
                 </Link>
               </div>
             </div>
+
             {jobs.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-gray-400 bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800">
                 <Building2 className="w-8 h-8 mb-2 opacity-40" />
@@ -540,7 +800,6 @@ export default function SiteDetailPage() {
 
           {/* Sidebar */}
           <div className="space-y-3">
-            {/* Location map */}
             <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               Location
             </h2>
@@ -556,7 +815,6 @@ export default function SiteDetailPage() {
               </button>
             )}
 
-            {/* Floor Summary */}
             <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider pt-2">
               Defects by Floor
             </h2>
@@ -616,6 +874,19 @@ export default function SiteDetailPage() {
         </div>
       </main>
 
+      {/* ── Inspector modal ── */}
+      {inspectorModalOpen && (
+        <InspectorModal
+          allInspectors={allInspectors}
+          jobInspectorMap={jobInspectorMap}
+          siteInspectorNames={siteInspectorNames}
+          onAdd={handleAddInspector}
+          onRemove={handleRemoveInspector}
+          onClose={() => setInspectorModalOpen(false)}
+          saving={savingInspector}
+        />
+      )}
+
       {/* ── Edit address dialog ── */}
       {editingAddress && (
         <div
@@ -656,7 +927,6 @@ export default function SiteDetailPage() {
             className="w-full max-w-sm bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xl overflow-hidden"
             onClick={e => e.stopPropagation()}
           >
-            {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800">
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-lg bg-red-50 dark:bg-red-950/40 flex items-center justify-center shrink-0">
@@ -670,14 +940,12 @@ export default function SiteDetailPage() {
               </div>
               <button
                 onClick={() => { setPendingDelete(null); setDeleteError(null); }}
-
                 className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition cursor-pointer disabled:opacity-40"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Body */}
             <div className="px-6 py-5">
               {pendingDelete.type === "job" && (
                 <>
@@ -711,11 +979,9 @@ export default function SiteDetailPage() {
               )}
             </div>
 
-            {/* Footer */}
             <div className="flex items-center gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-800">
               <button
                 onClick={() => { setPendingDelete(null); setDeleteError(null); }}
-
                 className="flex-1 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-sm font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer disabled:opacity-40"
               >
                 Cancel
