@@ -6,16 +6,20 @@ import Link from "next/link";
 import {
   ArrowLeft, Building2, Plus, Layers, Loader2, AlertCircle,
   MapPin, User, Calendar, ChevronRight, Trash2, ExternalLink, X,
-  ImageIcon, AlertTriangle, LogOut,
+  ImageIcon, AlertTriangle, LogOut, Pencil,
 } from "lucide-react";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 import { getSupabase } from "@/lib/supabase";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { cn } from "@/lib/utils";
 import {
-  getSite, getJobsForSite, getSiteItems, deleteSite, deleteJob,
+  getSite, getJobsForSite, getSiteItems, deleteSite, deleteJob, updateSite,
   type SiteResponse, type JobStatusResponse,
 } from "@/lib/api";
+import dynamic from "next/dynamic";
+
+const LocationDisplayMap = dynamic(() => import("@/components/LocationDisplayMap"), { ssr: false });
+const LocationPickerMap  = dynamic(() => import("@/components/LocationPickerMap"),  { ssr: false });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -251,6 +255,10 @@ export default function SiteDetailPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  const [editingAddress, setEditingAddress] = useState(false);
+  const [addressDraft, setAddressDraft] = useState('');
+  const [savingAddress, setSavingAddress] = useState(false);
+
   useEffect(() => {
     load();
   }, [site_id]);
@@ -334,6 +342,19 @@ export default function SiteDetailPage() {
     }
   }
 
+  async function handleAddressSave(address: string) {
+    setSavingAddress(true);
+    try {
+      const updated = await updateSite(site_id, { address });
+      setSite(updated);
+      setEditingAddress(false);
+    } catch {
+      // keep dialog open on error
+    } finally {
+      setSavingAddress(false);
+    }
+  }
+
   const totalDefects = Object.values(floorSummary).reduce((a, b) => a + b, 0);
   const maxFloorCount = Math.max(...Object.values(floorSummary), 1);
   const allSelected = jobs.length > 0 && selectedJobIds.size === jobs.length;
@@ -373,11 +394,14 @@ export default function SiteDetailPage() {
           </Link>
           <div className="flex-1 min-w-0">
             <h1 className="text-base font-bold text-gray-900 dark:text-white truncate">{site.name}</h1>
-            {site.address && (
-              <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
-                <MapPin className="w-3 h-3" />{site.address}
-              </p>
-            )}
+            <button
+              onClick={() => { setAddressDraft(site.address ?? ''); setEditingAddress(true); }}
+              className="inline-flex items-center gap-1 mt-0.5 text-xs text-gray-400 hover:text-blue-500 transition group cursor-pointer"
+            >
+              <MapPin className="w-3 h-3 shrink-0" />
+              <span className="truncate max-w-xs">{site.address || 'Add location…'}</span>
+              <Pencil className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition shrink-0" />
+            </button>
           </div>
           <div className="flex items-center gap-2">
             <Link
@@ -489,9 +513,26 @@ export default function SiteDetailPage() {
             )}
           </div>
 
-          {/* Floor Summary */}
+          {/* Sidebar */}
           <div className="space-y-3">
+            {/* Location map */}
             <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              Location
+            </h2>
+            {site.address ? (
+              <LocationDisplayMap address={site.address} />
+            ) : (
+              <button
+                onClick={() => { setAddressDraft(''); setEditingAddress(true); }}
+                className="w-full h-24 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center gap-1.5 text-gray-400 hover:border-blue-400 hover:text-blue-500 transition cursor-pointer"
+              >
+                <MapPin className="w-5 h-5" />
+                <span className="text-xs">Add location</span>
+              </button>
+            )}
+
+            {/* Floor Summary */}
+            <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider pt-2">
               Defects by Floor
             </h2>
             <div className="bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800 p-4 space-y-3">
@@ -549,6 +590,36 @@ export default function SiteDetailPage() {
           </div>
         </div>
       </main>
+
+      {/* ── Edit address dialog ── */}
+      {editingAddress && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          onClick={() => { if (!savingAddress) setEditingAddress(false); }}
+        >
+          <div
+            className="w-full max-w-2xl bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xl overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800">
+              <h2 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-blue-500" />
+                Update Location
+              </h2>
+              <button
+                onClick={() => setEditingAddress(false)}
+                disabled={savingAddress}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition cursor-pointer disabled:opacity-40"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-6">
+              <LocationPickerMap onConfirm={(address) => handleAddressSave(address)} />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Delete confirmation modal ── */}
       {pendingDelete && (
