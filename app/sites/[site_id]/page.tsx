@@ -105,7 +105,7 @@ function ModalShell({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4"
+      className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4"
       onClick={onClose}
     >
       <div
@@ -1113,7 +1113,7 @@ export default function SiteDetailPage() {
 
       {/* ── Edit address dialog ── */}
       {editingAddress && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
           onClick={() => { if (!savingAddress) setEditingAddress(false); }}>
           <div className="w-full max-w-2xl bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xl overflow-hidden"
             onClick={e => e.stopPropagation()}>
@@ -1135,7 +1135,7 @@ export default function SiteDetailPage() {
 
       {/* ── Delete confirmation modal ── */}
       {pendingDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
           onClick={() => { if (!deleting) { setPendingDelete(null); setDeleteError(null); } }}>
           <div className="w-full max-w-sm bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xl overflow-hidden"
             onClick={e => e.stopPropagation()}>
