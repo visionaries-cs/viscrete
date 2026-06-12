@@ -57,9 +57,9 @@ function LoginContent() {
     setError('');
     setIsLoading(true);
     const { error: authError } = await getSupabase().auth.signInWithPassword({ email, password });
+    setIsLoading(false);
     if (authError) {
       setError(authError.message);
-      setIsLoading(false);
     } else {
       router.push(redirectTo);
     }
