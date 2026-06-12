@@ -33,7 +33,7 @@ function ForgotPasswordContent() {
     setError('');
     setIsLoading(true);
     const { error: authError } = await getSupabase().auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/login`,
+      redirectTo: `${window.location.origin}/reset-password`,
     });
     setIsLoading(false);
     if (authError) {
