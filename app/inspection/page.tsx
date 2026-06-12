@@ -11,8 +11,8 @@ import { Label } from "@/components/ui/label";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 import { getSupabase } from "@/lib/supabase";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { cn } from "@/lib/utils";
 import { listSites, createSite, type SiteResponse } from "@/lib/api";
+import LocationPicker from "@/components/LocationPicker";
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-PH", {
@@ -179,16 +179,10 @@ export default function InspectionPage() {
                   </div>
 
                   <div>
-                    <Label htmlFor="address" className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 block">
+                    <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 block">
                       Address
                     </Label>
-                    <Input
-                      id="address"
-                      placeholder="e.g. 123 University Ave"
-                      value={address}
-                      onChange={e => setAddress(e.target.value)}
-                      className="border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1a1a1a]"
-                    />
+                    <LocationPicker value={address} onChange={setAddress} />
                   </div>
 
                   <div>
