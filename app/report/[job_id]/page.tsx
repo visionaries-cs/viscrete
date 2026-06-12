@@ -38,7 +38,6 @@ export default function ReportPage() {
     setState("loading-pdf");
     try {
       const url = await getReportUrl(job_id);
-      blobUrlRef.current = url;
       setBlobUrl(url);
       setState("completed");
     } catch (e) {
