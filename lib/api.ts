@@ -9,20 +9,22 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
     const { getSupabase } = await import('@/lib/supabase');
     const supabase = getSupabase();
 
-    // Fast path — session already in memory
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.access_token) {
-      return { Authorization: `Bearer ${session.access_token}` };
-    }
-
-    // Slow path — session not yet restored from cookies; wait up to 3 s
+    // Register listener BEFORE getSession to avoid missing INITIAL_SESSION microtask
     const token = await new Promise<string | null>(resolve => {
-      const timer = setTimeout(() => { sub.unsubscribe(); resolve(null); }, 3000);
+      const timer = setTimeout(() => { sub.unsubscribe(); resolve(null); }, 5000);
       const { data: { subscription: sub } } = supabase.auth.onAuthStateChange((_e, s) => {
         if (s?.access_token) {
           clearTimeout(timer);
           sub.unsubscribe();
           resolve(s.access_token);
+        }
+      });
+      // Also check immediately — resolves fast path if session already in memory
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.access_token) {
+          clearTimeout(timer);
+          sub.unsubscribe();
+          resolve(session.access_token);
         }
       });
     });
