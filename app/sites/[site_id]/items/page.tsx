@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSignedUrl } from "@/hooks/useSignedUrl";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -8,7 +9,7 @@ import {
   Clock, Circle, ImageIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getSiteItems, updateDefectStatus, type DefectItem, API_BASE_URL } from "@/lib/api";
+import { getSiteItems, updateDefectStatus, type DefectItem } from "@/lib/api";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -71,9 +72,7 @@ function DefectCard({
     }
   }
 
-  const imgSrc = defect.annotated_path
-    ? `${API_BASE_URL}/static/${defect.annotated_path}?w=300`
-    : null;
+  const imgSrc = useSignedUrl(defect.job_id, defect.annotated_path ?? null);
 
   return (
     <div className="bg-white dark:bg-gray-950 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden flex flex-col sm:flex-row gap-0">

@@ -1,5 +1,23 @@
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'https://viscrete-core.shares.zrok.io';
 
+// ─── Auth helpers ─────────────────────────────────────────────────────────────
+
+/** Returns Authorization header with the current Supabase JWT, or empty object. */
+export async function getAuthHeaders(): Promise<Record<string, string>> {
+  // Dynamic import keeps api.ts usable outside the browser (e.g. during SSR)
+  if (typeof window === 'undefined') return {};
+  try {
+    const { supabase } = await import('@/lib/supabase');
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      return { Authorization: `Bearer ${session.access_token}` };
+    }
+  } catch {
+    // supabase not configured — gracefully degrade
+  }
+  return {};
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async function handleResponse<T>(res: Response): Promise<T> {
@@ -163,13 +181,17 @@ export interface ReportResponse {
 
 /** GET /api/v1/jobs/{job_id} — get full job record including status */
 export async function getJob(jobId: string): Promise<JobStatusResponse> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}`);
+  const res = await fetch(`${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}`, {
+    headers: await getAuthHeaders(),
+  });
   return handleResponse<JobStatusResponse>(res);
 }
 
 /** GET /api/v1/jobs/{job_id} — get job status including per-file list */
 export async function getJobFiles(jobId: string): Promise<FileStatusItem[]> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}`);
+  const res = await fetch(`${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}`, {
+    headers: await getAuthHeaders(),
+  });
   const data = await handleResponse<{ files?: FileStatusItem[] }>(res);
   return data.files ?? [];
 }
@@ -183,11 +205,12 @@ export async function updateLocation(
   jobId: string,
   payload: LocationUpdateRequest,
 ): Promise<void> {
+  const auth = await getAuthHeaders();
   const res = await fetch(
     `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/location`,
     {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...auth },
       body: JSON.stringify(payload),
     },
   );
@@ -196,7 +219,9 @@ export async function updateLocation(
 
 /** GET /api/v1/jobs — list all non-deleted jobs newest first */
 export async function listJobs(): Promise<JobStatusResponse[]> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/jobs`);
+  const res = await fetch(`${API_BASE_URL}/api/v1/jobs`, {
+    headers: await getAuthHeaders(),
+  });
   return handleResponse<JobStatusResponse[]>(res);
 }
 
@@ -204,6 +229,7 @@ export async function listJobs(): Promise<JobStatusResponse[]> {
 export async function deleteJob(jobId: string): Promise<void> {
   const res = await fetch(`${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}`, {
     method: 'DELETE',
+    headers: await getAuthHeaders(),
   });
   await handleResponse<unknown>(res);
 }
@@ -216,9 +242,10 @@ export async function createJob(
   siteId?: string | null,
   floor?: string | null,
 ): Promise<JobStatusResponse> {
+  const auth = await getAuthHeaders();
   const res = await fetch(`${API_BASE_URL}/api/v1/jobs`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...auth },
     body: JSON.stringify({
       input_type: inputType,
       site_location: siteName,
@@ -240,6 +267,7 @@ export async function validateFiles(jobId: string, files: File[]): Promise<Valid
   }
   const res = await fetch(`${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/validate`, {
     method: 'POST',
+    headers: await getAuthHeaders(),
     body: formData,
   });
   return handleResponse<ValidationResult[]>(res);
@@ -249,7 +277,7 @@ export async function validateFiles(jobId: string, files: File[]): Promise<Valid
 export async function overrideFile(jobId: string, fileId: string): Promise<FileOverrideResponse> {
   const res = await fetch(
     `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/files/${encodeURIComponent(fileId)}/override`,
-    { method: 'PATCH' },
+    { method: 'PATCH', headers: await getAuthHeaders() },
   );
   return handleResponse<FileOverrideResponse>(res);
 }
@@ -260,7 +288,7 @@ export async function replaceFile(jobId: string, fileId: string, file: File): Pr
   formData.append('file', file);
   const res = await fetch(
     `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/files/${encodeURIComponent(fileId)}`,
-    { method: 'PUT', body: formData },
+    { method: 'PUT', headers: await getAuthHeaders(), body: formData },
   );
   return handleResponse<ValidationResult>(res);
 }
@@ -276,7 +304,7 @@ export async function uploadImage(jobId: string, file: File): Promise<unknown> {
 export async function preprocessJob(jobId: string): Promise<void> {
   const res = await fetch(
     `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/preprocess`,
-    { method: 'POST' }
+    { method: 'POST', headers: await getAuthHeaders() }
   );
   if (!res.ok) {
     const errData = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
@@ -309,43 +337,19 @@ export async function detectJob(
   const query = params.size > 0 ? `?${params.toString()}` : '';
   const res = await fetch(
     `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/detect${query}`,
-    { method: 'POST' }
+    { method: 'POST', headers: await getAuthHeaders() }
   );
   return handleResponse<{ status: string; job_id: string }>(res);
 }
 
 /** GET /api/v1/jobs/{job_id}/detect — retrieve cached detection results */
 export async function getDetectResults(jobId: string): Promise<DetectResponse> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/detect`);
+  const res = await fetch(`${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/detect`, {
+    headers: await getAuthHeaders(),
+  });
   return handleResponse<DetectResponse>(res);
 }
 
-// ─── Static files ─────────────────────────────────────────────────────────────
-
-/** Build URL for original image: GET /static/{job_id}/original/{filename} */
-export function getOriginalImageUrl(jobId: string, filename: string): string {
-  return `${API_BASE_URL}/static/${encodeURIComponent(jobId)}/original/${encodeURIComponent(filename)}`;
-}
-
-/** Build URL for processed image: GET /static/{job_id}/processed/{filename} */
-export function getProcessedImageUrl(jobId: string, filename: string): string {
-  return `${API_BASE_URL}/static/${encodeURIComponent(jobId)}/processed/${encodeURIComponent(filename)}`;
-}
-
-/** Build URL for annotated image: GET /static/{job_id}/annotated/{filename} */
-export function getAnnotatedImageUrl(jobId: string, filename: string): string {
-  return `${API_BASE_URL}/static/${encodeURIComponent(jobId)}/annotated/${encodeURIComponent(filename)}`;
-}
-
-/** @deprecated — use getAnnotatedImageUrl instead */
-export async function getResultImageUrl(jobId: string, imageName: string): Promise<string> {
-  const res = await fetch(
-    `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/image?image_name=${encodeURIComponent(imageName)}`
-  );
-  if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch image`);
-  const blob = await res.blob();
-  return URL.createObjectURL(blob);
-}
 
 // ─── Remarks ──────────────────────────────────────────────────────────────────
 
@@ -361,11 +365,12 @@ export async function patchRemarks(
   jobId: string,
   remarks: Record<string, string>,
 ): Promise<RemarksResponse> {
+  const auth = await getAuthHeaders();
   const res = await fetch(
     `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/remarks`,
     {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...auth },
       body: JSON.stringify({ remarks }),
     },
   );
@@ -377,7 +382,7 @@ export async function patchRemarks(
 /** POST /api/v1/jobs/{job_id}/report — generate PDF report. Pass regenerate=true to overwrite an existing one. */
 export async function generateReport(jobId: string, regenerate = false): Promise<void> {
   const url = `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/report${regenerate ? '?regenerate=true' : ''}`;
-  const res = await fetch(url, { method: 'POST' });
+  const res = await fetch(url, { method: 'POST', headers: await getAuthHeaders() });
   if (res.status === 201 || res.status === 409) return;
   const errData = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
   throw new Error(errData.detail || `HTTP ${res.status}`);
@@ -385,8 +390,20 @@ export async function generateReport(jobId: string, regenerate = false): Promise
 
 /** GET /api/v1/jobs/{job_id}/report — fetch existing report */
 export async function getReport(jobId: string): Promise<ReportResponse> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/report`);
+  const res = await fetch(`${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/report`, {
+    headers: await getAuthHeaders(),
+  });
   return handleResponse<ReportResponse>(res);
+}
+
+/** GET /api/v1/jobs/{job_id}/report/url — get a signed URL to download the PDF */
+export async function getReportUrl(jobId: string): Promise<string> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/report/url`,
+    { headers: await getAuthHeaders() },
+  );
+  const data = await handleResponse<{ url: string }>(res);
+  return data.url;
 }
 
 // ─── Legacy helpers (kept for upload-review & results pages) ──────────────────
@@ -402,7 +419,9 @@ export interface ValidateImagesResponse {
 }
 
 export async function validateImages(jobId: string): Promise<ValidateImagesResponse> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}`);
+  const res = await fetch(`${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}`, {
+    headers: await getAuthHeaders(),
+  });
   return handleResponse<ValidateImagesResponse>(res);
 }
 
@@ -434,9 +453,10 @@ export interface SiteUpdatePayload {
 
 /** POST /api/v1/sites */
 export async function createSite(payload: SiteCreatePayload): Promise<SiteResponse> {
+  const auth = await getAuthHeaders();
   const res = await fetch(`${API_BASE_URL}/api/v1/sites`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...auth },
     body: JSON.stringify(payload),
   });
   return handleResponse<SiteResponse>(res);
@@ -444,21 +464,26 @@ export async function createSite(payload: SiteCreatePayload): Promise<SiteRespon
 
 /** GET /api/v1/sites */
 export async function listSites(): Promise<SiteResponse[]> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/sites`);
+  const res = await fetch(`${API_BASE_URL}/api/v1/sites`, {
+    headers: await getAuthHeaders(),
+  });
   return handleResponse<SiteResponse[]>(res);
 }
 
 /** GET /api/v1/sites/{site_id} */
 export async function getSite(siteId: string): Promise<SiteResponse> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/sites/${encodeURIComponent(siteId)}`);
+  const res = await fetch(`${API_BASE_URL}/api/v1/sites/${encodeURIComponent(siteId)}`, {
+    headers: await getAuthHeaders(),
+  });
   return handleResponse<SiteResponse>(res);
 }
 
 /** PATCH /api/v1/sites/{site_id} */
 export async function updateSite(siteId: string, payload: SiteUpdatePayload): Promise<SiteResponse> {
+  const auth = await getAuthHeaders();
   const res = await fetch(`${API_BASE_URL}/api/v1/sites/${encodeURIComponent(siteId)}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...auth },
     body: JSON.stringify(payload),
   });
   return handleResponse<SiteResponse>(res);
@@ -468,13 +493,16 @@ export async function updateSite(siteId: string, payload: SiteUpdatePayload): Pr
 export async function deleteSite(siteId: string): Promise<void> {
   const res = await fetch(`${API_BASE_URL}/api/v1/sites/${encodeURIComponent(siteId)}`, {
     method: 'DELETE',
+    headers: await getAuthHeaders(),
   });
   await handleResponse<unknown>(res);
 }
 
 /** GET /api/v1/sites/{site_id}/jobs */
 export async function getJobsForSite(siteId: string): Promise<JobStatusResponse[]> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/sites/${encodeURIComponent(siteId)}/jobs`);
+  const res = await fetch(`${API_BASE_URL}/api/v1/sites/${encodeURIComponent(siteId)}/jobs`, {
+    headers: await getAuthHeaders(),
+  });
   return handleResponse<JobStatusResponse[]>(res);
 }
 
@@ -525,7 +553,10 @@ export async function getSiteItems(siteId: string, filters?: SiteItemsFilter): P
   if (filters?.defect_type) params.set('defect_type',  filters.defect_type);
   if (filters?.item_status) params.set('item_status',  filters.item_status);
   const qs = params.toString();
-  const res = await fetch(`${API_BASE_URL}/api/v1/sites/${encodeURIComponent(siteId)}/items${qs ? `?${qs}` : ''}`);
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/sites/${encodeURIComponent(siteId)}/items${qs ? `?${qs}` : ''}`,
+    { headers: await getAuthHeaders() },
+  );
   return handleResponse<SiteDefectsResponse>(res);
 }
 
@@ -536,11 +567,12 @@ export async function updateDefectStatus(
   itemStatus: 'open' | 'in_progress' | 'resolved',
   note = '',
 ): Promise<DefectItem> {
+  const auth = await getAuthHeaders();
   const res = await fetch(
     `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/defects/${encodeURIComponent(defectId)}/status`,
     {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...auth },
       body: JSON.stringify({ item_status: itemStatus, note }),
     },
   );
@@ -553,11 +585,12 @@ export async function setFileLocation(
   fileId: string,
   location: { floor?: string | null; room?: string | null; area_tag?: string | null },
 ): Promise<void> {
+  const auth = await getAuthHeaders();
   const res = await fetch(
     `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/files/${encodeURIComponent(fileId)}/location`,
     {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...auth },
       body: JSON.stringify(location),
     },
   );
@@ -566,13 +599,34 @@ export async function setFileLocation(
 
 /** POST /api/v1/jobs/{job_id}/site */
 export async function assignJobToSite(jobId: string, siteId: string | null): Promise<void> {
+  const auth = await getAuthHeaders();
   const res = await fetch(
     `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/site`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...auth },
       body: JSON.stringify({ site_id: siteId }),
     },
   );
   await handleResponse<unknown>(res);
+}
+
+/** GET /api/v1/files/{file_id}/url — get a signed URL for a file by its file_id */
+export async function getFileUrl(fileId: string): Promise<string> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/files/${encodeURIComponent(fileId)}/url`,
+    { headers: await getAuthHeaders() },
+  );
+  const data = await handleResponse<{ url: string }>(res);
+  return data.url;
+}
+
+/** GET /api/v1/jobs/{job_id}/storage/url?key=... — get a signed URL for any storage key owned by a job */
+export async function getJobStorageUrl(jobId: string, key: string): Promise<string> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/storage/url?key=${encodeURIComponent(key)}`,
+    { headers: await getAuthHeaders() },
+  );
+  const data = await handleResponse<{ url: string }>(res);
+  return data.url;
 }

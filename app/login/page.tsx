@@ -3,9 +3,10 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ModeToggle } from '@/components/ui/mode-toggle';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/lib/supabase';
 
 const inputCls = `w-full px-4 py-3 rounded-xl text-sm
   border border-gray-200 dark:border-gray-700
@@ -17,6 +18,8 @@ const inputCls = `w-full px-4 py-3 rounded-xl text-sm
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get('redirectedFrom') ?? '/upload';
   const [mode, setMode] = useState<'login' | 'signup'>('login');
 
   // Login fields
@@ -36,10 +39,6 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // Hardcoded credentials — replaced with Supabase signInWithPassword in Phase 2.5
-  const VALID_EMAIL = 'admin@viscrete.com';
-  const VALID_PASSWORD = 'admin123';
-
   const handleModeSwitch = (next: 'login' | 'signup') => {
     setError('');
     setMode(next);
@@ -49,12 +48,12 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     setIsLoading(true);
-    await new Promise(r => setTimeout(r, 600));
-    if (email === VALID_EMAIL && password === VALID_PASSWORD) {
-      router.push('/inspection');
-    } else {
-      setError('Invalid email or password');
+    const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+    if (authError) {
+      setError(authError.message);
       setIsLoading(false);
+    } else {
+      router.push(redirectTo);
     }
   };
 
@@ -66,10 +65,19 @@ export default function LoginPage() {
       return;
     }
     setIsLoading(true);
-    await new Promise(r => setTimeout(r, 600));
-    // Replaced with Supabase signUp in Phase 2.5
-    setError('Sign-up not yet connected. Check back after Phase 2.5.');
-    setIsLoading(false);
+    const { error: authError } = await supabase.auth.signUp({
+      email: suEmail,
+      password: suPassword,
+      options: { data: { inspector_name: name } },
+    });
+    if (authError) {
+      setError(authError.message);
+      setIsLoading(false);
+    } else {
+      setError('');
+      setMode('login');
+      setIsLoading(false);
+    }
   };
 
   return (

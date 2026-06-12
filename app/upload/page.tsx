@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, Suspense } from "react";
+import { useFileUrl } from "@/hooks/useSignedUrl";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -14,7 +15,6 @@ import {
   updateLocation,
   listSites,
   createSite,
-  API_BASE_URL,
   type JobStatusResponse,
   type ValidationResult,
   type LocationUpdateRequest,
@@ -1419,7 +1419,7 @@ export default function UploadPage() {
 
 function ImagePreviewModal({ result, onClose }: { result: ValidationResult; onClose: () => void }) {
   const isLowQuality = result.laplacian_score < result.blur_threshold;
-  const imageUrl = result.original_path ? `${API_BASE_URL}/static/${result.original_path}?w=1280` : null;
+  const imageUrl = useFileUrl(result.file_id ?? null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -1720,9 +1720,7 @@ function CarouselResultView({
   onReplace?: (file: File) => void;
 }) {
   const [imgLoading, setImgLoading] = useState(true);
-  const imageUrl = result.original_path
-    ? `${API_BASE_URL}/static/${result.original_path}?w=1280`
-    : null;
+  const imageUrl = useFileUrl(result.file_id ?? null);
 
   useEffect(() => { setImgLoading(true); }, [imageUrl]);
 

@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import {
   generateReport,
   patchRemarks,
+  getJobStorageUrl,
   type DetectResponse,
   type Detection,
 } from "@/lib/api";
@@ -151,6 +152,7 @@ export default function ResultPage() {
 
   const [fileIdToCarouselIndex, setFileIdToCarouselIndex] = useState<Record<string, number>>({});
   const [carouselIndexToProcessedPath, setCarouselIndexToProcessedPath] = useState<Record<number, string>>({});
+  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [highlightedDetection, setHighlightedDetection] = useState<Detection | null>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -507,6 +509,28 @@ export default function ResultPage() {
   const annotatedPaths: string[] = flatData?.annotated_paths ?? [];
   const totalImages = annotatedPaths.length;
 
+  // Fetch signed URLs for all carousel images (processed paths preferred)
+  useEffect(() => {
+    if (!jobId || !annotatedPaths.length) return;
+    const keysToFetch = new Set<string>();
+    annotatedPaths.forEach((annotatedPath, idx) => {
+      const processedPath = carouselIndexToProcessedPath[idx];
+      keysToFetch.add(processedPath ?? annotatedPath
+        .replace('/annotated/', '/processed/')
+        .replace(/_annotated(\.[^.]+)$/, '$1'));
+    });
+    Promise.all(
+      [...keysToFetch].map(async key => {
+        try { return [key, await getJobStorageUrl(jobId, key)] as [string, string]; }
+        catch { return null; }
+      })
+    ).then(pairs => {
+      const valid = pairs.filter(Boolean) as [string, string][];
+      if (valid.length) setSignedUrls(prev => ({ ...prev, ...Object.fromEntries(valid) }));
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobId, annotatedPaths, carouselIndexToProcessedPath]);
+
   const goToPrevious = () => setCurrentImageIndex(prev => (prev === 0 ? totalImages - 1 : prev - 1));
   const goToNext = () => setCurrentImageIndex(prev => (prev === totalImages - 1 ? 0 : prev + 1));
 
@@ -530,17 +554,14 @@ export default function ResultPage() {
 
   const currentAnnotatedPath = annotatedPaths[currentImageIndex];
 
-  // Use processed_path from job status (exact extension); fall back to
-  // string-derived path only when the map hasn't populated yet.
+  // Use processed_path from job status (exact extension); fall back to derived key.
   const currentImageSrc = currentAnnotatedPath
     ? (() => {
         const processedPath = carouselIndexToProcessedPath[currentImageIndex];
-        if (processedPath) return `${API_BASE_URL}/static/${processedPath}?w=1280`;
-        return `${API_BASE_URL}/static/${
-          currentAnnotatedPath
-            .replace('/annotated/', '/processed/')
-            .replace(/_annotated(\.[^.]+)$/, '$1')
-        }?w=1280`;
+        const storageKey = processedPath ?? currentAnnotatedPath
+          .replace('/annotated/', '/processed/')
+          .replace(/_annotated(\.[^.]+)$/, '$1');
+        return signedUrls[storageKey] ?? null;
       })()
     : null;
 
@@ -550,7 +571,7 @@ export default function ResultPage() {
     if (currentImageSrc) setImageLoading(true);
   }, [currentImageSrc]);
 
-  // Prefetch the next and previous images so navigation feels instant
+  // Prefetch adjacent images using already-resolved signed URLs
   useEffect(() => {
     if (totalImages < 2) return;
     const indices = [
@@ -561,14 +582,12 @@ export default function ResultPage() {
       const path = annotatedPaths[idx];
       if (!path) continue;
       const processedPath = carouselIndexToProcessedPath[idx];
-      const src = processedPath
-        ? `${API_BASE_URL}/static/${processedPath}?w=1280`
-        : `${API_BASE_URL}/static/${path.replace('/annotated/', '/processed/').replace(/_annotated(\.[^.]+)$/, '$1')}?w=1280`;
-      const img = new Image();
-      img.src = src;
+      const storageKey = processedPath ?? path.replace('/annotated/', '/processed/').replace(/_annotated(\.[^.]+)$/, '$1');
+      const src = signedUrls[storageKey];
+      if (src) { const img = new Image(); img.src = src; }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentImageIndex, totalImages]);
+  }, [currentImageIndex, totalImages, signedUrls]);
 
   // ResizeObserver — fires after every layout change to the img element
   // (window.resize misses flex-layout reflows and gives stale dimensions)

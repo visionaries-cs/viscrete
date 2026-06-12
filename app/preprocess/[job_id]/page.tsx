@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useSignedUrl } from "@/hooks/useSignedUrl";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -156,21 +157,25 @@ function makePendingSteps(names: string[]): StepState[] {
 // ─── BeforeAfterToggle ────────────────────────────────────────────────────────
 
 function BeforeAfterToggle({
-  original,
-  processed,
+  jobId,
+  originalKey,
+  processedKey,
   label,
   ciiScore,
   originalContrast,
   processedContrast,
 }: {
-  original: string;
-  processed: string;
+  jobId: string;
+  originalKey: string;
+  processedKey: string;
   label: string;
   ciiScore?: number | null;
   originalContrast?: number | null;
   processedContrast?: number | null;
 }) {
   const [showProcessed, setShowProcessed] = useState(false);
+  const original = useSignedUrl(jobId, originalKey);
+  const processed = useSignedUrl(jobId, processedKey);
   const activeContrast = showProcessed ? processedContrast : originalContrast;
 
   return (
@@ -225,9 +230,14 @@ function BeforeAfterToggle({
         </div>
       </div>
       <div className="relative overflow-hidden bg-black" style={{ aspectRatio: "16/9" }}>
+        {(!original && !processed) && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-6 h-6 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={original}
+          src={original ?? undefined}
           alt="Original"
           decoding="async"
           className={cn(
@@ -238,7 +248,7 @@ function BeforeAfterToggle({
         />
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={processed}
+          src={processed ?? undefined}
           alt="Processed"
           decoding="async"
           className={cn(
@@ -1223,12 +1233,10 @@ export default function PreprocessPage() {
         const cii = ciiByFileId.get(f.file_id) ?? null;
         return {
           label: f.filename,
-          original: f.original_path
-            ? `${API_BASE_URL}/static/${f.original_path}?w=1280`
-            : `${API_BASE_URL}/static/${encodeURIComponent(job_id)}/original/${storedName}?w=1280`,
-          processed: f.processed_path
-            ? `${API_BASE_URL}/static/${f.processed_path}?w=1280`
-            : `${API_BASE_URL}/static/${encodeURIComponent(job_id)}/processed/${storedName}?w=1280`,
+          originalKey: (f as unknown as Record<string, string>).original_path
+            ?? `${job_id}/original/${storedName}`,
+          processedKey: (f as unknown as Record<string, string>).processed_path
+            ?? `${job_id}/processed/${storedName}`,
           ciiScore: cii?.cii_score ?? null,
           originalContrast: cii?.original_contrast ?? null,
           processedContrast: cii?.processed_contrast ?? null,
@@ -1406,17 +1414,18 @@ export default function PreprocessPage() {
                   {imageFiles.map(
                     ({
                       label,
-                      original,
-                      processed,
+                      originalKey,
+                      processedKey,
                       ciiScore,
                       originalContrast,
                       processedContrast,
                     }) => (
                       <BeforeAfterToggle
                         key={label}
+                        jobId={job_id}
                         label={label}
-                        original={original}
-                        processed={processed}
+                        originalKey={originalKey}
+                        processedKey={processedKey}
                         ciiScore={ciiScore}
                         originalContrast={originalContrast}
                         processedContrast={processedContrast}

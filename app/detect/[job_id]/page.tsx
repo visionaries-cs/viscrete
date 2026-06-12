@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useSignedUrl } from "@/hooks/useSignedUrl";
 import { useParams, useRouter } from "next/navigation";
 import {
   detectJob,
@@ -8,9 +9,9 @@ import {
   generateReport,
   getJobFiles,
   setFileLocation,
+  API_BASE_URL,
   type Detection,
   type FileStatusItem,
-  API_BASE_URL,
 } from "@/lib/api";
 import {
   ArrowLeft,
@@ -279,6 +280,7 @@ export default function DetectPage() {
                   {annotatedPaths.map(path => (
                     <AnnotatedImageCard
                       key={path}
+                      jobId={job_id}
                       path={path}
                     />
                   ))}
@@ -487,19 +489,19 @@ function LocationAssignPanel({
 
 // ─── Annotated Image Card ─────────────────────────────────────────────────────
 
-function AnnotatedImageCard({ path }: { path: string }) {
-  const src = `${API_BASE_URL}/static/${path}?w=400`;
+function AnnotatedImageCard({ jobId, path }: { jobId: string; path: string }) {
+  const src = useSignedUrl(jobId, path);
   const label = path.split("/").pop() ?? path;
 
   return (
     <div className="bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
-      <div className="aspect-video bg-gray-100 dark:bg-gray-900 relative overflow-hidden">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={src}
-          alt={label}
-          className="w-full h-full object-cover"
-        />
+      <div className="aspect-video bg-gray-100 dark:bg-gray-900 relative overflow-hidden flex items-center justify-center">
+        {src ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={src} alt={label} className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-6 h-6 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+        )}
       </div>
       <div className="px-3 py-2.5">
         <span className="text-xs text-gray-600 dark:text-gray-400 truncate block font-medium">{label}</span>
