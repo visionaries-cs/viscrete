@@ -241,8 +241,8 @@ function LoginContent() {
               ))}
             </div>
 
-            {/* Sliding form container */}
-            <div className="overflow-hidden">
+            {/* Sliding form container — p-0.5 gives focus rings room inside the overflow clip */}
+            <div className="overflow-hidden p-0.5">
               <div
                 className="flex transition-transform duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]"
                 style={{ width: '200%', transform: mode === 'login' ? 'translateX(0)' : 'translateX(-50%)' }}
