@@ -692,7 +692,7 @@ function UploadPageInner() {
   const pagedResults = filteredResults.slice((resultsPage - 1) * RESULTS_PER_PAGE, resultsPage * RESULTS_PER_PAGE);
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#0a0a0a]">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#14171e]">
       {/* Site Picker Modal */}
       <SitePickerModal
         open={sitePickerOpen}

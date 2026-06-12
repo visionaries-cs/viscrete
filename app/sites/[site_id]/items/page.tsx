@@ -189,7 +189,7 @@ export default function SiteItemsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#14171e]">
       {/* Header */}
       <header className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center gap-4">

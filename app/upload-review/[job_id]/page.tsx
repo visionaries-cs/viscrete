@@ -183,7 +183,7 @@ export default function UploadReviewPage() {
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#0a0a0a]">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#14171e]">
 
       {/* ── Location picker modal (shared across all three modes) ──────────── */}
       {modalCtx !== null && (

@@ -215,7 +215,7 @@ function LoginContent() {
       </div>
 
       {/* ── RIGHT PANEL — form ────────────────────────────────── */}
-      <div className="flex-1 flex flex-col min-w-0 bg-gray-50 dark:bg-[#0a0a0a]">
+      <div className="flex-1 flex flex-col min-w-0 bg-gray-50 dark:bg-[#14171e]">
 
         {/* Form area — vertically centered */}
         <div className="flex-1 flex items-center justify-center px-8 py-10">

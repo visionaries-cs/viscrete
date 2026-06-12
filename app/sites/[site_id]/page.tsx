@@ -845,7 +845,7 @@ export default function SiteDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-[#0a0a0a] flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-[#14171e] flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
       </div>
     );
@@ -853,7 +853,7 @@ export default function SiteDetailPage() {
 
   if (error || !site) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-[#0a0a0a] flex items-center justify-center p-6">
+      <div className="min-h-screen bg-gray-50 dark:bg-[#14171e] flex items-center justify-center p-6">
         <div className="text-center">
           <AlertCircle className="w-10 h-10 text-red-400 mx-auto mb-3" />
           <p className="text-gray-700 dark:text-gray-300 mb-4">{error ?? "Site not found"}</p>
@@ -864,7 +864,7 @@ export default function SiteDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#0a0a0a]">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#14171e]">
       {/* Header */}
       <header className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#111]">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 flex items-center gap-3 sm:gap-4">

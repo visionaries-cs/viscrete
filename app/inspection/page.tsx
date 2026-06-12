@@ -191,7 +191,7 @@ export default function InspectionPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#0a0a0a]">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#14171e]">
       {/* Header */}
       <header className="fixed top-0 left-0 right-0 z-50
                          border-b border-emerald-100 dark:border-[#2ca75d]/10

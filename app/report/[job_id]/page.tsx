@@ -64,7 +64,7 @@ export default function ReportPage() {
   }, [job_id]);
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex flex-col">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#14171e] flex flex-col">
       <main className="flex-1 flex flex-col">
         {/* Checking job status */}
         {state === "checking" && (

@@ -44,7 +44,7 @@ function ForgotPasswordContent() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-[#0a0a0a] px-4">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-[#14171e] px-4">
       <div className="w-full max-w-sm">
         <Link
           href="/login"

@@ -310,7 +310,7 @@ function FaqItem({ q, a }: { q: string; a: string }) {
 
 export default function InstructionsPage() {
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#14171e]">
 
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#111] backdrop-blur-md">
