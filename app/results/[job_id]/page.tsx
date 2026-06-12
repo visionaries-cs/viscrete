@@ -156,7 +156,7 @@ export default function ResultPage() {
   const [origSize, setOrigSize] = useState<{ w: number; h: number } | null>(null);
 
   const [fileIdToCarouselIndex, setFileIdToCarouselIndex] = useState<Record<string, number>>({});
-  const [carouselIndexToProcessedPath, setCarouselIndexToProcessedPath] = useState<Record<number, string>>({});
+  const [fileIdToProcessedPath, setFileIdToProcessedPath] = useState<Record<string, string>>({});
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [highlightedDetection, setHighlightedDetection] = useState<Detection | null>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -254,9 +254,7 @@ export default function ResultPage() {
           // Build file GPS map and carousel index map
           if (Array.isArray(job.files)) {
             const gpsMap: Record<string, FileGpsEntry> = {};
-            const indexMap: Record<string, number> = {};
-            const processedPathMap: Record<number, string> = {};
-            let carouselIdx = 0;
+            const procByFileId: Record<string, string> = {};
             for (const f of job.files as Array<{ file_id: string; filename?: string; processed_path?: string | null; gps_latitude?: number; gps_longitude?: number; location_label?: string }>) {
               gpsMap[f.file_id] = {
                 filename: f.filename ?? f.file_id,
@@ -264,13 +262,10 @@ export default function ResultPage() {
                 gps_longitude: f.gps_longitude ?? null,
                 location_label: f.location_label ?? null,
               };
-              const idx = carouselIdx++;
-              indexMap[f.file_id] = idx;
-              if (f.processed_path) processedPathMap[idx] = f.processed_path;
+              if (f.processed_path) procByFileId[f.file_id] = f.processed_path;
             }
             setFileGpsMap(gpsMap);
-            setFileIdToCarouselIndex(indexMap);
-            setCarouselIndexToProcessedPath(processedPathMap);
+            setFileIdToProcessedPath(procByFileId);
           }
           // Load any previously saved remarks
           if (job.remarks && typeof job.remarks === 'object') {
@@ -514,12 +509,32 @@ export default function ResultPage() {
   const annotatedPaths: string[] = flatData?.annotated_paths ?? [];
   const totalImages = annotatedPaths.length;
 
+  // Extract file_id from an annotated storage key like "{job_id}/annotated/{file_id}_annotated.jpg"
+  function fileIdFromAnnotatedPath(path: string): string {
+    return (path.split('/').pop() ?? '').split('_annotated')[0];
+  }
+
+  // Rebuild fileIdToCarouselIndex from annotated_paths so table-row clicks navigate
+  // to the correct carousel slot (annotated_paths only contains files with detections,
+  // so positional index from job.files would be misaligned).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const idxMap: Record<string, number> = {};
+    annotatedPaths.forEach((path, idx) => {
+      const fid = fileIdFromAnnotatedPath(path);
+      if (fid) idxMap[fid] = idx;
+    });
+    setFileIdToCarouselIndex(idxMap);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [annotatedPaths.join(',')]);
+
   // Fetch signed URLs for all carousel images (processed paths preferred)
   useEffect(() => {
     if (!jobId || !annotatedPaths.length) return;
     const keysToFetch = new Set<string>();
-    annotatedPaths.forEach((annotatedPath, idx) => {
-      const processedPath = carouselIndexToProcessedPath[idx];
+    annotatedPaths.forEach((annotatedPath) => {
+      const fid = fileIdFromAnnotatedPath(annotatedPath);
+      const processedPath = fid ? fileIdToProcessedPath[fid] : undefined;
       keysToFetch.add(processedPath ?? annotatedPath
         .replace('/annotated/', '/processed/')
         .replace(/_annotated(\.[^.]+)$/, '$1'));
@@ -534,7 +549,7 @@ export default function ResultPage() {
       if (valid.length) setSignedUrls(prev => ({ ...prev, ...Object.fromEntries(valid) }));
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobId, annotatedPaths, carouselIndexToProcessedPath]);
+  }, [jobId, annotatedPaths, fileIdToProcessedPath]);
 
   const goToPrevious = () => setCurrentImageIndex(prev => (prev === 0 ? totalImages - 1 : prev - 1));
   const goToNext = () => setCurrentImageIndex(prev => (prev === totalImages - 1 ? 0 : prev + 1));
@@ -559,10 +574,11 @@ export default function ResultPage() {
 
   const currentAnnotatedPath = annotatedPaths[currentImageIndex];
 
-  // Use processed_path from job status (exact extension); fall back to derived key.
+  // Use processed_path from job status (keyed by file_id); fall back to derived key.
   const currentImageSrc = currentAnnotatedPath
     ? (() => {
-        const processedPath = carouselIndexToProcessedPath[currentImageIndex];
+        const fid = fileIdFromAnnotatedPath(currentAnnotatedPath);
+        const processedPath = fid ? fileIdToProcessedPath[fid] : undefined;
         const storageKey = processedPath ?? currentAnnotatedPath
           .replace('/annotated/', '/processed/')
           .replace(/_annotated(\.[^.]+)$/, '$1');
@@ -586,7 +602,8 @@ export default function ResultPage() {
     for (const idx of indices) {
       const path = annotatedPaths[idx];
       if (!path) continue;
-      const processedPath = carouselIndexToProcessedPath[idx];
+      const fid = fileIdFromAnnotatedPath(path);
+      const processedPath = fid ? fileIdToProcessedPath[fid] : undefined;
       const storageKey = processedPath ?? path.replace('/annotated/', '/processed/').replace(/_annotated(\.[^.]+)$/, '$1');
       const src = signedUrls[storageKey];
       if (src) { const img = new Image(); img.src = src; }
@@ -624,10 +641,12 @@ export default function ResultPage() {
     img.src = fullResUrl;
   }, [currentImageSrc]);
 
-  // Resolve the file_id of whichever image is currently shown
-  const currentFileId = annotatedPaths.length === 1
-    ? flatData?.file_id
-    : Object.entries(fileIdToCarouselIndex).find(([, idx]) => idx === currentImageIndex)?.[0];
+  // Resolve the file_id of whichever image is currently shown — extracted
+  // directly from the annotated path so it stays correct even when only a
+  // subset of files have detections.
+  const currentFileId = currentAnnotatedPath
+    ? (fileIdFromAnnotatedPath(currentAnnotatedPath) || (flatData?.file_id ?? null))
+    : (flatData?.file_id ?? null);
 
   // While a highlight is active, show only that exact detection (reference equality).
   // Otherwise filter by current image and visible defect classes.
@@ -1155,7 +1174,7 @@ export default function ResultPage() {
               {/* Filename label */}
               {currentAnnotatedPath && (
                 <p className="text-center text-xs font-mono text-gray-500 dark:text-gray-400 mb-3 truncate">
-                  {currentAnnotatedPath.split('/').pop()}
+                  {(currentFileId ? fileGpsMap[currentFileId]?.filename : undefined) ?? currentAnnotatedPath.split('/').pop()}
                 </p>
               )}
 
