@@ -1061,93 +1061,74 @@ export default function ResultPage() {
         <div className={cn("flex flex-1 flex-col lg:flex-row", sidebarSide === 'left' && "lg:flex-row-reverse")}>
           {/* Main Image Viewer */}
           <div className="flex-1 min-w-0 bg-gray-100 dark:bg-gray-900 flex flex-col">
-            {/* Overlay Controls */}
-            <div className="flex justify-center pt-4 md:pt-6 px-4 md:px-6">
-              <div className="bg-white/90 backdrop-blur-sm border border-gray-200 dark:bg-gray-950/90 dark:border-gray-700 rounded-lg px-3 sm:px-6 py-3 flex flex-col gap-3 w-full max-w-2xl max-h-[60vh] overflow-y-auto">
+            {/* Controls — two boxes side by side above the carousel */}
+            <div className="flex flex-col sm:flex-row gap-3 pt-4 md:pt-5 px-4 md:px-6">
 
-                {/* Per-class sensitivity selector — collapsible accordion */}
-                <div className="w-full">
-                  {/* Accordion header */}
-                  <button
-                    onClick={() => setSensitivityOpen(o => !o)}
-                    className="w-full flex items-center justify-between gap-2 cursor-pointer group"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="text-gray-500 dark:text-gray-400 text-sm uppercase tracking-wider shrink-0">Sensitivity</span>
-                      {isRunning && <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500 shrink-0" />}
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {!sensitivityOpen && (
-                        <span className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">
-                          {Object.values(sensitivity).every(v => v === Object.values(sensitivity)[0])
-                            ? `All ${(Object.values(sensitivity)[0] as string).charAt(0).toUpperCase() + (Object.values(sensitivity)[0] as string).slice(1)}`
-                            : 'Custom'}
-                        </span>
-                      )}
-                      <ChevronDown className={cn('w-3.5 h-3.5 text-gray-400 transition-transform', sensitivityOpen && 'rotate-180')} />
-                    </div>
-                  </button>
-
-                  {/* Accordion body */}
-                  {sensitivityOpen && (
-                    <div className="mt-3 space-y-2">
-                      {([
-                        { cls: 'crack',    label: 'Crack',    dot: 'bg-red-500' },
-                        { cls: 'spalling', label: 'Spalling', dot: 'bg-yellow-500' },
-                        { cls: 'peeling',  label: 'Peeling',  dot: 'bg-orange-500' },
-                        { cls: 'algae',    label: 'Algae',    dot: 'bg-green-500' },
-                      ] as const).map(({ cls, label, dot }) => (
-                        <div key={cls} className="flex items-center gap-2">
-                          <div className="flex items-center gap-1.5 w-16 shrink-0">
-                            <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', dot)} />
-                            <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-300">{label}</span>
-                          </div>
-                          <div className="flex flex-1 gap-1">
-                            {(['conservative','balanced','aggressive'] as const).map(level => {
-                              const active = sensitivity[cls] === level;
-                              const activeStyle: Record<string,string> = {
-                                conservative: 'bg-blue-600 border-blue-600 text-white',
-                                balanced:     'bg-emerald-600 border-emerald-600 text-white',
-                                aggressive:   'bg-orange-500 border-orange-500 text-white',
-                              };
-                              return (
-                                <button
-                                  key={level}
-                                  disabled={isRunning}
-                                  onClick={() => setSensitivity(prev => ({ ...prev, [cls]: level }))}
-                                  className={cn(
-                                    'flex-1 py-1 rounded text-[10px] font-semibold border transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed capitalize',
-                                    active
-                                      ? activeStyle[level]
-                                      : 'border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:border-gray-400 dark:hover:border-gray-500',
-                                  )}
-                                >
-                                  {level}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ))}
-                      <button
-                        disabled={isRunning}
-                        onClick={() => runDetection(sensitivity)}
-                        className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold transition cursor-pointer mt-1"
-                      >
-                        <RefreshCw className="w-3 h-3" />
-                        Re-run Detection
-                      </button>
-                      {Object.values(remarks).some(v => v) && (
-                        <p className="text-[10px] text-amber-600 dark:text-amber-400 text-center mt-1">
-                          Re-running will clear all saved notes.
-                        </p>
-                      )}
-                    </div>
-                  )}
+              {/* Box 1 — Sensitivity */}
+              <div className="bg-white/90 backdrop-blur-sm border border-gray-200 dark:bg-gray-950/90 dark:border-gray-700 rounded-lg px-4 py-3 flex flex-col gap-2.5 sm:w-60 shrink-0">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Sensitivity</span>
+                  {isRunning && <Loader2 className="w-3 h-3 animate-spin text-blue-500" />}
                 </div>
+                <div className="space-y-1.5">
+                  {([
+                    { cls: 'crack',    label: 'Crack',    dot: 'bg-red-500' },
+                    { cls: 'spalling', label: 'Spalling', dot: 'bg-yellow-500' },
+                    { cls: 'peeling',  label: 'Peeling',  dot: 'bg-orange-500' },
+                    { cls: 'algae',    label: 'Algae',    dot: 'bg-green-500' },
+                  ] as const).map(({ cls, label, dot }) => (
+                    <div key={cls} className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5 w-14 shrink-0">
+                        <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', dot)} />
+                        <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-300">{label}</span>
+                      </div>
+                      <div className="flex flex-1 gap-1">
+                        {(['conservative','balanced','aggressive'] as const).map(level => {
+                          const active = sensitivity[cls] === level;
+                          const activeStyle: Record<string,string> = {
+                            conservative: 'bg-blue-600 border-blue-600 text-white',
+                            balanced:     'bg-emerald-600 border-emerald-600 text-white',
+                            aggressive:   'bg-orange-500 border-orange-500 text-white',
+                          };
+                          return (
+                            <button
+                              key={level}
+                              disabled={isRunning}
+                              onClick={() => setSensitivity(prev => ({ ...prev, [cls]: level }))}
+                              className={cn(
+                                'flex-1 py-1 rounded text-[10px] font-semibold border transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed capitalize',
+                                active
+                                  ? activeStyle[level]
+                                  : 'border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:border-gray-400 dark:hover:border-gray-500',
+                              )}
+                            >
+                              {level.slice(0, 3)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  disabled={isRunning}
+                  onClick={() => runDetection(sensitivity)}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold transition cursor-pointer"
+                >
+                  {isRunning ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                  Re-run Detection
+                </button>
+                {Object.values(remarks).some(v => v) && (
+                  <p className="text-[10px] text-amber-600 dark:text-amber-400 text-center">
+                    Re-running will clear all saved notes.
+                  </p>
+                )}
+              </div>
 
+              {/* Box 2 — View / Overlays / Classes / Timing (open card, no wrapper close yet) */}
+              <div className="bg-white/90 backdrop-blur-sm border border-gray-200 dark:bg-gray-950/90 dark:border-gray-700 rounded-lg px-4 py-3 flex flex-col gap-3 flex-1 min-w-0">
                 {/* View mode segmented control */}
-                <div className="flex items-center gap-3 pb-3 border-b border-gray-200 dark:border-gray-700">
+                <div className="flex items-center gap-3">
                   <span className="text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider shrink-0">View</span>
                   <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-full p-0.5 gap-0.5">
                     <button
@@ -1180,46 +1161,38 @@ export default function ResultPage() {
                 {/* Overlay toggles + class pills — only relevant in overlay mode */}
                 {viewMode === 'overlay' ? (
                 <>
-                <div className="flex items-center flex-wrap gap-x-6 gap-y-2">
-                  <span className="text-gray-500 dark:text-gray-400 text-sm uppercase tracking-wider shrink-0">Overlays</span>
-
-                  {/* Bounding Boxes Toggle */}
+                <div className="flex items-center flex-wrap gap-x-4 gap-y-2 border-t border-gray-100 dark:border-gray-800 pt-2.5">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 shrink-0">Overlays</span>
                   <button
                     onClick={() => setShowBoundingBoxes(!showBoundingBoxes)}
                     className="flex items-center gap-2 text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white transition-colors"
                   >
-                    <div className={`w-10 h-6 rounded-full relative cursor-pointer transition-colors ${showBoundingBoxes ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
-                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${showBoundingBoxes ? 'right-1' : 'left-1'}`} />
+                    <div className={`w-8 h-5 rounded-full relative cursor-pointer transition-colors ${showBoundingBoxes ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                      <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${showBoundingBoxes ? 'right-0.5' : 'left-0.5'}`} />
                     </div>
-                    <Box className="w-5 h-5" />
+                    <Box className="w-4 h-4" />
                   </button>
-
-                  {/* Labels Toggle */}
                   <button
                     onClick={() => setShowLabels(!showLabels)}
                     className="flex items-center gap-2 text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white transition-colors"
                   >
-                    <div className={`w-10 h-6 rounded-full relative cursor-pointer transition-colors ${showLabels ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
-                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${showLabels ? 'right-1' : 'left-1'}`} />
+                    <div className={`w-8 h-5 rounded-full relative cursor-pointer transition-colors ${showLabels ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                      <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${showLabels ? 'right-0.5' : 'left-0.5'}`} />
                     </div>
-                    <Tag className="w-5 h-5" />
+                    <Tag className="w-4 h-4" />
                   </button>
-
-                  {/* Heatmap Toggle */}
                   <button
                     onClick={() => setShowColorOverlay(!showColorOverlay)}
                     className="flex items-center gap-2 text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white transition-colors"
                   >
-                    <div className={`w-10 h-6 rounded-full relative cursor-pointer transition-colors ${showColorOverlay ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
-                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${showColorOverlay ? 'right-1' : 'left-1'}`} />
+                    <div className={`w-8 h-5 rounded-full relative cursor-pointer transition-colors ${showColorOverlay ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                      <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${showColorOverlay ? 'right-0.5' : 'left-0.5'}`} />
                     </div>
-                    <Layers className="w-5 h-5" />
+                    <Layers className="w-4 h-4" />
                   </button>
                 </div>
-
-                {/* Row 2 — per-class toggles */}
-                <div className="flex items-center gap-2 flex-wrap border-t border-gray-200 dark:border-gray-700 pt-3">
-                  <span className="text-gray-500 dark:text-gray-500 text-xs uppercase tracking-wider mr-2">Classes</span>
+                <div className="flex items-center gap-2 flex-wrap border-t border-gray-100 dark:border-gray-800 pt-2.5">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 shrink-0">Classes</span>
                   {allDefectClasses.map(cls => {
                     const active = visibleDefects.has(cls);
                     const dot: Record<string, string> = {
@@ -1231,13 +1204,13 @@ export default function ResultPage() {
                         key={cls}
                         onClick={() => toggleDefectClass(cls)}
                         className={cn(
-                          'flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all cursor-pointer',
+                          'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all cursor-pointer',
                           active
                             ? 'bg-gray-100 border-gray-400 text-gray-900 dark:bg-gray-800 dark:border-gray-500 dark:text-white'
                             : 'bg-transparent border-gray-300 text-gray-400 dark:border-gray-700 dark:text-gray-500',
                         )}
                       >
-                        <span className={cn('w-2 h-2 rounded-full', dot[cls], !active && 'opacity-40')} />
+                        <span className={cn('w-1.5 h-1.5 rounded-full', dot[cls], !active && 'opacity-40')} />
                         {cls.charAt(0).toUpperCase() + cls.slice(1)}
                       </button>
                     );
@@ -1245,14 +1218,14 @@ export default function ResultPage() {
                 </div>
                 </>
                 ) : (
-                  <p className="text-xs text-gray-400 dark:text-gray-500">
+                  <p className="text-xs text-gray-400 dark:text-gray-500 border-t border-gray-100 dark:border-gray-800 pt-2.5">
                     Annotations are rendered directly by YOLO. Click a row in the defect table to highlight a specific detection.
                   </p>
                 )}
 
-                {/* Pipeline timing — inline with controls */}
+                {/* Pipeline timing */}
                 {(preprocessDurationSec != null || detectionDurationSec != null) && (
-                  <div className="flex items-center gap-2 pt-2 border-t border-gray-200 dark:border-gray-700 flex-wrap">
+                  <div className="flex items-center gap-2 border-t border-gray-100 dark:border-gray-800 pt-2.5 flex-wrap">
                     <Clock className="w-3 h-3 text-gray-400 dark:text-gray-500 shrink-0" />
                     {preprocessDurationSec != null && (
                       <span className="text-[10px] font-mono text-gray-500 dark:text-gray-400">
