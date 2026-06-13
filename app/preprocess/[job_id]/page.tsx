@@ -964,9 +964,9 @@ export default function PreprocessPage() {
               id="btn-proceed-detection"
               onClick={() => router.push(`/results/${encodeURIComponent(job_id)}`)}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl
-                         bg-emerald-600 hover:bg-emerald-700 active:scale-95
-                         text-white text-sm font-semibold transition-all
-                         shadow-lg shadow-emerald-600/30 shrink-0 cursor-pointer"
+                         bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-500
+                         dark:bg-emerald-950/40 dark:hover:bg-emerald-950/60 dark:text-emerald-400 dark:border-emerald-600
+                         text-sm font-semibold transition-all shadow-sm active:scale-95 shrink-0 cursor-pointer"
             >
               Proceed
               <ArrowRight className="w-4 h-4" />

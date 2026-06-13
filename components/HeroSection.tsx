@@ -77,7 +77,7 @@ const HeroSection = () => {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
             <Button
               size="lg"
-              className="cursor-pointer gap-2 text-base bg-[#e5ac0c] hover:bg-[#e5ac0c]/90 text-black font-semibold"
+              className="cursor-pointer gap-2 text-base bg-yellow-50 hover:bg-yellow-100 text-yellow-700 border border-yellow-400 dark:bg-yellow-950/40 dark:hover:bg-yellow-950/60 dark:text-yellow-400 dark:border-yellow-600 font-semibold"
               onClick={handleStart}
             >
               Start Inspection

@@ -164,8 +164,10 @@ function ConfirmContent() {
               <div className="flex flex-col gap-3">
                 <Link
                   href="/login"
-                  className="w-full py-3 rounded-xl text-sm font-semibold text-white text-center
-                             bg-[#2ca75d] hover:bg-[#259150] active:scale-[0.98] transition"
+                  className="w-full py-3 rounded-xl text-sm font-semibold text-center transition border
+                             bg-green-50 hover:bg-green-100 text-green-700 border-green-500
+                             dark:bg-green-950/40 dark:hover:bg-green-950/60 dark:text-green-400 dark:border-green-600
+                             active:scale-[0.98]"
                 >
                   Back to sign in
                 </Link>

@@ -359,7 +359,9 @@ export default function InstructionsPage() {
             <Link
               href="/upload"
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg
-                         bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition"
+                         bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-400
+                         dark:bg-blue-950/40 dark:hover:bg-blue-950/60 dark:text-blue-400 dark:border-blue-600
+                         text-sm font-semibold transition"
             >
               Start Inspection
               <ArrowRight className="w-4 h-4" />
@@ -468,8 +470,9 @@ export default function InstructionsPage() {
           <Link
             href="/upload"
             className="inline-flex items-center gap-2 px-6 py-3 rounded-xl
-                       bg-blue-600 hover:bg-blue-700 text-white font-semibold transition
-                       shadow-lg shadow-blue-600/20"
+                       bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-400
+                       dark:bg-blue-950/40 dark:hover:bg-blue-950/60 dark:text-blue-400 dark:border-blue-600
+                       font-semibold transition shadow-sm"
           >
             Start Inspection
             <ArrowRight className="w-4 h-4" />

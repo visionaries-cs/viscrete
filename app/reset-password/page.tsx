@@ -186,10 +186,10 @@ function ResetPasswordContent() {
                   type="submit"
                   disabled={isLoading}
                   className={cn(
-                    'w-full py-3 rounded-xl text-sm font-semibold text-white transition-all mt-2',
+                    'w-full py-3 rounded-xl text-sm font-semibold transition-all mt-2 border',
                     isLoading
-                      ? 'bg-[#2ca75d]/50 cursor-not-allowed'
-                      : 'bg-[#2ca75d] hover:bg-[#259150] active:scale-[0.98] cursor-pointer',
+                      ? 'bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-400 border-green-500 dark:border-green-600 cursor-not-allowed opacity-50'
+                      : 'bg-green-50 hover:bg-green-100 text-green-700 border-green-500 dark:bg-green-950/40 dark:hover:bg-green-950/60 dark:text-green-400 dark:border-green-600 active:scale-[0.98] cursor-pointer',
                   )}
                 >
                   {isLoading ? (

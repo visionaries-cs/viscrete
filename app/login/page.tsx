@@ -312,8 +312,8 @@ function LoginContent() {
 
                     <div className="pt-2">
                       <button type="submit" disabled={isLoading}
-                              className={cn('w-full py-3 rounded-xl text-sm font-semibold text-black transition-all',
-                                isLoading ? 'bg-[#e5ac0c]/50 cursor-not-allowed' : 'bg-[#e5ac0c] hover:bg-[#d4a00b] active:scale-[0.99] cursor-pointer')}>
+                              className={cn('w-full py-3 rounded-xl text-sm font-semibold transition-all border',
+                                isLoading ? 'bg-yellow-50 dark:bg-yellow-950/40 text-yellow-700 dark:text-yellow-400 border-yellow-400 dark:border-yellow-600 cursor-not-allowed opacity-50' : 'bg-yellow-50 hover:bg-yellow-100 text-yellow-700 border-yellow-400 dark:bg-yellow-950/40 dark:hover:bg-yellow-950/60 dark:text-yellow-400 dark:border-yellow-600 active:scale-[0.99] cursor-pointer')}>
                         {isLoading ? (
                           <span className="flex items-center justify-center gap-2">
                             <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -429,8 +429,8 @@ function LoginContent() {
 
                     <div className="pt-2">
                       <button type="submit" disabled={isLoading}
-                              className={cn('w-full py-3 rounded-xl text-sm font-semibold text-black transition-all',
-                                isLoading ? 'bg-[#e5ac0c]/50 cursor-not-allowed' : 'bg-[#e5ac0c] hover:bg-[#d4a00b] active:scale-[0.99] cursor-pointer')}>
+                              className={cn('w-full py-3 rounded-xl text-sm font-semibold transition-all border',
+                                isLoading ? 'bg-yellow-50 dark:bg-yellow-950/40 text-yellow-700 dark:text-yellow-400 border-yellow-400 dark:border-yellow-600 cursor-not-allowed opacity-50' : 'bg-yellow-50 hover:bg-yellow-100 text-yellow-700 border-yellow-400 dark:bg-yellow-950/40 dark:hover:bg-yellow-950/60 dark:text-yellow-400 dark:border-yellow-600 active:scale-[0.99] cursor-pointer')}>
                         {isLoading ? (
                           <span className="flex items-center justify-center gap-2">
                             <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">

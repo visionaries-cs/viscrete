@@ -104,7 +104,7 @@ export default function ReportPage() {
               </p>
               <button
                 onClick={() => handleGenerateReport()}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition"
+                className="w-full bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-400 dark:bg-blue-950/40 dark:hover:bg-blue-950/60 dark:text-blue-400 dark:border-blue-600 text-sm font-semibold px-4 py-2.5 rounded-lg transition"
               >
                 Generate Report
               </button>

@@ -212,7 +212,7 @@ export default function DetectPage() {
               id="btn-generate-report"
               onClick={handleGenerateReport}
               disabled={isGenerating}
-              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs sm:text-sm font-semibold transition shrink-0"
+              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-400 dark:bg-blue-950/40 dark:hover:bg-blue-950/60 dark:text-blue-400 dark:border-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm font-semibold transition shrink-0"
             >
               {isGenerating
                 ? <><Loader2 className="w-4 h-4 animate-spin" /> <span className="hidden sm:inline">Generating…</span></>
@@ -370,7 +370,7 @@ export default function DetectPage() {
                 id="btn-generate-report-bottom"
                 onClick={handleGenerateReport}
                 disabled={isGenerating}
-                className="flex items-center gap-2 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold transition shadow-lg shadow-blue-600/20"
+                className="flex items-center gap-2 px-6 py-3 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-400 dark:bg-blue-950/40 dark:hover:bg-blue-950/60 dark:text-blue-400 dark:border-blue-600 disabled:opacity-50 font-semibold transition shadow-sm"
               >
                 {isGenerating
                   ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating Report…</>
@@ -493,7 +493,7 @@ function LocationAssignPanel({
             <button
               onClick={handleSave}
               disabled={saving}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold transition"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-400 dark:bg-blue-950/40 dark:hover:bg-blue-950/60 dark:text-blue-400 dark:border-blue-600 disabled:opacity-50 text-sm font-semibold transition"
             >
               {saving ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Saving…</> : <><Save className="w-3.5 h-3.5" />Save Locations</>}
             </button>

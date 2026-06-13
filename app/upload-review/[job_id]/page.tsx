@@ -226,7 +226,7 @@ export default function UploadReviewPage() {
             </div>
           </div>
           <Button
-            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold cursor-pointer"
+            className="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-400 dark:bg-blue-950/40 dark:hover:bg-blue-950/60 dark:text-blue-400 dark:border-blue-600 font-semibold cursor-pointer"
             onClick={() => router.push(`/preprocess/${jobId}`)}
           >
             Proceed
@@ -459,7 +459,7 @@ export default function UploadReviewPage() {
                   </p>
                 )}
                 <Button
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold cursor-pointer"
+                  className="w-full bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-400 dark:bg-blue-950/40 dark:hover:bg-blue-950/60 dark:text-blue-400 dark:border-blue-600 font-semibold cursor-pointer"
                   onClick={() => { setModalCtx("select"); setSaveError(null); setSaveSuccess(null); }}
                 >
                   <Map className="w-4 h-4 mr-2" />
@@ -486,7 +486,7 @@ export default function UploadReviewPage() {
                 </p>
               )}
               <Button
-                className="w-full bg-gray-900 hover:bg-gray-700 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100 text-white font-semibold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                className="w-full bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-400 dark:bg-gray-800/60 dark:hover:bg-gray-800 dark:text-gray-200 dark:border-gray-600 font-semibold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 onClick={() => { setModalCtx("batch"); setSaveError(null); setSaveSuccess(null); }}
                 disabled={allBatchDisabled}
               >
