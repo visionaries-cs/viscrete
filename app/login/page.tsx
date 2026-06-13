@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState, Suspense } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Mail, CheckCircle2 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ModeToggle } from '@/components/ui/mode-toggle';
 import { cn } from '@/lib/utils';
@@ -46,6 +46,7 @@ function LoginContent() {
 
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [signUpSent, setSignUpSent] = useState(false);
 
   const handleModeSwitch = (next: 'login' | 'signup') => {
     setError('');
@@ -76,13 +77,16 @@ function LoginContent() {
     const { error: authError } = await getSupabase().auth.signUp({
       email: suEmail,
       password: suPassword,
-      options: { data: { inspector_name: name } },
+      options: {
+        data: { inspector_name: name },
+        emailRedirectTo: `${window.location.origin}/confirm`,
+      },
     });
     setIsLoading(false);
     if (authError) {
       setError(authError.message);
     } else {
-      router.push('/inspection');
+      setSignUpSent(true);
     }
   };
 
@@ -328,6 +332,43 @@ function LoginContent() {
                 <div style={{ width: '50%' }}
                      className={cn('min-w-0 transition-opacity duration-300',
                        mode === 'signup' ? 'opacity-100' : 'opacity-0')}>
+
+                  {signUpSent ? (
+                    <div className="flex flex-col items-center text-center space-y-5 py-4">
+                      <div className="w-16 h-16 rounded-full bg-emerald-50 dark:bg-emerald-950/30
+                                      flex items-center justify-center ring-8 ring-emerald-50 dark:ring-emerald-950/20">
+                        <Mail className="w-7 h-7 text-[#2ca75d]" />
+                      </div>
+                      <div>
+                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                          Check your email
+                        </h2>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+                          We sent a confirmation link to{' '}
+                          <span className="font-semibold text-gray-700 dark:text-gray-300">{suEmail}</span>.
+                          Click it to activate your account.
+                        </p>
+                      </div>
+                      <div className="w-full pt-2 space-y-3">
+                        <div className="flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500
+                                        bg-gray-100 dark:bg-gray-800/60 rounded-xl px-4 py-3">
+                          <CheckCircle2 className="w-4 h-4 text-[#2ca75d] shrink-0" />
+                          Didn&apos;t get it? Check your spam folder.
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => { setSignUpSent(false); setError(''); }}
+                          className="w-full py-2.5 rounded-xl text-sm font-medium
+                                     text-gray-500 dark:text-gray-400
+                                     border border-gray-200 dark:border-gray-700
+                                     hover:border-gray-300 dark:hover:border-gray-600 transition cursor-pointer"
+                        >
+                          Use a different email
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                  <>
                   <div className="mb-6">
                     <h2 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-white mb-1.5">
                       Create account
@@ -402,6 +443,8 @@ function LoginContent() {
                       </button>
                     </div>
                   </form>
+                  </>
+                  )}
                 </div>
 
               </div>
