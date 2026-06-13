@@ -1062,7 +1062,7 @@ export default function ResultPage() {
           {/* Main Image Viewer */}
           <div className="flex-1 min-w-0 bg-gray-100 dark:bg-gray-900 flex flex-col">
             {/* Controls — two boxes side by side above the carousel */}
-            <div className="flex flex-col sm:flex-row gap-3 pt-4 md:pt-5 px-4 md:px-6">
+            <div className="flex flex-col sm:flex-row gap-3 pt-3 px-4 md:px-6">
 
               {/* Box 1 — Sensitivity */}
               <div className="bg-white/90 backdrop-blur-sm border border-gray-200 dark:bg-gray-950/90 dark:border-gray-700 rounded-lg px-4 py-3 flex flex-col gap-2.5 flex-1 min-w-0">
@@ -1251,7 +1251,7 @@ export default function ResultPage() {
             </div>
 
             {/* Image Carousel */}
-            <div ref={carouselRef} className="flex-1 flex flex-col p-4 md:p-8 min-h-0">
+            <div ref={carouselRef} className="flex-1 flex flex-col pt-3 px-4 md:px-6 pb-4 md:pb-6 min-h-0">
 
               {/* ── Image carousel ───────────────────────────────────────────── */}
               {(
