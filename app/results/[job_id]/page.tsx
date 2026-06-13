@@ -1065,7 +1065,7 @@ export default function ResultPage() {
             <div className="flex flex-col sm:flex-row gap-3 pt-4 md:pt-5 px-4 md:px-6">
 
               {/* Box 1 — Sensitivity */}
-              <div className="bg-white/90 backdrop-blur-sm border border-gray-200 dark:bg-gray-950/90 dark:border-gray-700 rounded-lg px-4 py-3 flex flex-col gap-2.5 sm:w-60 shrink-0">
+              <div className="bg-white/90 backdrop-blur-sm border border-gray-200 dark:bg-gray-950/90 dark:border-gray-700 rounded-lg px-4 py-3 flex flex-col gap-2.5 flex-1 min-w-0">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Sensitivity</span>
                   {isRunning && <Loader2 className="w-3 h-3 animate-spin text-blue-500" />}
