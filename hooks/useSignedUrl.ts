@@ -7,6 +7,7 @@ export function useSignedUrl(jobId: string | null | undefined, storageKey: strin
   const [url, setUrl] = useState<string | null>(null);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!jobId || !storageKey) { setUrl(null); return; }
     let active = true;
     getJobStorageUrl(jobId, storageKey)
@@ -23,6 +24,7 @@ export function useFileUrl(fileId: string | null | undefined): string | null {
   const [url, setUrl] = useState<string | null>(null);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!fileId) { setUrl(null); return; }
     let active = true;
     getFileUrl(fileId)

@@ -34,6 +34,7 @@ export default function LocationDisplayMap({ address }: Props) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!address) { setLoading(false); return; }
     geocode(address).then(c => { setCoords(c); setLoading(false); });
   }, [address]);

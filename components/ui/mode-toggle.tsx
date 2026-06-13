@@ -9,6 +9,7 @@ export function ModeToggle({ className }: { className?: string }) {
   const [mounted, setMounted] = useState(false);
   const { resolvedTheme, setTheme } = useTheme();
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setMounted(true); }, []);
 
   // Render a same-size placeholder to avoid layout shift

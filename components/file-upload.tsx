@@ -198,7 +198,7 @@ export default function FileUpload() {
                 id="fileUpload"
                 ref={fileInputRef}
                 className="hidden"
-                {...({ webkitdirectory: '', directory: '' } as any)}
+                {...({ webkitdirectory: '', directory: '' } as Record<string, string>)}
                 multiple
                 onChange={(e) => handleFileSelect(e.target.files)}
               />

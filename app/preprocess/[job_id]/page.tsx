@@ -1,29 +1,24 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useSignedUrl } from "@/hooks/useSignedUrl";
 import { getAuthHeaders } from "@/lib/api";
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { BeforeAfterToggle } from "@/components/preprocess/BeforeAfterToggle";
+import { ClusterCard } from "@/components/preprocess/ClusterCard";
+import { PreprocessingStepper } from "@/components/preprocess/PreprocessingStepper";
+import { PreprocessingTerminal } from "@/components/preprocess/PreprocessingTerminal";
 import {
   CheckCircle2,
   XCircle,
-  Loader2,
   ArrowLeft,
   ArrowRight,
   AlertCircle,
   Clock,
-  ChevronDown,
-  ChevronUp,
-  Terminal,
-  Copy,
-  Trash2,
-  // ChevronDown and ChevronUp used by PreprocessingTerminal
 } from "lucide-react";
 import AppNav from "@/components/AppNav";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type StepStatus = "pending" | "in_progress" | "completed" | "failed";
 type LogLevel = "info" | "warning" | "error";
@@ -106,7 +101,7 @@ interface PreprocessResult {
   cii_scores?: CiiScoreEntry[];
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "https://viscrete-core.shares.zrok.io";
@@ -127,7 +122,7 @@ const IMAGE_STEPS = [
   "CLAHE Enhancement",
 ];
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function getTimestamp(iso?: string): string {
   const d = iso ? new Date(iso) : new Date();
@@ -155,485 +150,10 @@ function makePendingSteps(names: string[]): StepState[] {
   }));
 }
 
-// ─── BeforeAfterToggle ────────────────────────────────────────────────────────
+// â”€â”€â”€ BeforeAfterToggle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-function BeforeAfterToggle({
-  jobId,
-  originalKey,
-  processedKey,
-  label,
-  ciiScore,
-  originalContrast,
-  processedContrast,
-}: {
-  jobId: string;
-  originalKey: string;
-  processedKey: string;
-  label: string;
-  ciiScore?: number | null;
-  originalContrast?: number | null;
-  processedContrast?: number | null;
-}) {
-  const [showProcessed, setShowProcessed] = useState(false);
-  const original = useSignedUrl(jobId, originalKey);
-  const processed = useSignedUrl(jobId, processedKey);
-  const activeContrast = showProcessed ? processedContrast : originalContrast;
 
-  return (
-    <div className="rounded-xl overflow-hidden border border-gray-200 dark:border-gray-800">
-      <div className="px-3 py-2 bg-gray-50 dark:bg-gray-900 flex items-center justify-between gap-2">
-        <span className="text-xs font-medium text-gray-600 dark:text-gray-400 truncate min-w-0">
-          {label}
-        </span>
-        <div className="flex items-center gap-2 shrink-0">
-          {ciiScore != null && (
-            <div
-              className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800"
-              title={`Contrast Improvement Index\nOriginal contrast: ${originalContrast?.toFixed(6) ?? "—"}\nProcessed contrast: ${processedContrast?.toFixed(6) ?? "—"}`}
-            >
-              <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wide">
-                CII
-              </span>
-              <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 font-mono tabular-nums">
-                {ciiScore.toFixed(2)}
-              </span>
-              {activeContrast != null && (
-                <span className="text-[10px] text-emerald-500/70 dark:text-emerald-500/60 font-mono tabular-nums">
-                  ({activeContrast.toFixed(4)})
-                </span>
-              )}
-            </div>
-          )}
-          <div className="flex items-center gap-1 bg-gray-200 dark:bg-gray-700 rounded-lg p-0.5">
-            <button
-              onClick={() => setShowProcessed(false)}
-              className={cn(
-                "px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all",
-                !showProcessed
-                  ? "bg-white dark:bg-gray-900 text-gray-800 dark:text-white shadow-sm"
-                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-              )}
-            >
-              Original
-            </button>
-            <button
-              onClick={() => setShowProcessed(true)}
-              className={cn(
-                "px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all",
-                showProcessed
-                  ? "bg-white dark:bg-gray-900 text-gray-800 dark:text-white shadow-sm"
-                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-              )}
-            >
-              Processed
-            </button>
-          </div>
-        </div>
-      </div>
-      <div className="relative overflow-hidden bg-black" style={{ aspectRatio: "16/9" }}>
-        {(!original && !processed) && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-6 h-6 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
-          </div>
-        )}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={original ?? undefined}
-          alt="Original"
-          decoding="async"
-          className={cn(
-            "absolute inset-0 w-full h-full object-contain transition-opacity duration-300",
-            showProcessed ? "opacity-0" : "opacity-100"
-          )}
-          draggable={false}
-        />
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={processed ?? undefined}
-          alt="Processed"
-          decoding="async"
-          className={cn(
-            "absolute inset-0 w-full h-full object-contain transition-opacity duration-300",
-            showProcessed ? "opacity-100" : "opacity-0"
-          )}
-          draggable={false}
-        />
-        <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/60 text-white text-[10px] font-semibold">
-          {showProcessed ? "PROCESSED" : "ORIGINAL"}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── ClusterCard ──────────────────────────────────────────────────────────────
-
-function ClusterCard({ info }: { info: ClusterInfo }) {
-  return (
-    <div className="bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-bold text-gray-800 dark:text-white">
-          Cluster {info.cluster_id}
-        </span>
-        <span
-          className={cn(
-            "px-2 py-0.5 rounded-full text-[11px] font-semibold",
-            info.clahe_params.source === "mocs"
-              ? "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300"
-              : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
-          )}
-        >
-          {info.clahe_params.source.toUpperCase()}
-        </span>
-      </div>
-      <div className="grid grid-cols-2 gap-2 text-xs text-gray-500 dark:text-gray-400">
-        <div>
-          <p className="text-gray-400 dark:text-gray-500">Members</p>
-          <p className="font-medium text-gray-700 dark:text-gray-300">
-            {info.member_count} images
-          </p>
-        </div>
-        <div>
-          <p className="text-gray-400 dark:text-gray-500">CLAHE Clip</p>
-          <p className="font-medium text-gray-700 dark:text-gray-300">
-            {info.clahe_params.clip_limit.toFixed(2)}
-          </p>
-        </div>
-        <div className="col-span-2">
-          <p className="text-gray-400 dark:text-gray-500">Tile Grid</p>
-          <p className="font-medium text-gray-700 dark:text-gray-300">
-            {info.clahe_params.tile_grid_size[0]} ×{" "}
-            {info.clahe_params.tile_grid_size[1]}
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── StepItem ─────────────────────────────────────────────────────────────────
-
-function StepItem({ step, isLast }: { step: StepState; isLast: boolean }) {
-  return (
-    <div className="flex gap-4">
-      {/* Icon + connector column */}
-      <div className="flex flex-col items-center">
-        <div
-          className={cn(
-            "w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-300",
-            step.status === "pending" &&
-              "border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950",
-            step.status === "in_progress" &&
-              "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 shadow-sm shadow-emerald-500/30",
-            step.status === "completed" &&
-              "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30",
-            step.status === "failed" &&
-              "border-red-500 bg-red-50 dark:bg-red-950/30"
-          )}
-        >
-          {step.status === "pending" && (
-            <span className="text-xs font-bold text-gray-400 dark:text-gray-600">
-              {step.step}
-            </span>
-          )}
-          {step.status === "in_progress" && (
-            <Loader2 className="w-3.5 h-3.5 text-emerald-500 animate-spin" />
-          )}
-          {step.status === "completed" && (
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-          )}
-          {step.status === "failed" && (
-            <XCircle className="w-3.5 h-3.5 text-red-500" />
-          )}
-        </div>
-        {!isLast && (
-          <div
-            className={cn(
-              "w-px flex-1 min-h-[1.5rem] mt-1 transition-colors duration-500",
-              step.status === "completed"
-                ? "bg-emerald-400 dark:bg-emerald-600"
-                : "bg-gray-200 dark:bg-gray-800"
-            )}
-          />
-        )}
-      </div>
-
-      {/* Content column */}
-      <div className={cn("flex-1 min-w-0", !isLast && "pb-5")}>
-        <div className="flex items-start justify-between gap-2">
-          <span
-            className={cn(
-              "text-sm font-semibold leading-5",
-              step.status === "pending" &&
-                "text-gray-400 dark:text-gray-600",
-              step.status === "in_progress" &&
-                "text-gray-900 dark:text-white",
-              step.status === "completed" &&
-                "text-gray-900 dark:text-white",
-              step.status === "failed" &&
-                "text-red-600 dark:text-red-400"
-            )}
-          >
-            {step.name}
-          </span>
-          {step.status === "completed" && step.duration_sec != null && (
-            <span className="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500 shrink-0 mt-0.5 font-mono tabular-nums">
-              <Clock className="w-3 h-3" />
-              {step.duration_sec.toFixed(2)}s
-            </span>
-          )}
-        </div>
-
-        {step.status === "completed" && step.detail && (
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-            {step.detail}
-          </p>
-        )}
-
-        {/* Step progress bar — only shown for in_progress steps with a percent */}
-        {step.status === "in_progress" && step.progress != null && (
-          <div className="mt-2 max-w-sm">
-            <div className="flex items-center justify-between text-xs mb-1">
-              <span className="text-gray-500 dark:text-gray-400 truncate min-w-0 mr-2">
-                {step.detail || "Processing…"}
-              </span>
-              <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 shrink-0 tabular-nums">
-                {step.progress}%
-              </span>
-            </div>
-            <div className="h-1.5 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-emerald-500 rounded-full transition-all duration-300 ease-out"
-                style={{ width: `${step.progress}%` }}
-              />
-            </div>
-          </div>
-        )}
-
-        {step.status === "failed" && step.error && (
-          <p className="text-xs text-red-500 dark:text-red-400 mt-0.5">
-            {step.error}
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── PreprocessingStepper ─────────────────────────────────────────────────────
-
-function PreprocessingStepper({
-  steps,
-  completedSummary,
-  elapsedSecs,
-  isRunning,
-}: {
-  steps: StepState[];
-  completedSummary: CompletedSummary | null;
-  elapsedSecs: number;
-  isRunning: boolean;
-}) {
-  if (steps.length === 0) {
-    return (
-      <div className="flex items-center gap-2 text-sm text-gray-400 dark:text-gray-600 py-4">
-        <Loader2 className="w-4 h-4 animate-spin" />
-        Connecting to pipeline…
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      {/* Vertical step list */}
-      <div>
-        {steps.map((step, i) => (
-          <StepItem key={step.step} step={step} isLast={i === steps.length - 1} />
-        ))}
-      </div>
-
-      {/* Elapsed timer while running */}
-      {isRunning && (
-        <div className="mt-4 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-          <Clock className="w-3.5 h-3.5" />
-          <span>
-            Elapsed:{" "}
-            <span className="font-mono font-semibold text-gray-700 dark:text-gray-200 tabular-nums">
-              {formatTime(elapsedSecs)}
-            </span>
-          </span>
-        </div>
-      )}
-
-      {/* Summary card after completion */}
-      {completedSummary && (
-        <div className="mt-5 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800">
-          <div className="flex items-center gap-2 mb-3">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-            <span className="text-sm font-bold text-emerald-700 dark:text-emerald-300">
-              Pipeline Complete
-            </span>
-          </div>
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <p className="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">
-                Files Processed
-              </p>
-              <p className="text-2xl font-bold font-mono text-gray-900 dark:text-white tabular-nums">
-                {completedSummary.total_processed}
-              </p>
-            </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">
-                Pipeline Type
-              </p>
-              <p className="text-sm font-bold text-gray-900 dark:text-white capitalize mt-1.5">
-                {completedSummary.pipeline_type}
-              </p>
-            </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">
-                Total Duration
-              </p>
-              <p className="text-2xl font-bold font-mono text-gray-900 dark:text-white tabular-nums">
-                {(completedSummary.duration_sec ?? 0).toFixed(2)}s
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── PreprocessingTerminal ────────────────────────────────────────────────────
-
-function PreprocessingTerminal({ lines }: { lines: TerminalLine[] }) {
-  const [collapsed, setCollapsed] = useState(false);
-  const [visibleLines, setVisibleLines] = useState<TerminalLine[]>([]);
-  const [copied, setCopied] = useState(false);
-  const lastSyncedCountRef = useRef(0);
-  const logEndRef = useRef<HTMLDivElement>(null);
-
-  // Sync new lines from parent into visibleLines
-  useEffect(() => {
-    if (lines.length > lastSyncedCountRef.current) {
-      const newLines = lines.slice(lastSyncedCountRef.current);
-      lastSyncedCountRef.current = lines.length;
-      setVisibleLines((prev) => {
-        const merged = [...prev, ...newLines];
-        return merged.length > 500 ? merged.slice(merged.length - 500) : merged;
-      });
-    }
-  }, [lines]);
-
-  // Auto-scroll to bottom on new lines
-  useEffect(() => {
-    if (!collapsed) {
-      logEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [visibleLines, collapsed]);
-
-  function handleClear() {
-    lastSyncedCountRef.current = lines.length;
-    setVisibleLines([]);
-  }
-
-  async function handleCopy() {
-    const text = lines
-      .map((l) => {
-        const tag = l.step != null ? `STEP ${l.step}` : "PIPELINE";
-        return `[${l.timestamp}] [${tag.padEnd(8)}] ${l.message}`;
-      })
-      .join("\n");
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* clipboard API unavailable */
-    }
-  }
-
-  return (
-    <div className="rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-800">
-      {/* Header bar */}
-      <div className="flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800">
-        <button
-          onClick={() => setCollapsed((c) => !c)}
-          className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition cursor-pointer"
-        >
-          <Terminal className="w-4 h-4 text-gray-400" />
-          <span>
-            {collapsed ? `Logs (${lines.length})` : "Terminal Output"}
-          </span>
-          {collapsed ? (
-            <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
-          ) : (
-            <ChevronUp className="w-3.5 h-3.5 text-gray-400" />
-          )}
-        </button>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={handleCopy}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200 transition cursor-pointer"
-          >
-            <Copy className="w-3.5 h-3.5" />
-            {copied ? "Copied!" : "Copy logs"}
-          </button>
-          <button
-            onClick={handleClear}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200 transition cursor-pointer"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            Clear
-          </button>
-        </div>
-      </div>
-
-      {/* Terminal body */}
-      {!collapsed && (
-        <div className="bg-[#0b0d10] p-4 h-72 overflow-y-auto font-mono text-[11.5px] leading-[1.65] scroll-smooth">
-          {visibleLines.length === 0 ? (
-            <span className="text-gray-600">Waiting for pipeline output…</span>
-          ) : (
-            visibleLines.map((line, i) => {
-              const tag =
-                line.step != null ? `STEP ${line.step}` : "PIPELINE";
-              const padded = tag.padEnd(8);
-              return (
-                <div key={i} className="whitespace-pre-wrap break-all">
-                  <span className="text-gray-600 select-none">
-                    [{line.timestamp}]
-                  </span>{" "}
-                  <span
-                    className={cn(
-                      "font-semibold select-none",
-                      line.step != null ? "text-blue-500" : "text-gray-500"
-                    )}
-                  >
-                    [{padded}]
-                  </span>{" "}
-                  <span
-                    className={cn(
-                      line.level === "warning" && "text-[#FACC15]",
-                      line.level === "error" && "text-[#F87171]",
-                      line.level === "info" && "text-gray-200"
-                    )}
-                  >
-                    {line.message}
-                  </span>
-                </div>
-              );
-            })
-          )}
-          <div ref={logEndRef} />
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function PreprocessPage() {
   const { job_id } = useParams<{ job_id: string }>();
@@ -655,7 +175,7 @@ export default function PreprocessPage() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Elapsed timer — driven by isRunning
+  // Elapsed timer â€” driven by isRunning
   useEffect(() => {
     if (!isRunning) {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -688,14 +208,14 @@ export default function PreprocessPage() {
     setRetryCount((c) => c + 1);
   }
 
-  // ── Master effect: fetch job + WebSocket + polling fallback ──────────────────
+  // â”€â”€ Master effect: fetch job + WebSocket + polling fallback â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     let cancelled = false;
     let ws: WebSocket | null = null;
     let pollInterval: ReturnType<typeof setInterval> | null = null;
     let receivedCompleted = false;
 
-    // ── Helpers ──────────────────────────────────────────────────────────────
+    // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     function addLine(line: TerminalLine) {
       if (cancelled) return;
@@ -715,7 +235,7 @@ export default function PreprocessPage() {
       });
     }
 
-    // ── Result fetch (called after completed event) ───────────────────────────
+    // â”€â”€ Result fetch (called after completed event) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     async function fetchResults() {
       const delays = [0, 1000, 2000, 4000];
@@ -730,8 +250,8 @@ export default function PreprocessPage() {
             { headers: await getAuthHeaders() }
           );
           if (cancelled) return;
-          if (res.status === 404) continue; // not persisted yet — retry
-          if (!res.ok) break;              // unexpected error — stop
+          if (res.status === 404) continue; // not persisted yet â€” retry
+          if (!res.ok) break;              // unexpected error â€” stop
           const r: PreprocessResult = await res.json();
           if (cancelled) return;
           setResult(r);
@@ -755,7 +275,7 @@ export default function PreprocessPage() {
       } catch { /* corrupt cache */ }
     }
 
-    // ── Polling fallback ──────────────────────────────────────────────────────
+    // â”€â”€ Polling fallback â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     function startPolling() {
       if (pollInterval) return; // already polling
@@ -804,7 +324,7 @@ export default function PreprocessPage() {
                 );
               } catch { /* quota */ }
             } else {
-              // No step details — mark all completed
+              // No step details â€” mark all completed
               setStepStates((prev) =>
                 prev.map((s) => ({ ...s, status: "completed" }))
               );
@@ -839,12 +359,12 @@ export default function PreprocessPage() {
             setGlobalError("Preprocessing failed on the server.");
             setIsRunning(false);
           }
-        } catch { /* transient network error — keep polling */ }
+        } catch { /* transient network error â€” keep polling */ }
       }, 3000);
       pollRef.current = pollInterval;
     }
 
-    // ── WebSocket message handler ─────────────────────────────────────────────
+    // â”€â”€ WebSocket message handler â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     function handleMsg(msg: Record<string, unknown>, isReconnect = false) {
       if (cancelled) return;
@@ -866,7 +386,7 @@ export default function PreprocessPage() {
             })
           );
           if (isReconnect) {
-            // Preserve steps already completed/failed — only reset still-pending ones
+            // Preserve steps already completed/failed â€” only reset still-pending ones
             setStepStates((prev) => {
               if (prev.length === 0) return initSteps;
               return initSteps.map((s, i) => {
@@ -900,7 +420,7 @@ export default function PreprocessPage() {
             step,
             name,
             level: "info",
-            message: `▶ ${name} started`,
+            message: `â–¶ ${name} started`,
           });
           break;
         }
@@ -922,13 +442,13 @@ export default function PreprocessPage() {
             step,
             name,
             level: "info",
-            message: `✓ ${name} completed in ${duration_sec}s${detail ? ` — ${detail}` : ""}`,
+            message: `âœ“ ${name} completed in ${duration_sec}s${detail ? ` â€” ${detail}` : ""}`,
           });
           break;
         }
 
         case "step_progress": {
-          // No terminal output — only update progress bar
+          // No terminal output â€” only update progress bar
           const step = msg.step as number;
           const percent = msg.percent as number;
           const detail = (msg.detail as string | null) ?? null;
@@ -985,7 +505,7 @@ export default function PreprocessPage() {
               step,
               name,
               level: "error",
-              message: `✗ ${message}`,
+              message: `âœ— ${message}`,
             });
             setIsRunning(false);
             ws?.close();
@@ -995,7 +515,7 @@ export default function PreprocessPage() {
               step,
               name,
               level: "warning",
-              message: `⚠ ${message}`,
+              message: `âš  ${message}`,
             });
           }
           break;
@@ -1021,11 +541,11 @@ export default function PreprocessPage() {
         }
 
         case "ping":
-          break; // keepalive from backend — no action needed
+          break; // keepalive from backend â€” no action needed
       }
     }
 
-    // ── Start WebSocket connection ─────────────────────────────────────────────
+    // â”€â”€ Start WebSocket connection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     function startWS(inputType: string) {
       // Pre-populate with fallback step names (overwritten once pipeline_init fires)
@@ -1047,7 +567,7 @@ export default function PreprocessPage() {
 
         ws.onopen = async () => {
           if (cancelled) { ws?.close(); return; }
-          if (isReconnect) return; // server replays buffered events — no POST needed
+          if (isReconnect) return; // server replays buffered events â€” no POST needed
           setIsRunning(true);
           try {
             const res = await fetch(
@@ -1065,7 +585,7 @@ export default function PreprocessPage() {
               return;
             }
             pipelineStarted = true;
-            // 202 → pipeline streams events via WS
+            // 202 â†’ pipeline streams events via WS
           } catch (e) {
             if (cancelled) return;
             const errMsg =
@@ -1083,25 +603,25 @@ export default function PreprocessPage() {
               JSON.parse(event.data) as Record<string, unknown>,
               isReconnect
             );
-          } catch { /* malformed JSON — ignore */ }
+          } catch { /* malformed JSON â€” ignore */ }
         };
 
         ws.onerror = () => {
-          // onclose fires after onerror — handled there
+          // onclose fires after onerror â€” handled there
         };
 
         ws.onclose = () => {
           if (receivedCompleted || cancelled) return;
-          if (!pipelineStarted) return; // POST failed or never sent — do not reconnect
+          if (!pipelineStarted) return; // POST failed or never sent â€” do not reconnect
           if (reconnectAttempts < 2) {
             reconnectAttempts++;
             const delay = reconnectAttempts * 1500;
             addPipelineLine(
-              `WebSocket closed — reconnecting in ${delay / 1000}s…`
+              `WebSocket closed â€” reconnecting in ${delay / 1000}sâ€¦`
             );
             setTimeout(() => connect(true), delay);
           } else {
-            addPipelineLine("WebSocket unavailable — switched to polling");
+            addPipelineLine("WebSocket unavailable â€” switched to polling");
             startPolling();
           }
         };
@@ -1110,7 +630,7 @@ export default function PreprocessPage() {
       connect(false);
     }
 
-    // ── Load already-complete job ─────────────────────────────────────────────
+    // â”€â”€ Load already-complete job â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     async function loadCompletedJob(data: JobStatus) {
       // Fetch from the dedicated endpoint (always authoritative)
@@ -1155,7 +675,7 @@ export default function PreprocessPage() {
             return;
           }
         }
-      } catch { /* network error — fall through to fallback */ }
+      } catch { /* network error â€” fall through to fallback */ }
 
       if (cancelled) return;
 
@@ -1186,7 +706,7 @@ export default function PreprocessPage() {
       setIsComplete(true);
     }
 
-    // ── Fetch job metadata and branch ─────────────────────────────────────────
+    // â”€â”€ Fetch job metadata and branch â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     async function fetchJob() {
       try {
@@ -1224,7 +744,7 @@ export default function PreprocessPage() {
     };
   }, [job_id, retryCount]); // retryCount forces re-run on manual retry
 
-  // ── Derived: before/after image list ─────────────────────────────────────────
+  // â”€â”€ Derived: before/after image list â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const ciiByFileId = new Map(
     (result?.cii_scores ?? []).map((e) => [e.file_id, e])
@@ -1248,7 +768,7 @@ export default function PreprocessPage() {
         };
       }) ?? [];
 
-  // ── Render ────────────────────────────────────────────────────────────────────
+  // â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#14171e]">
@@ -1273,7 +793,7 @@ export default function PreprocessPage() {
           </div>
         )}
 
-        {/* ── Section 1: Pipeline progress + stepper ──────────────────── */}
+        {/* â”€â”€ Section 1: Pipeline progress + stepper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <div className="bg-white dark:bg-gray-950 rounded-2xl border border-gray-200 dark:border-gray-800 p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -1310,13 +830,13 @@ export default function PreprocessPage() {
 
         </div>
 
-        {/* ── Section 2: Terminal log ──────────────────────────────────── */}
+        {/* â”€â”€ Section 2: Terminal log â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <PreprocessingTerminal lines={terminalLines} />
 
-        {/* ── Section 3: Results (shown after completion) ─────────────── */}
+        {/* â”€â”€ Section 3: Results (shown after completion) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         {isComplete && (
           <>
-            {/* Cluster summary + step timing — always expanded */}
+            {/* Cluster summary + step timing â€” always expanded */}
             {result && (result.cluster_info?.length > 0 || result.pipeline_steps?.length > 0) && (
               <div className="bg-white dark:bg-gray-950 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
                 <div className="flex items-center gap-3 px-4 sm:px-6 py-4 border-b border-gray-100 dark:border-gray-800">
@@ -1424,7 +944,7 @@ export default function PreprocessPage() {
         )}
       </main>
 
-      {/* Floating proceed bar — fixed at bottom once pipeline is complete */}
+      {/* Floating proceed bar â€” fixed at bottom once pipeline is complete */}
       {isComplete && (
         <div className="fixed bottom-6 left-0 right-0 z-50 flex justify-center px-4 pointer-events-none">
           <div className="pointer-events-auto flex items-center gap-4 px-5 py-3 rounded-2xl
