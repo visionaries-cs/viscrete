@@ -29,6 +29,7 @@ import {
   Download,
   Grid3x3,
   ChevronDown,
+  Archive,
   Box,
   Tag,
   Layers,
@@ -109,6 +110,7 @@ export default function ResultPage() {
   const [needsRegenerate, setNeedsRegenerate] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isZipDownloading, setIsZipDownloading] = useState(false);
   const [csvGenerated, setCsvGenerated] = useState(false);
 
   // The actual API response is flat (api.ts types are outdated):
@@ -193,8 +195,8 @@ export default function ResultPage() {
   const carouselRef = useRef<HTMLDivElement>(null);
 
   // Overlay toggles
-  const [showBoundingBoxes, setShowBoundingBoxes] = useState(true);
-  const [showLabels, setShowLabels] = useState(true);
+  const [showBoundingBoxes, setShowBoundingBoxes] = useState(false);
+  const [showLabels, setShowLabels] = useState(false);
   const [showColorOverlay, setShowColorOverlay] = useState(false);
 
   // Per-class visibility
@@ -504,6 +506,29 @@ export default function ResultPage() {
     setCsvGenerated(true);
   }
 
+  async function handleDownloadAnnotatedZip() {
+    if (!annotatedPaths.length) return;
+    setIsZipDownloading(true);
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/annotated-images.zip`,
+        { headers: await getAuthHeaders() },
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `annotated-${jobId.slice(0, 8)}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: unknown) {
+      setReportError(e instanceof Error ? e.message : 'Failed to download ZIP');
+    } finally {
+      setIsZipDownloading(false);
+    }
+  }
+
   // ── Image carousel ──────────────────────────────────────────────────────────
 
   const annotatedPaths: string[] = flatData?.annotated_paths ?? [];
@@ -528,16 +553,12 @@ export default function ResultPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [annotatedPaths.join(',')]);
 
-  // Fetch signed URLs for all carousel images (processed paths preferred)
+  // Fetch signed URLs for all carousel images (annotated images with burned-in bboxes)
   useEffect(() => {
     if (!jobId || !annotatedPaths.length) return;
     const keysToFetch = new Set<string>();
     annotatedPaths.forEach((annotatedPath) => {
-      const fid = fileIdFromAnnotatedPath(annotatedPath);
-      const processedPath = fid ? fileIdToProcessedPath[fid] : undefined;
-      keysToFetch.add(processedPath ?? annotatedPath
-        .replace('/annotated/', '/processed/')
-        .replace(/_annotated(\.[^.]+)$/, '$1'));
+      keysToFetch.add(annotatedPath);
     });
     Promise.all(
       [...keysToFetch].map(async key => {
@@ -574,16 +595,9 @@ export default function ResultPage() {
 
   const currentAnnotatedPath = annotatedPaths[currentImageIndex];
 
-  // Use processed_path from job status (keyed by file_id); fall back to derived key.
+  // Display the annotated image directly — it has bboxes burned in by the backend.
   const currentImageSrc = currentAnnotatedPath
-    ? (() => {
-        const fid = fileIdFromAnnotatedPath(currentAnnotatedPath);
-        const processedPath = fid ? fileIdToProcessedPath[fid] : undefined;
-        const storageKey = processedPath ?? currentAnnotatedPath
-          .replace('/annotated/', '/processed/')
-          .replace(/_annotated(\.[^.]+)$/, '$1');
-        return signedUrls[storageKey] ?? null;
-      })()
+    ? (signedUrls[currentAnnotatedPath] ?? null)
     : null;
 
   // Reset dimensions and mark loading when the displayed image changes
@@ -602,10 +616,7 @@ export default function ResultPage() {
     for (const idx of indices) {
       const path = annotatedPaths[idx];
       if (!path) continue;
-      const fid = fileIdFromAnnotatedPath(path);
-      const processedPath = fid ? fileIdToProcessedPath[fid] : undefined;
-      const storageKey = processedPath ?? path.replace('/annotated/', '/processed/').replace(/_annotated(\.[^.]+)$/, '$1');
-      const src = signedUrls[storageKey];
+      const src = signedUrls[path];
       if (src) { const img = new Image(); img.src = src; }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1125,10 +1136,10 @@ export default function ResultPage() {
                           const height = (cy2 - cy1) * scaleY;
 
                           // Place label above the box when there's room (top > 28px),
-                          // otherwise below. Clamp left so the label doesn't overflow
-                          // the right edge of the rendered image.
+                          // otherwise below. Always anchor at the box's left edge;
+                          // maxWidth clips text before it overflows the image boundary.
                           const labelAbove = top > 28;
-                          const labelLeft  = Math.min(left, renderedW - 120);
+                          const labelLeft  = Math.max(0, left);
 
                           const isHighlighted = !imageLoading && detection === highlightedDetection;
 
@@ -1156,6 +1167,8 @@ export default function ResultPage() {
                                   )}
                                   style={{
                                     left: labelLeft,
+                                    maxWidth: renderedW - labelLeft,
+                                    overflow: 'hidden',
                                     ...(labelAbove
                                       ? { bottom: renderedH - top + 2 }
                                       : { top: top + height + 2 }),
@@ -1605,6 +1618,23 @@ export default function ResultPage() {
                     <div>
                       <div className="font-semibold">{csvGenerated ? 'Download CSV Report' : 'Generate CSV Report'}</div>
                       <div className="text-xs text-gray-500 dark:text-gray-400">Defect data as spreadsheet</div>
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator className="bg-gray-100 dark:bg-gray-800" />
+                  <DropdownMenuLabel className="text-xs text-gray-400 dark:text-gray-500">Images</DropdownMenuLabel>
+                  <DropdownMenuItem
+                    className="text-gray-800 hover:bg-gray-100 dark:text-white dark:hover:bg-gray-800 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={handleDownloadAnnotatedZip}
+                    disabled={!annotatedPaths.length || isZipDownloading}
+                  >
+                    {isZipDownloading ? (
+                      <Loader2 className="w-4 h-4 mr-2 shrink-0 animate-spin" />
+                    ) : (
+                      <Archive className="w-4 h-4 mr-2 shrink-0" />
+                    )}
+                    <div>
+                      <div className="font-semibold">Download Annotated Images</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">All annotated images as .zip</div>
                     </div>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
