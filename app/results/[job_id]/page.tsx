@@ -41,6 +41,7 @@ import {
   X,
   Check,
   ZoomIn,
+  MessageSquare,
   Settings,
   Calendar,
   LogOut,
@@ -174,6 +175,12 @@ export default function ResultPage() {
 
   // Lightbox
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+
+  // Image comment modal
+  const [commentModalOpen, setCommentModalOpen] = useState(false);
+  const [commentDraft, setCommentDraft] = useState('');
+  const [commentSelectedDefect, setCommentSelectedDefect] = useState<string | null>(null);
+  const commentTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Per-class sensitivity selector
   type SensitivityLevel = 'conservative' | 'balanced' | 'aggressive';
@@ -435,6 +442,39 @@ export default function ResultPage() {
     } finally {
       setIsGenerating(false);
     }
+  }
+
+  function openImageComment() {
+    if (!currentFileId) return;
+    const key = `img-${currentFileId}`;
+    setCommentDraft(remarks[key] ?? '');
+    setCommentSelectedDefect(null);
+    setCommentModalOpen(true);
+    setTimeout(() => commentTextareaRef.current?.focus(), 50);
+  }
+
+  function handleCommentDefectSelect(defId: string) {
+    const mention = `[${defId}] `;
+    setCommentSelectedDefect(defId);
+    setCommentDraft(prev => {
+      if (prev.includes(mention)) return prev;
+      // Strip any existing [DEF-XXX] mention at the start and replace
+      const stripped = prev.replace(/^\[DEF-\d+\]\s*/, '');
+      return mention + stripped;
+    });
+    setTimeout(() => {
+      const ta = commentTextareaRef.current;
+      if (!ta) return;
+      ta.focus();
+      ta.setSelectionRange(ta.value.length, ta.value.length);
+    }, 20);
+  }
+
+  function saveImageComment() {
+    if (!currentFileId) return;
+    const key = `img-${currentFileId}`;
+    handleRemarkChange(key, commentDraft);
+    setCommentModalOpen(false);
   }
 
   function handleRemarkChange(defId: string, value: string) {
@@ -832,109 +872,6 @@ export default function ResultPage() {
               </span>
             )}
 
-            {/* Report export — compact navbar controls */}
-            {hasRun && detectData && (
-              <div className="flex items-center gap-1 shrink-0">
-                {/* Primary action button */}
-                <button
-                  onClick={reportGenerated ? handleDownloadPdf : needsRegenerate ? handleRegenerateReport : handleGenerateReport}
-                  disabled={isGenerating || isDownloading}
-                  className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold
-                             bg-[#e5ac0c] hover:bg-[#d9a20b] text-black transition
-                             disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
-                >
-                  {(isGenerating || isDownloading) ? (
-                    <Loader2 className="w-3 h-3 animate-spin shrink-0" />
-                  ) : reportGenerated ? (
-                    <Download className="w-3 h-3 shrink-0" />
-                  ) : (
-                    <FileText className="w-3 h-3 shrink-0" />
-                  )}
-                  {isGenerating ? 'Generating…' : isDownloading ? 'Downloading…' : reportGenerated ? 'Download PDF' : needsRegenerate ? 'Regenerate' : 'Generate Report'}
-                </button>
-                {/* Dropdown: more export options */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button className="flex items-center px-1.5 py-1.5 rounded-lg text-xs
-                                       border border-gray-200 dark:border-gray-700
-                                       bg-white dark:bg-gray-900
-                                       text-gray-600 dark:text-gray-400
-                                       hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer">
-                      <ChevronDown className="w-3.5 h-3.5" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56 bg-white border-gray-200 dark:bg-gray-900 dark:border-gray-700">
-                    <DropdownMenuLabel className="text-xs text-gray-400 dark:text-gray-500">PDF</DropdownMenuLabel>
-                    <DropdownMenuItem
-                      className="text-gray-800 hover:bg-gray-100 dark:text-white dark:hover:bg-gray-800 cursor-pointer"
-                      onClick={reportGenerated ? handleDownloadPdf : needsRegenerate ? handleRegenerateReport : handleGenerateReport}
-                    >
-                      <FileText className="w-4 h-4 mr-2 shrink-0" />
-                      <div>
-                        <div className="font-semibold">{reportGenerated ? 'Download PDF Report' : needsRegenerate ? 'Regenerate PDF Report' : 'Generate PDF Report'}</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">{reportGenerated ? 'Annotated images & summary' : needsRegenerate ? 'PDF was missing — regenerate it' : 'Create the inspection PDF'}</div>
-                      </div>
-                    </DropdownMenuItem>
-                    {reportGenerated && (
-                      <DropdownMenuItem
-                        className="text-gray-800 hover:bg-gray-100 dark:text-white dark:hover:bg-gray-800 cursor-pointer"
-                        onClick={handleViewPdf}
-                      >
-                        <ExternalLink className="w-4 h-4 mr-2 shrink-0" />
-                        <div>
-                          <div className="font-semibold">View PDF Report</div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">Open in report viewer</div>
-                        </div>
-                      </DropdownMenuItem>
-                    )}
-                    <DropdownMenuSeparator className="bg-gray-100 dark:bg-gray-800" />
-                    <DropdownMenuLabel className="text-xs text-gray-400 dark:text-gray-500">CSV</DropdownMenuLabel>
-                    <DropdownMenuItem
-                      className="text-gray-800 hover:bg-gray-100 dark:text-white dark:hover:bg-gray-800 cursor-pointer"
-                      onClick={handleDownloadCsv}
-                    >
-                      <Table2 className="w-4 h-4 mr-2 shrink-0" />
-                      <div>
-                        <div className="font-semibold">{csvGenerated ? 'Download CSV Report' : 'Generate CSV Report'}</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">Defect data as spreadsheet</div>
-                      </div>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator className="bg-gray-100 dark:bg-gray-800" />
-                    <DropdownMenuLabel className="text-xs text-gray-400 dark:text-gray-500">Images</DropdownMenuLabel>
-                    <DropdownMenuItem
-                      className="text-gray-800 hover:bg-gray-100 dark:text-white dark:hover:bg-gray-800 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                      onClick={handleDownloadAnnotatedZip}
-                      disabled={!annotatedPaths.length || isZipDownloading}
-                    >
-                      {isZipDownloading ? (
-                        <Loader2 className="w-4 h-4 mr-2 shrink-0 animate-spin" />
-                      ) : (
-                        <Archive className="w-4 h-4 mr-2 shrink-0" />
-                      )}
-                      <div>
-                        <div className="font-semibold">Download Annotated Images</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">All annotated images as .zip</div>
-                      </div>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                {/* Regenerate icon — only once report exists */}
-                {reportGenerated && (
-                  <button
-                    onClick={handleRegenerateReport}
-                    disabled={isGenerating}
-                    title="Regenerate PDF Report"
-                    className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-700
-                               text-gray-500 dark:text-gray-400
-                               hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer
-                               disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                  </button>
-                )}
-              </div>
-            )}
-
             <ModeToggle />
             <button
               onClick={async () => { await getSupabase().auth.signOut(); router.push('/login'); }}
@@ -1086,9 +1023,9 @@ export default function ResultPage() {
                         {(['conservative','balanced','aggressive'] as const).map(level => {
                           const active = sensitivity[cls] === level;
                           const activeStyle: Record<string,string> = {
-                            conservative: 'bg-blue-600 border-blue-600 text-white',
-                            balanced:     'bg-emerald-600 border-emerald-600 text-white',
-                            aggressive:   'bg-orange-500 border-orange-500 text-white',
+                            conservative: 'bg-green-50 border-green-500 text-green-700 dark:bg-green-950/40 dark:border-green-600 dark:text-green-400',
+                            balanced:     'bg-green-50 border-green-500 text-green-700 dark:bg-green-950/40 dark:border-green-600 dark:text-green-400',
+                            aggressive:   'bg-green-50 border-green-500 text-green-700 dark:bg-green-950/40 dark:border-green-600 dark:text-green-400',
                           };
                           return (
                             <button
@@ -1113,7 +1050,7 @@ export default function ResultPage() {
                 <button
                   disabled={isRunning}
                   onClick={() => runDetection(sensitivity)}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold transition cursor-pointer"
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-400 dark:bg-blue-950/40 dark:hover:bg-blue-950/60 dark:text-blue-400 dark:border-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-semibold transition cursor-pointer"
                 >
                   {isRunning ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
                   Re-run Detection
@@ -1279,15 +1216,34 @@ export default function ResultPage() {
                       alt={`Detection Result ${currentImageIndex + 1}`}
                       decoding="async"
                       fetchPriority="high"
-                      className={cn("w-full h-full object-contain transition-opacity cursor-zoom-in", imageLoading ? "opacity-0" : "opacity-100")}
+                      className={cn("w-full h-full object-contain transition-opacity cursor-pointer", imageLoading ? "opacity-0" : "opacity-100")}
                       onLoad={handleImageLoad}
                       onError={() => setImageLoading(false)}
-                      onClick={() => !imageLoading && setLightboxSrc(currentImageSrc)}
+                      onClick={() => !imageLoading && openImageComment()}
                     />
-                    {/* Zoom hint */}
+                    {/* Corner controls — zoom button + comment indicator */}
                     {!imageLoading && (
-                      <div className="absolute bottom-2 right-2 flex items-center gap-1 px-2 py-1 rounded-md bg-black/50 text-white text-[10px] pointer-events-none select-none">
-                        <ZoomIn className="w-3 h-3" /> Click to zoom
+                      <div className="absolute top-2 right-2 flex items-center gap-1.5">
+                        {/* Comment indicator */}
+                        {currentFileId && remarks[`img-${currentFileId}`] && (
+                          <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-black/50 text-white text-[10px] select-none pointer-events-none">
+                            <MessageSquare className="w-3 h-3" />
+                          </div>
+                        )}
+                        {/* Zoom button */}
+                        <button
+                          onClick={e => { e.stopPropagation(); !imageLoading && setLightboxSrc(currentImageSrc); }}
+                          className="flex items-center gap-1 px-2 py-1 rounded-md bg-black/50 hover:bg-black/70 text-white text-[10px] transition cursor-pointer"
+                          title="Zoom image"
+                        >
+                          <ZoomIn className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
+                    {/* Click-to-comment hint */}
+                    {!imageLoading && (
+                      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1 px-2 py-1 rounded-md bg-black/40 text-white text-[10px] pointer-events-none select-none opacity-60">
+                        <MessageSquare className="w-3 h-3" /> Click image to add note
                       </div>
                     )}
                     {/* Overlay container — positioned at the actual rendered image rect.
@@ -1409,7 +1365,7 @@ export default function ResultPage() {
 
           {/* Sidebar — left or right based on sidebarSide */}
           <div className={cn(
-            "lg:w-72 xl:w-80 bg-white border-t lg:border-t-0 border-gray-200 dark:bg-gray-950 dark:border-gray-800 p-4 sm:p-5 overflow-y-auto flex flex-col gap-4",
+            "lg:w-96 xl:w-[28rem] bg-white border-t lg:border-t-0 border-gray-200 dark:bg-gray-950 dark:border-gray-800 p-4 sm:p-5 overflow-y-auto flex flex-col gap-4",
             sidebarSide === 'left' ? "lg:border-r" : "lg:border-l"
           )}>
 
@@ -1534,48 +1490,51 @@ export default function ResultPage() {
             </div>
 
             {/* Defect table — driven by Current/All toggle above */}
-            {allDetections.length > 0 && (
+            {allDetections.length > 0 && (<>
               <div className="bg-white border border-gray-200 dark:bg-gray-950 dark:border-gray-800 rounded-xl overflow-hidden">
                 {/* Filter pills */}
-                <div className="flex items-center gap-1.5 px-3 py-2 border-b border-gray-100 dark:border-gray-800 flex-wrap">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Filter</span>
-                  {allDefectClasses.map(cls => {
-                    const active = tableVisibleDefects.has(cls);
-                    const dot: Record<string, string> = {
-                      crack: 'bg-red-500', spalling: 'bg-yellow-500',
-                      peeling: 'bg-orange-500', algae: 'bg-green-500',
-                    };
-                    return (
+                <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-800 flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Filter</span>
+                    {tableVisibleDefects.size < allDefectClasses.length && (
                       <button
-                        key={cls}
-                        onClick={() => toggleTableDefectClass(cls)}
-                        className={cn(
-                          'flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-all cursor-pointer',
-                          active
-                            ? 'bg-gray-100 border-gray-400 text-gray-900 dark:bg-gray-800 dark:border-gray-500 dark:text-white'
-                            : 'bg-transparent border-gray-300 text-gray-400 dark:border-gray-700 dark:text-gray-500',
-                        )}
+                        onClick={() => { setTableVisibleDefects(new Set(['crack', 'spalling', 'peeling', 'algae'])); setDefectPage(0); }}
+                        className="text-[10px] text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition cursor-pointer"
                       >
-                        <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', dot[cls], !active && 'opacity-40')} />
-                        {cls.charAt(0).toUpperCase() + cls.slice(1)}
+                        Reset
                       </button>
-                    );
-                  })}
-                  {tableVisibleDefects.size < allDefectClasses.length && (
-                    <button
-                      onClick={() => { setTableVisibleDefects(new Set(['crack', 'spalling', 'peeling', 'algae'])); setDefectPage(0); }}
-                      className="ml-auto text-[10px] text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition cursor-pointer"
-                    >
-                      Reset
-                    </button>
-                  )}
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {allDefectClasses.map(cls => {
+                      const active = tableVisibleDefects.has(cls);
+                      const dot: Record<string, string> = {
+                        crack: 'bg-red-500', spalling: 'bg-yellow-500',
+                        peeling: 'bg-orange-500', algae: 'bg-green-500',
+                      };
+                      return (
+                        <button
+                          key={cls}
+                          onClick={() => toggleTableDefectClass(cls)}
+                          className={cn(
+                            'flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-all cursor-pointer',
+                            active
+                              ? 'bg-gray-100 border-gray-400 text-gray-900 dark:bg-gray-800 dark:border-gray-500 dark:text-white'
+                              : 'bg-transparent border-gray-300 text-gray-400 dark:border-gray-700 dark:text-gray-500',
+                          )}
+                        >
+                          <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', dot[cls], !active && 'opacity-40')} />
+                          {cls.charAt(0).toUpperCase() + cls.slice(1)}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
                 {/* Table */}
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-gray-200 dark:border-gray-800">
-                        <th className="text-left px-2.5 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Image</th>
                         <th className="text-left px-2.5 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Type</th>
                         <th className="text-left px-2.5 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Conf</th>
                         <th className="text-left px-2.5 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
@@ -1597,7 +1556,6 @@ export default function ResultPage() {
                         const fileCount = Object.keys(fileIdToCarouselIndex).length;
                         const isSingleFile = fileCount <= 1;
                         const fileId = det.file_id ?? (isSingleFile ? flatData?.file_id : undefined);
-                        const filename = fileId ? fileGpsMap[fileId]?.filename : undefined;
                         const carouselIndex = isSingleFile
                           ? 0
                           : (fileId !== undefined ? (fileIdToCarouselIndex[fileId] ?? -1) : -1);
@@ -1620,17 +1578,6 @@ export default function ResultPage() {
                               }, 50);
                             }}
                           >
-                            <td className="px-2.5 py-2">
-                              <span
-                                className={cn(
-                                  "font-mono text-[10px] truncate max-w-[80px] block",
-                                  isClickable ? "text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-gray-400"
-                                )}
-                                title={filename}
-                              >
-                                {filename ?? "—"}
-                              </span>
-                            </td>
                             <td className="px-2.5 py-2 text-xs font-medium text-gray-800 dark:text-gray-200 capitalize whitespace-nowrap">{d.defect_type}</td>
                             <td className="px-2.5 py-2 text-xs text-gray-600 dark:text-gray-300 whitespace-nowrap">{Math.round(d.confidence * 100)}%</td>
                             <td className="px-2 py-1.5" onClick={e => e.stopPropagation()}>
@@ -1677,7 +1624,106 @@ export default function ResultPage() {
                   </div>
                 )}
               </div>
-            )}
+
+              {/* Generate / Download Report */}
+              <div className="flex items-center gap-1.5 pt-1">
+                <button
+                  onClick={reportGenerated ? handleDownloadPdf : needsRegenerate ? handleRegenerateReport : handleGenerateReport}
+                  disabled={isGenerating || isDownloading}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold
+                             bg-yellow-50 hover:bg-yellow-100 text-yellow-700 border border-yellow-400 dark:bg-yellow-950/40 dark:hover:bg-yellow-950/60 dark:text-yellow-400 dark:border-yellow-600 transition
+                             disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  {(isGenerating || isDownloading) ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                  ) : reportGenerated ? (
+                    <Download className="w-3.5 h-3.5 shrink-0" />
+                  ) : (
+                    <FileText className="w-3.5 h-3.5 shrink-0" />
+                  )}
+                  {isGenerating ? 'Generating…' : isDownloading ? 'Downloading…' : reportGenerated ? 'Download PDF' : needsRegenerate ? 'Regenerate Report' : 'Generate Report'}
+                </button>
+                {/* More export options dropdown */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="flex items-center px-2 py-2 rounded-lg text-xs
+                                       border border-gray-200 dark:border-gray-700
+                                       bg-white dark:bg-gray-900
+                                       text-gray-600 dark:text-gray-400
+                                       hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer">
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56 bg-white border-gray-200 dark:bg-gray-900 dark:border-gray-700">
+                    <DropdownMenuLabel className="text-xs text-gray-400 dark:text-gray-500">PDF</DropdownMenuLabel>
+                    <DropdownMenuItem
+                      className="text-gray-800 hover:bg-gray-100 dark:text-white dark:hover:bg-gray-800 cursor-pointer"
+                      onClick={reportGenerated ? handleDownloadPdf : needsRegenerate ? handleRegenerateReport : handleGenerateReport}
+                    >
+                      <FileText className="w-4 h-4 mr-2 shrink-0" />
+                      <div>
+                        <div className="font-semibold">{reportGenerated ? 'Download PDF Report' : needsRegenerate ? 'Regenerate PDF Report' : 'Generate PDF Report'}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">{reportGenerated ? 'Annotated images & summary' : needsRegenerate ? 'PDF was missing — regenerate it' : 'Create the inspection PDF'}</div>
+                      </div>
+                    </DropdownMenuItem>
+                    {reportGenerated && (
+                      <DropdownMenuItem
+                        className="text-gray-800 hover:bg-gray-100 dark:text-white dark:hover:bg-gray-800 cursor-pointer"
+                        onClick={handleViewPdf}
+                      >
+                        <ExternalLink className="w-4 h-4 mr-2 shrink-0" />
+                        <div>
+                          <div className="font-semibold">View PDF Report</div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">Open in report viewer</div>
+                        </div>
+                      </DropdownMenuItem>
+                    )}
+                    {reportGenerated && (
+                      <DropdownMenuItem
+                        className="text-gray-800 hover:bg-gray-100 dark:text-white dark:hover:bg-gray-800 cursor-pointer"
+                        onClick={handleRegenerateReport}
+                        disabled={isGenerating}
+                      >
+                        <RefreshCw className="w-4 h-4 mr-2 shrink-0" />
+                        <div>
+                          <div className="font-semibold">Regenerate PDF</div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">Re-create with updated notes</div>
+                        </div>
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuSeparator className="bg-gray-100 dark:bg-gray-800" />
+                    <DropdownMenuLabel className="text-xs text-gray-400 dark:text-gray-500">CSV</DropdownMenuLabel>
+                    <DropdownMenuItem
+                      className="text-gray-800 hover:bg-gray-100 dark:text-white dark:hover:bg-gray-800 cursor-pointer"
+                      onClick={handleDownloadCsv}
+                    >
+                      <Table2 className="w-4 h-4 mr-2 shrink-0" />
+                      <div>
+                        <div className="font-semibold">{csvGenerated ? 'Download CSV Report' : 'Generate CSV Report'}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">Defect data as spreadsheet</div>
+                      </div>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator className="bg-gray-100 dark:bg-gray-800" />
+                    <DropdownMenuLabel className="text-xs text-gray-400 dark:text-gray-500">Images</DropdownMenuLabel>
+                    <DropdownMenuItem
+                      className="text-gray-800 hover:bg-gray-100 dark:text-white dark:hover:bg-gray-800 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={handleDownloadAnnotatedZip}
+                      disabled={!annotatedPaths.length || isZipDownloading}
+                    >
+                      {isZipDownloading ? (
+                        <Loader2 className="w-4 h-4 mr-2 shrink-0 animate-spin" />
+                      ) : (
+                        <Archive className="w-4 h-4 mr-2 shrink-0" />
+                      )}
+                      <div>
+                        <div className="font-semibold">Download Annotated Images</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">All annotated images as .zip</div>
+                      </div>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </>)}
 
             {/* Remarks changed warning */}
             {remarksChangedAfterReport && (
@@ -1756,6 +1802,97 @@ export default function ResultPage() {
               >
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image comment modal */}
+      {commentModalOpen && currentFileId && (
+        <div
+          className="fixed inset-0 z-[55] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => setCommentModalOpen(false)}
+        >
+          <div
+            className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-md mx-4 flex flex-col overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="w-4 h-4 text-blue-500 shrink-0" />
+                <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">Image Note</span>
+                {fileGpsMap[currentFileId]?.filename && (
+                  <span className="text-xs text-gray-400 dark:text-gray-500 font-mono truncate max-w-[160px]">
+                    {fileGpsMap[currentFileId].filename}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => setCommentModalOpen(false)}
+                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Defect selector */}
+            {currentFileDetections.length > 0 && (
+              <div className="px-4 pt-3 pb-1">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">Mention a defect (optional)</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {currentFileDetections.map((d, i) => {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const defId: string = (d as any).def_id ?? `DEF-${String(i + 1).padStart(3, '0')}`;
+                    const dot: Record<string, string> = {
+                      crack: 'bg-red-500', spalling: 'bg-yellow-500',
+                      peeling: 'bg-orange-500', algae: 'bg-green-500',
+                    };
+                    const active = commentSelectedDefect === defId;
+                    return (
+                      <button
+                        key={defId}
+                        onClick={() => handleCommentDefectSelect(defId)}
+                        className={cn(
+                          'flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border transition cursor-pointer',
+                          active
+                            ? 'bg-blue-50 border-blue-400 text-blue-700 dark:bg-blue-950/40 dark:border-blue-500 dark:text-blue-300'
+                            : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500',
+                        )}
+                      >
+                        <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', dot[d.defect_type])} />
+                        [{defId}] {d.defect_type} {Math.round(d.confidence * 100)}%
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Textarea */}
+            <div className="px-4 pt-3 pb-4">
+              <textarea
+                ref={commentTextareaRef}
+                value={commentDraft}
+                onChange={e => setCommentDraft(e.target.value)}
+                placeholder={currentFileDetections.length > 0 ? "Select a defect above to mention it, or write a general note…" : "Write a note about this image…"}
+                rows={4}
+                className="w-full px-3 py-2 rounded-lg text-sm border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 text-gray-800 dark:text-gray-200 placeholder-gray-300 dark:placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition resize-none"
+              />
+              <div className="flex items-center justify-end gap-2 mt-2">
+                <button
+                  onClick={() => setCommentModalOpen(false)}
+                  className="px-3 py-1.5 rounded-lg text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={saveImageComment}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white transition cursor-pointer"
+                >
+                  Save Note
+                </button>
+              </div>
             </div>
           </div>
         </div>
