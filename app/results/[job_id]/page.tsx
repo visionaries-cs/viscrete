@@ -1234,6 +1234,7 @@ export default function ResultPage() {
                           title="Zoom image"
                         >
                           <ZoomIn className="w-3 h-3" />
+                          <span className="hidden lg:inline">Zoom</span>
                         </button>
                       </div>
                     )}
