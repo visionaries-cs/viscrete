@@ -182,6 +182,9 @@ export default function ResultPage() {
   const [commentSelectedDefect, setCommentSelectedDefect] = useState<string | null>(null);
   const commentTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
+  // Hover state for bounding box defects
+  const [hoveredDetection, setHoveredDetection] = useState<Detection | null>(null);
+
   // Per-class sensitivity selector
   type SensitivityLevel = 'conservative' | 'balanced' | 'aggressive';
   type SensMap = Record<string, SensitivityLevel>;
@@ -444,30 +447,25 @@ export default function ResultPage() {
     }
   }
 
-  function openImageComment() {
+  function openImageComment(preselectedDefId?: string) {
     if (!currentFileId) return;
     const key = `img-${currentFileId}`;
-    setCommentDraft(remarks[key] ?? '');
-    setCommentSelectedDefect(null);
+    const existing = remarks[key] ?? '';
+    if (preselectedDefId) {
+      const mention = `[${preselectedDefId}] `;
+      setCommentSelectedDefect(preselectedDefId);
+      setCommentDraft(existing.includes(mention) ? existing : mention + existing.replace(/^\[DEF-\d+\]\s*/, ''));
+    } else {
+      setCommentSelectedDefect(null);
+      setCommentDraft(existing);
+    }
     setCommentModalOpen(true);
-    setTimeout(() => commentTextareaRef.current?.focus(), 50);
-  }
-
-  function handleCommentDefectSelect(defId: string) {
-    const mention = `[${defId}] `;
-    setCommentSelectedDefect(defId);
-    setCommentDraft(prev => {
-      if (prev.includes(mention)) return prev;
-      // Strip any existing [DEF-XXX] mention at the start and replace
-      const stripped = prev.replace(/^\[DEF-\d+\]\s*/, '');
-      return mention + stripped;
-    });
     setTimeout(() => {
       const ta = commentTextareaRef.current;
       if (!ta) return;
       ta.focus();
       ta.setSelectionRange(ta.value.length, ta.value.length);
-    }, 20);
+    }, 50);
   }
 
   function saveImageComment() {
@@ -1240,18 +1238,12 @@ export default function ResultPage() {
                         </button>
                       </div>
                     )}
-                    {/* Click-to-comment hint */}
-                    {!imageLoading && (
-                      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1 px-2 py-1 rounded-md bg-black/40 text-white text-[10px] pointer-events-none select-none opacity-60">
-                        <MessageSquare className="w-3 h-3" /> Click image to add note
-                      </div>
-                    )}
                     {/* Overlay container — positioned at the actual rendered image rect.
                         No overflow-hidden so labels near the top edge aren't clipped. */}
                     {hasValidDimensions && !imageLoading && (
                       <div
                         ref={containerRef}
-                        className="absolute pointer-events-none"
+                        className="absolute"
                         style={{ left: offsetX, top: offsetY, width: renderedW, height: renderedH }}
                       >
                         {getCurrentDetections().map((detection, index) => {
@@ -1277,24 +1269,68 @@ export default function ResultPage() {
                           const labelLeft  = Math.max(0, left);
 
                           const isHighlighted = !imageLoading && detection === highlightedDetection;
+                          const isHovered = detection === hoveredDetection;
+
+                          // Glow colour per defect class (RGB values for box-shadow)
+                          const glowRgb: Record<string, string> = {
+                            crack: '239,68,68', spalling: '234,179,8',
+                            peeling: '249,115,22', algae: '34,197,94',
+                          };
+                          const rgb = glowRgb[defect_type] ?? '255,255,255';
+
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          const globalIdx = flatDetections.indexOf(detection as any);
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          const defId: string = (detection as any).def_id ?? `DEF-${String(globalIdx + 1).padStart(3, '0')}`;
 
                           return (
                             <div key={index}>
-                              {/* Bounding box */}
+                              {/* Bounding box — interactive */}
                               <div
                                 className={cn(
-                                  "absolute pointer-events-none",
+                                  "absolute transition-all duration-100",
                                   isHighlighted
-                                    ? `border-[3px] animate-pulse ${defectBorderColor[defect_type] ?? 'border-white'} ${defectBgColor[defect_type] ?? 'bg-white/20'}`
+                                    ? `border-[3px] animate-pulse cursor-pointer ${defectBorderColor[defect_type] ?? 'border-white'} ${defectBgColor[defect_type] ?? 'bg-white/20'}`
+                                    : isHovered
+                                    ? `border-[3px] cursor-pointer ${defectBorderColor[defect_type] ?? 'border-white'}`
                                     : cn(
-                                        showBoundingBoxes ? `border-2 ${defectBorderColor[defect_type] ?? 'border-white'}` : '',
+                                        'cursor-pointer',
+                                        showBoundingBoxes ? `border-2 ${defectBorderColor[defect_type] ?? 'border-white'}` : 'border-2 border-transparent',
                                         showColorOverlay ? (defectBgColor[defect_type] ?? 'bg-white/20') : '',
                                       ),
                                 )}
-                                style={{ left, top, width, height }}
+                                style={{
+                                  left, top, width, height,
+                                  ...(isHovered && {
+                                    zIndex: 10,
+                                    boxShadow: `0 0 0 2px rgba(${rgb},1), 0 0 20px rgba(${rgb},0.7), inset 0 0 10px rgba(${rgb},0.2)`,
+                                    backgroundColor: `rgba(${rgb},0.15)`,
+                                  }),
+                                }}
+                                onMouseEnter={() => setHoveredDetection(detection)}
+                                onMouseLeave={() => setHoveredDetection(null)}
+                                onClick={e => { e.stopPropagation(); openImageComment(defId); }}
                               />
-                              {/* Label */}
-                              {showLabels && (
+                              {/* Hover tooltip — replaces label while hovered */}
+                              {isHovered && (
+                                <div
+                                  className="absolute z-20 pointer-events-none flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold text-white whitespace-nowrap"
+                                  style={{
+                                    left: labelLeft,
+                                    maxWidth: renderedW - labelLeft,
+                                    overflow: 'hidden',
+                                    backgroundColor: `rgba(${rgb},0.9)`,
+                                    ...(labelAbove
+                                      ? { bottom: renderedH - top + 2 }
+                                      : { top: top + height + 2 }),
+                                  }}
+                                >
+                                  <MessageSquare className="w-2.5 h-2.5 shrink-0" />
+                                  [{defId}] Click to comment
+                                </div>
+                              )}
+                              {/* Normal label — hidden while hovered */}
+                              {showLabels && !isHovered && (
                                 <div
                                   className={cn(
                                     "absolute pointer-events-none px-1.5 py-0.5 text-[11px] leading-tight font-semibold text-white rounded-sm whitespace-nowrap",
@@ -1836,36 +1872,13 @@ export default function ResultPage() {
               </button>
             </div>
 
-            {/* Defect selector */}
-            {currentFileDetections.length > 0 && (
-              <div className="px-4 pt-3 pb-1">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">Mention a defect (optional)</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {currentFileDetections.map((d, i) => {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const defId: string = (d as any).def_id ?? `DEF-${String(i + 1).padStart(3, '0')}`;
-                    const dot: Record<string, string> = {
-                      crack: 'bg-red-500', spalling: 'bg-yellow-500',
-                      peeling: 'bg-orange-500', algae: 'bg-green-500',
-                    };
-                    const active = commentSelectedDefect === defId;
-                    return (
-                      <button
-                        key={defId}
-                        onClick={() => handleCommentDefectSelect(defId)}
-                        className={cn(
-                          'flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border transition cursor-pointer',
-                          active
-                            ? 'bg-blue-50 border-blue-400 text-blue-700 dark:bg-blue-950/40 dark:border-blue-500 dark:text-blue-300'
-                            : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500',
-                        )}
-                      >
-                        <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', dot[d.defect_type])} />
-                        [{defId}] {d.defect_type} {Math.round(d.confidence * 100)}%
-                      </button>
-                    );
-                  })}
-                </div>
+            {/* Defect mention badge — shown when opened from a bbox click */}
+            {commentSelectedDefect && (
+              <div className="px-4 pt-3 pb-1 flex items-center gap-2">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Regarding</span>
+                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 border border-blue-300 text-blue-700 dark:bg-blue-950/40 dark:border-blue-600 dark:text-blue-300">
+                  [{commentSelectedDefect}]
+                </span>
               </div>
             )}
 
@@ -1875,7 +1888,7 @@ export default function ResultPage() {
                 ref={commentTextareaRef}
                 value={commentDraft}
                 onChange={e => setCommentDraft(e.target.value)}
-                placeholder={currentFileDetections.length > 0 ? "Select a defect above to mention it, or write a general note…" : "Write a note about this image…"}
+                placeholder={commentSelectedDefect ? `Add a note about [${commentSelectedDefect}]…` : "Write a note about this image…"}
                 rows={4}
                 className="w-full px-3 py-2 rounded-lg text-sm border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 text-gray-800 dark:text-gray-200 placeholder-gray-300 dark:placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition resize-none"
               />
