@@ -1214,10 +1214,9 @@ export default function ResultPage() {
                       alt={`Detection Result ${currentImageIndex + 1}`}
                       decoding="async"
                       fetchPriority="high"
-                      className={cn("w-full h-full object-contain transition-opacity cursor-pointer", imageLoading ? "opacity-0" : "opacity-100")}
+                      className={cn("w-full h-full object-contain transition-opacity", imageLoading ? "opacity-0" : "opacity-100")}
                       onLoad={handleImageLoad}
                       onError={() => setImageLoading(false)}
-                      onClick={() => !imageLoading && openImageComment()}
                     />
                     {/* Corner controls — zoom button + comment indicator */}
                     {!imageLoading && (
@@ -1239,12 +1238,48 @@ export default function ResultPage() {
                       </div>
                     )}
                     {/* Overlay container — positioned at the actual rendered image rect.
-                        No overflow-hidden so labels near the top edge aren't clipped. */}
+                        Handles all mouse events centrally so overlapping bboxes
+                        don't block each other — hit-tests pick the smallest box. */}
                     {hasValidDimensions && !imageLoading && (
                       <div
                         ref={containerRef}
-                        className="absolute"
+                        className={cn("absolute", hoveredDetection ? "cursor-pointer" : "cursor-default")}
                         style={{ left: offsetX, top: offsetY, width: renderedW, height: renderedH }}
+                        onMouseMove={e => {
+                          const rect = containerRef.current?.getBoundingClientRect();
+                          if (!rect) return;
+                          const mx = e.clientX - rect.left;
+                          const my = e.clientY - rect.top;
+                          const hits = getCurrentDetections().filter(d => {
+                            const { x1, y1, x2, y2 } = d.bounding_box;
+                            const l = Math.max(0, Math.min(x1, origSize!.w)) * scaleX;
+                            const t = Math.max(0, Math.min(y1, origSize!.h)) * scaleY;
+                            const r = Math.max(0, Math.min(x2, origSize!.w)) * scaleX;
+                            const b = Math.max(0, Math.min(y2, origSize!.h)) * scaleY;
+                            return mx >= l && mx <= r && my >= t && my <= b;
+                          });
+                          if (hits.length === 0) { setHoveredDetection(null); return; }
+                          // Pick the smallest-area box (most specific under cursor)
+                          const best = hits.reduce((a, b) => {
+                            const areaA = (a.bounding_box.x2 - a.bounding_box.x1) * (a.bounding_box.y2 - a.bounding_box.y1);
+                            const areaB = (b.bounding_box.x2 - b.bounding_box.x1) * (b.bounding_box.y2 - b.bounding_box.y1);
+                            return areaA <= areaB ? a : b;
+                          });
+                          setHoveredDetection(best);
+                        }}
+                        onMouseLeave={() => setHoveredDetection(null)}
+                        onClick={e => {
+                          if (hoveredDetection) {
+                            e.stopPropagation();
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            const globalIdx = flatDetections.indexOf(hoveredDetection as any);
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            const defId: string = (hoveredDetection as any).def_id ?? `DEF-${String(globalIdx + 1).padStart(3, '0')}`;
+                            openImageComment(defId);
+                          } else {
+                            openImageComment();
+                          }
+                        }}
                       >
                         {getCurrentDetections().map((detection, index) => {
                           const { bounding_box, defect_type, confidence } = detection;
@@ -1285,16 +1320,15 @@ export default function ResultPage() {
 
                           return (
                             <div key={index}>
-                              {/* Bounding box — interactive */}
+                              {/* Bounding box — pointer-events-none; container handles all events */}
                               <div
                                 className={cn(
-                                  "absolute transition-all duration-100",
+                                  "absolute pointer-events-none transition-all duration-100",
                                   isHighlighted
-                                    ? `border-[3px] animate-pulse cursor-pointer ${defectBorderColor[defect_type] ?? 'border-white'} ${defectBgColor[defect_type] ?? 'bg-white/20'}`
+                                    ? `border-[3px] animate-pulse ${defectBorderColor[defect_type] ?? 'border-white'} ${defectBgColor[defect_type] ?? 'bg-white/20'}`
                                     : isHovered
-                                    ? `border-[3px] cursor-pointer ${defectBorderColor[defect_type] ?? 'border-white'}`
+                                    ? `border-[3px] ${defectBorderColor[defect_type] ?? 'border-white'}`
                                     : cn(
-                                        'cursor-pointer',
                                         showBoundingBoxes ? `border-2 ${defectBorderColor[defect_type] ?? 'border-white'}` : 'border-2 border-transparent',
                                         showColorOverlay ? (defectBgColor[defect_type] ?? 'bg-white/20') : '',
                                       ),
@@ -1307,9 +1341,6 @@ export default function ResultPage() {
                                     backgroundColor: `rgba(${rgb},0.15)`,
                                   }),
                                 }}
-                                onMouseEnter={() => setHoveredDetection(detection)}
-                                onMouseLeave={() => setHoveredDetection(null)}
-                                onClick={e => { e.stopPropagation(); openImageComment(defId); }}
                               />
                               {/* Hover tooltip — replaces label while hovered */}
                               {isHovered && (
