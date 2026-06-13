@@ -30,6 +30,7 @@ import {
   Grid3x3,
   ChevronDown,
   Archive,
+  Scan,
   Box,
   Tag,
   Layers,
@@ -195,8 +196,10 @@ export default function ResultPage() {
   const carouselRef = useRef<HTMLDivElement>(null);
 
   // Overlay toggles
-  const [showBoundingBoxes, setShowBoundingBoxes] = useState(false);
-  const [showLabels, setShowLabels] = useState(false);
+  type ViewMode = 'overlay' | 'yolo';
+  const [viewMode, setViewMode] = useState<ViewMode>('overlay');
+  const [showBoundingBoxes, setShowBoundingBoxes] = useState(true);
+  const [showLabels, setShowLabels] = useState(true);
   const [showColorOverlay, setShowColorOverlay] = useState(false);
 
   // Per-class visibility
@@ -553,12 +556,17 @@ export default function ResultPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [annotatedPaths.join(',')]);
 
-  // Fetch signed URLs for all carousel images (annotated images with burned-in bboxes)
+  // Fetch signed URLs for both view modes: annotated (YOLO plot) + processed (overlay)
   useEffect(() => {
     if (!jobId || !annotatedPaths.length) return;
     const keysToFetch = new Set<string>();
     annotatedPaths.forEach((annotatedPath) => {
       keysToFetch.add(annotatedPath);
+      const fid = fileIdFromAnnotatedPath(annotatedPath);
+      const processedKey = (fid && fileIdToProcessedPath[fid])
+        ? fileIdToProcessedPath[fid]
+        : annotatedPath.replace('/annotated/', '/processed/').replace(/_annotated(\.[^.]+)$/, '$1');
+      keysToFetch.add(processedKey);
     });
     Promise.all(
       [...keysToFetch].map(async key => {
@@ -595,9 +603,15 @@ export default function ResultPage() {
 
   const currentAnnotatedPath = annotatedPaths[currentImageIndex];
 
-  // Display the annotated image directly — it has bboxes burned in by the backend.
   const currentImageSrc = currentAnnotatedPath
-    ? (signedUrls[currentAnnotatedPath] ?? null)
+    ? (() => {
+        if (viewMode === 'yolo') return signedUrls[currentAnnotatedPath] ?? null;
+        const fid = fileIdFromAnnotatedPath(currentAnnotatedPath);
+        const processedKey = (fid && fileIdToProcessedPath[fid])
+          ? fileIdToProcessedPath[fid]
+          : currentAnnotatedPath.replace('/annotated/', '/processed/').replace(/_annotated(\.[^.]+)$/, '$1');
+        return signedUrls[processedKey] ?? null;
+      })()
     : null;
 
   // Reset dimensions and mark loading when the displayed image changes
@@ -616,8 +630,14 @@ export default function ResultPage() {
     for (const idx of indices) {
       const path = annotatedPaths[idx];
       if (!path) continue;
-      const src = signedUrls[path];
-      if (src) { const img = new Image(); img.src = src; }
+      const fid = fileIdFromAnnotatedPath(path);
+      const processedKey = (fid && fileIdToProcessedPath[fid])
+        ? fileIdToProcessedPath[fid]
+        : path.replace('/annotated/', '/processed/').replace(/_annotated(\.[^.]+)$/, '$1');
+      for (const key of [path, processedKey]) {
+        const src = signedUrls[key];
+        if (src) { const img = new Image(); img.src = src; }
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentImageIndex, totalImages, signedUrls]);
@@ -662,6 +682,11 @@ export default function ResultPage() {
   // While a highlight is active, show only that exact detection (reference equality).
   // Otherwise filter by current image and visible defect classes.
   const getCurrentDetections = (): Detection[] => {
+    // In YOLO mode the image already has annotations burned in — only show the
+    // interactive highlight pulse, nothing else.
+    if (viewMode === 'yolo') {
+      return highlightedDetection ? flatDetections.filter(d => d === highlightedDetection) : [];
+    }
     if (highlightedDetection) {
       return flatDetections.filter(d => d === highlightedDetection);
     }
@@ -1000,8 +1025,39 @@ export default function ResultPage() {
                   )}
                 </div>
 
-                {/* Overlay toggles + class pills */}
-                {(
+                {/* View mode segmented control */}
+                <div className="flex items-center gap-3 pb-3 border-b border-gray-200 dark:border-gray-700">
+                  <span className="text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider shrink-0">View</span>
+                  <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-full p-0.5 gap-0.5">
+                    <button
+                      onClick={() => setViewMode('overlay')}
+                      className={cn(
+                        'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer',
+                        viewMode === 'overlay'
+                          ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                          : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200',
+                      )}
+                    >
+                      <Layers className="w-3.5 h-3.5" />
+                      Viscrete Overlay
+                    </button>
+                    <button
+                      onClick={() => setViewMode('yolo')}
+                      className={cn(
+                        'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer',
+                        viewMode === 'yolo'
+                          ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                          : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200',
+                      )}
+                    >
+                      <Scan className="w-3.5 h-3.5" />
+                      YOLO Plot
+                    </button>
+                  </div>
+                </div>
+
+                {/* Overlay toggles + class pills — only relevant in overlay mode */}
+                {viewMode === 'overlay' ? (
                 <>
                 <div className="flex items-center flex-wrap gap-x-6 gap-y-2">
                   <span className="text-gray-500 dark:text-gray-400 text-sm uppercase tracking-wider shrink-0">Overlays</span>
@@ -1067,6 +1123,10 @@ export default function ResultPage() {
                   })}
                 </div>
                 </>
+                ) : (
+                  <p className="text-xs text-gray-400 dark:text-gray-500">
+                    Annotations are rendered directly by YOLO. Click a row in the defect table to highlight a specific detection.
+                  </p>
                 )}
               </div>
             </div>
