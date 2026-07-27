@@ -15,20 +15,20 @@ export function SiteStatCard({
   onClick?: () => void;
   children?: React.ReactNode;
 }) {
-  const cls = "bg-white dark:bg-[#161616] rounded-xl border border-gray-200 dark:border-gray-800 p-4 flex flex-col text-left";
-  const interactive = "hover:border-blue-300 dark:hover:border-blue-600 transition group cursor-pointer";
+  const cls = "surface-panel min-h-28 p-4 sm:p-5 flex flex-col text-left";
+  const interactive = "hover:border-primary/35 hover:-translate-y-0.5 transition-[border-color,transform,box-shadow] group";
 
   const inner = (
     <>
-      <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{label}</p>
-      <div className="flex items-center gap-2">
-        <Icon className={cn("w-4 h-4 shrink-0 text-gray-400", onClick && "group-hover:text-blue-500 transition")} />
-        <span className="text-sm font-semibold text-gray-900 dark:text-white truncate">{value}</span>
+      <p className="section-kicker mb-3">{label}</p>
+      <div className="flex items-center gap-2.5">
+        <Icon className={cn("size-4 shrink-0 text-muted-foreground", onClick && "group-hover:text-primary transition")} />
+        <span className="data-value truncate text-lg font-semibold">{value}</span>
       </div>
       {children}
       {onClick && (
-        <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-2 group-hover:text-blue-400 transition">
-          tap to view
+        <p className="mt-auto pt-3 text-[11px] font-medium text-muted-foreground transition group-hover:text-primary">
+          View details
         </p>
       )}
     </>

@@ -4,6 +4,11 @@ import { useState, useRef, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import AppNav from "@/components/AppNav";
+import { PageHeader } from "@/components/app/PageHeader";
+import { WorkflowRail } from "@/components/app/WorkflowRail";
+import { EmptyState } from "@/components/app/StatePanel";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import ImagePreviewModal from "@/components/upload/ImagePreviewModal";
 import FileResultCard from "@/components/upload/FileResultCard";
@@ -694,7 +699,7 @@ function UploadPageInner() {
   const pagedResults = filteredResults.slice((resultsPage - 1) * RESULTS_PER_PAGE, resultsPage * RESULTS_PER_PAGE);
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#14171e]">
+    <div className="app-page">
       {/* Site Picker Modal */}
       <SitePickerModal
         open={sitePickerOpen}
@@ -716,10 +721,10 @@ function UploadPageInner() {
       {/* Toast */}
       {toast && (
         <div className={cn(
-          "fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-sm font-medium transition-all",
+          "fixed right-4 top-20 z-[70] flex max-w-[calc(100vw-2rem)] items-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium shadow-lg transition-all",
           toast.type === "error"
-            ? "bg-red-600 text-white"
-            : "bg-amber-500 text-black"
+            ? "border-red-700 bg-red-600 text-white"
+            : "border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
         )}>
           <AlertCircle className="w-4 h-4 shrink-0" />
           {toast.msg}
@@ -742,38 +747,43 @@ function UploadPageInner() {
 
       {/* ── Saving overlay ── */}
       {saving && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="flex items-center gap-3 bg-white dark:bg-[#161616] rounded-2xl px-6 py-4 shadow-xl border border-gray-200 dark:border-gray-800">
-            <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Saving location…</span>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/55 p-4">
+          <div className="surface-panel flex items-center gap-3 px-6 py-4">
+            <Loader2 className="size-5 animate-spin text-primary" />
+            <span className="text-sm font-medium text-foreground">Saving location…</span>
           </div>
         </div>
       )}
 
-      <AppNav />
+      <AppNav subtitle="New inspection" />
 
-      <main className="max-w-7xl mx-auto px-3 sm:px-6 pt-16 pb-6">
-        <div className="mb-4">
-          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">New Inspection Job</h2>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Complete each step below to start the inspection pipeline.</p>
-        </div>
+      <main className="page-container page-main">
+        <PageHeader
+          eyebrow="New inspection"
+          title="Capture and validate"
+          description="Set the inspection context, upload field images, then resolve quality or location issues before enhancement."
+          actions={<WorkflowRail current="upload" />}
+        />
 
-        <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-4 items-start">
+        <div className="mt-7 grid grid-cols-1 items-start gap-6 xl:grid-cols-[24rem_minmax(0,1fr)]">
 
           {/* ── LEFT COLUMN ── */}
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4 xl:sticky xl:top-24">
 
             {/* Step 1 — Job Details */}
-            <div className="bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800 p-4 shadow-sm">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-[11px] font-bold shrink-0">1</span>
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Job Details</h3>
+            <div className="surface-panel p-5">
+              <div className="mb-4 flex items-center gap-3 border-b pb-3">
+                <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">1</span>
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">Inspection details</h3>
+                  <p className="mt-0.5 text-xs text-muted-foreground">Identify where and who is inspecting.</p>
+                </div>
               </div>
 
               <div className="space-y-3">
                 <div>
-                  <label htmlFor="siteName" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Site Name <span className="text-red-500">*</span>
+                  <label htmlFor="siteName" className="field-label">
+                    Site name <span className="text-red-500">*</span>
                   </label>
                   <div
                     role="button"
@@ -781,19 +791,17 @@ function UploadPageInner() {
                     onClick={() => setSitePickerOpen(true)}
                     onKeyDown={e => { if (e.key === "Enter" || e.key === " ") setSitePickerOpen(true); }}
                     className={cn(
-                      "flex items-center gap-2 w-full px-3 py-2 rounded-lg border text-sm cursor-pointer transition select-none",
-                      "border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1a1a1a]",
-                      "hover:border-blue-400 dark:hover:border-blue-600",
-                      "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent",
-                      siteName ? "text-gray-900 dark:text-white" : "text-gray-400"
+                      "flex h-11 w-full items-center gap-2 rounded-lg border border-input bg-card px-3.5 text-sm transition select-none",
+                      "hover:border-primary/50 focus:outline-none focus:ring-2 focus:ring-ring/20",
+                      siteName ? "text-foreground" : "text-muted-foreground"
                     )}
                   >
-                    <Building2 className="w-4 h-4 shrink-0 text-gray-400" />
-                    <span className="flex-1 truncate">{siteName || "Select or create a site…"}</span>
-                    <ChevronRight className="w-3.5 h-3.5 shrink-0 text-gray-400" />
+                    <Building2 className="size-4 shrink-0 text-muted-foreground" />
+                    <span className="flex-1 truncate">{siteName || "Select or create a site"}</span>
+                    <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
                   </div>
                   {activeSiteId && (
-                    <div className="flex items-center gap-1.5 mt-1.5 text-xs text-blue-600 dark:text-blue-400">
+                    <div className="mt-2 flex items-center gap-1.5 text-xs text-primary">
                       <CheckCircle2 className="w-3 h-3 shrink-0" />
                       <span>Linked to site</span>
                       <Link href={`/sites/${activeSiteId}`} className="underline hover:no-underline ml-0.5">View</Link>
@@ -809,30 +817,28 @@ function UploadPageInner() {
                 </div>
 
                 <div>
-                  <label htmlFor="inspectorName" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Inspector Name <span className="text-red-500">*</span>
+                  <label htmlFor="inspectorName" className="field-label">
+                    Inspector name <span className="text-red-500">*</span>
                   </label>
-                  <input
+                  <Input
                     id="inspectorName"
                     type="text"
                     placeholder="e.g. Juan dela Cruz"
                     value={inspectorName}
                     onChange={e => setInspectorName(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="floor" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label htmlFor="floor" className="field-label">
                     Floor / Level <span className="text-gray-400 font-normal">(optional)</span>
                   </label>
-                  <input
+                  <Input
                     id="floor"
                     type="text"
                     placeholder="e.g. 3, Ground, Rooftop"
                     value={floor}
                     onChange={e => setFloor(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                   />
                 </div>
 
@@ -840,10 +846,13 @@ function UploadPageInner() {
             </div>
 
             {/* Step 2 — Upload & Validate */}
-            <div className="bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800 p-4 shadow-sm">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-[11px] font-bold shrink-0">2</span>
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Upload & Validate</h3>
+            <div className="surface-panel p-5">
+              <div className="mb-4 flex items-center gap-3 border-b pb-3">
+                <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">2</span>
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">Upload and validate</h3>
+                  <p className="mt-0.5 text-xs text-muted-foreground">JPG, PNG, BMP, or TIFF · up to 20 MB.</p>
+                </div>
               </div>
 
               {/* Drop Zone */}
@@ -854,10 +863,10 @@ function UploadPageInner() {
                 onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
                 className={cn(
-                  "border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all",
+                  "quiet-grid rounded-xl border-2 border-dashed p-6 text-center transition-[border-color,background-color]",
                   isDragging
-                    ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30"
-                    : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 bg-gray-50 dark:bg-[#111]/60"
+                    ? "border-primary bg-primary/5"
+                    : "border-border bg-muted/30 hover:border-primary/45"
                 )}
               >
                 <input
@@ -868,12 +877,13 @@ function UploadPageInner() {
                   onChange={e => addFiles(e.target.files)}
                   className="hidden"
                 />
-                <Upload className={cn("w-10 h-10 mx-auto mb-3", isDragging ? "text-blue-500" : "text-gray-400")} />
-                <p className="font-semibold text-gray-700 dark:text-gray-200 mb-1">
+                <div className="mx-auto mb-3 flex size-10 items-center justify-center rounded-xl border bg-card shadow-sm">
+                  <Upload className={cn("size-5", isDragging ? "text-primary" : "text-muted-foreground")} />
+                </div>
+                <p className="mb-1 text-sm font-semibold text-foreground">
                   Drop images here
                 </p>
-                <p className="text-sm text-gray-400 mb-2">or click to browse</p>
-                <p className="text-xs text-gray-400">JPG, PNG, BMP, TIFF — max 20 MB each</p>
+                <p className="text-xs text-muted-foreground">or choose files from this device</p>
               </div>
 
               {/* File list */}
@@ -917,34 +927,30 @@ function UploadPageInner() {
               )}
 
               {/* Upload + Proceed buttons */}
-              <div className="mt-4 flex gap-3">
-                <button
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                <Button
                   id="btn-upload"
                   onClick={handleUpload}
                   disabled={!canUpload}
-                  className={cn(
-                    "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition",
-                    canUpload
-                      ? "bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-400 dark:bg-blue-950/40 dark:hover:bg-blue-950/60 dark:text-blue-400 dark:border-blue-600"
-                      : "bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed"
-                  )}
+                  className="flex-1"
                 >
                   {isUploading ? (
                     <><Loader2 className="w-4 h-4 animate-spin" /> Validating…</>
                   ) : (
                     <><Upload className="w-4 h-4" /> <span className="hidden sm:inline">Upload &amp; </span>Validate</>
                   )}
-                </button>
+                </Button>
 
                 {canProceed && (
-                  <button
+                  <Button
                     id="btn-proceed-preprocessing"
                     onClick={handleProceed}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-500 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/60 dark:text-emerald-400 dark:border-emerald-600 transition"
+                    variant="outline"
+                    className="border-primary/40 text-primary hover:bg-primary/5"
                   >
-                    Proceed
+                    Continue
                     <ArrowRight className="w-4 h-4" />
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>
@@ -952,29 +958,31 @@ function UploadPageInner() {
           </div>{/* end left column */}
 
           {/* ── RIGHT COLUMN — Step 3 ── */}
-          <div>
-            <div className="flex items-center gap-2 mb-3">
-              <span className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-[11px] font-bold shrink-0">3</span>
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Review & Proceed</h3>
+          <div className="min-w-0">
+            <div className="mb-3 flex items-center gap-3">
+              <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-primary/40 bg-primary/10 text-[11px] font-bold text-primary">3</span>
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">Review validation</h3>
+                <p className="mt-0.5 text-xs text-muted-foreground">Resolve image quality and location exceptions before continuing.</p>
+              </div>
             </div>
 
             {!validationResults && !isUploading ? (
-              <div className="flex flex-col items-center justify-center text-center py-16 text-gray-400 bg-white dark:bg-[#161616] rounded-xl border border-dashed border-gray-200 dark:border-gray-800">
-                <div className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-3">
-                  <CheckCircle2 className="w-6 h-6 text-gray-300" />
-                </div>
-                <p className="font-medium text-sm text-gray-500 dark:text-gray-400">Results appear here after validation</p>
-                <p className="text-xs mt-1 text-gray-400">Complete steps 1 &amp; 2, then click Upload &amp; Validate</p>
-              </div>
+              <EmptyState
+                icon={ShieldCheck}
+                title="Ready for image validation"
+                description="Complete the inspection details, select the field images, then run validation to review quality and location data here."
+              />
             ) : isUploading ? (
-              <div className="flex flex-col items-center justify-center text-center py-16 gap-3 bg-white dark:bg-[#161616] rounded-xl border border-gray-200 dark:border-gray-800">
-                <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-                <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Validating files…</p>
+              <div className="surface-panel flex min-h-64 flex-col items-center justify-center gap-3 text-center">
+                <Loader2 className="size-7 animate-spin text-primary" />
+                <p className="text-sm font-medium text-foreground">Checking image quality and metadata…</p>
+                <p className="text-xs text-muted-foreground">This may take a moment for larger batches.</p>
               </div>
             ) : (
               <div className="space-y-3">
                 {/* Filters + Summary */}
-                <div className="bg-white dark:bg-[#161616] rounded-xl border border-gray-200 dark:border-gray-800 p-3 shadow-sm space-y-2">
+                <div className="surface-panel space-y-3 p-3 sm:p-4">
                   {/* Row 1: GPS + Blur filters + view toggle */}
                   <div className="flex items-start gap-2">
                     {/* Filters group — wraps internally on narrow viewports */}
@@ -987,8 +995,8 @@ function UploadPageInner() {
                           className={cn(
                             "px-2.5 py-1 rounded-full text-xs font-medium transition shrink-0",
                             gpsFilter === opt
-                              ? "bg-blue-600 text-white"
-                              : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted text-muted-foreground hover:text-foreground"
                           )}
                         >
                           {opt === "all" ? "All" : opt === "with" ? "With GPS" : "Without GPS"}
@@ -1003,8 +1011,8 @@ function UploadPageInner() {
                           className={cn(
                             "px-2.5 py-1 rounded-full text-xs font-medium transition shrink-0",
                             blurFilter === opt
-                              ? "bg-blue-600 text-white"
-                              : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted text-muted-foreground hover:text-foreground"
                           )}
                         >
                           {opt === "all" ? "All" : opt === "sharp" ? "High Quality" : "Low Quality"}

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Activity, ChevronDown, ChevronUp, Copy, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Terminal, ChevronDown, ChevronUp, Copy, Trash2 } from "lucide-react";
 
 type LogLevel = "info" | "warning" | "error";
 
@@ -21,23 +21,15 @@ export function PreprocessingTerminal({ lines }: { lines: TerminalLine[] }) {
   const lastSyncedCountRef = useRef(0);
   const logEndRef = useRef<HTMLDivElement>(null);
 
-  // Sync new lines from parent into visibleLines
   useEffect(() => {
-    if (lines.length > lastSyncedCountRef.current) {
-      const newLines = lines.slice(lastSyncedCountRef.current);
-      lastSyncedCountRef.current = lines.length;
-      setVisibleLines((prev) => {
-        const merged = [...prev, ...newLines];
-        return merged.length > 500 ? merged.slice(merged.length - 500) : merged;
-      });
-    }
+    if (lines.length <= lastSyncedCountRef.current) return;
+    const newLines = lines.slice(lastSyncedCountRef.current);
+    lastSyncedCountRef.current = lines.length;
+    setVisibleLines((current) => [...current, ...newLines].slice(-500));
   }, [lines]);
 
-  // Auto-scroll to bottom on new lines
   useEffect(() => {
-    if (!collapsed) {
-      logEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
+    if (!collapsed) logEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [visibleLines, collapsed]);
 
   function handleClear() {
@@ -46,93 +38,67 @@ export function PreprocessingTerminal({ lines }: { lines: TerminalLine[] }) {
   }
 
   async function handleCopy() {
-    const text = lines
-      .map((l) => {
-        const tag = l.step != null ? `STEP ${l.step}` : "PIPELINE";
-        return `[${l.timestamp}] [${tag.padEnd(8)}] ${l.message}`;
-      })
-      .join("\n");
+    const text = lines.map((line) => {
+      const tag = line.step != null ? `STEP ${line.step}` : "PIPELINE";
+      return `[${line.timestamp}] [${tag.padEnd(8)}] ${line.message}`;
+    }).join("\n");
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      /* clipboard API unavailable */
+      // Clipboard access may be unavailable.
     }
   }
 
   return (
-    <div className="rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-800">
-      {/* Header bar */}
-      <div className="flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800">
+    <div className="surface-panel h-full overflow-hidden">
+      <div className="flex min-h-16 flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
         <button
-          onClick={() => setCollapsed((c) => !c)}
-          className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition cursor-pointer"
+          onClick={() => setCollapsed((current) => !current)}
+          className="flex items-center gap-2 text-sm font-semibold text-foreground transition hover:text-primary"
         >
-          <Terminal className="w-4 h-4 text-gray-400" />
-          <span>
-            {collapsed ? `Logs (${lines.length})` : "Terminal Output"}
-          </span>
-          {collapsed ? (
-            <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
-          ) : (
-            <ChevronUp className="w-3.5 h-3.5 text-gray-400" />
-          )}
+          <Activity className="size-4 text-primary" />
+          <span>{collapsed ? `Activity (${lines.length})` : "Live activity"}</span>
+          {collapsed ? <ChevronDown className="size-3.5 text-muted-foreground" /> : <ChevronUp className="size-3.5 text-muted-foreground" />}
         </button>
         <div className="flex items-center gap-1">
-          <button
-            onClick={handleCopy}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200 transition cursor-pointer"
-          >
-            <Copy className="w-3.5 h-3.5" />
-            {copied ? "Copied!" : "Copy logs"}
+          <button onClick={handleCopy} className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground">
+            <Copy className="size-3.5" />{copied ? "Copied" : "Copy"}
           </button>
-          <button
-            onClick={handleClear}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200 transition cursor-pointer"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            Clear
+          <button onClick={handleClear} className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground">
+            <Trash2 className="size-3.5" />Clear
           </button>
         </div>
       </div>
 
-      {/* Terminal body */}
       {!collapsed && (
-        <div className="bg-[#0b0d10] p-4 h-72 overflow-y-auto font-mono text-[11.5px] leading-[1.65] scroll-smooth">
+        <div className="h-[25rem] overflow-y-auto bg-muted/25 p-3 text-xs leading-5 scroll-smooth">
           {visibleLines.length === 0 ? (
-            <span className="text-gray-600">Waiting for pipeline output…</span>
-          ) : (
-            visibleLines.map((line, i) => {
-              const tag =
-                line.step != null ? `STEP ${line.step}` : "PIPELINE";
-              const padded = tag.padEnd(8);
-              return (
-                <div key={i} className="whitespace-pre-wrap break-all">
-                  <span className="text-gray-600 select-none">
-                    [{line.timestamp}]
-                  </span>{" "}
-                  <span
-                    className={cn(
-                      "font-semibold select-none",
-                      line.step != null ? "text-blue-500" : "text-gray-500"
-                    )}
-                  >
-                    [{padded}]
-                  </span>{" "}
-                  <span
-                    className={cn(
-                      line.level === "warning" && "text-[#FACC15]",
-                      line.level === "error" && "text-[#F87171]",
-                      line.level === "info" && "text-gray-200"
-                    )}
-                  >
+            <div className="flex h-full items-center justify-center text-muted-foreground">Waiting for processing activity…</div>
+          ) : visibleLines.map((line, index) => {
+            const tag = line.step != null ? `STEP ${line.step}` : "PIPELINE";
+            return (
+              <div key={index} className="mb-1.5 grid grid-cols-[3.5rem_minmax(0,1fr)] gap-2 rounded-lg border bg-card px-3 py-2 last:mb-0">
+                <span className="select-none font-mono text-[10px] text-muted-foreground">{line.timestamp}</span>
+                <div className="min-w-0">
+                  <span className={cn(
+                    "mr-2 select-none font-mono text-[10px] font-semibold",
+                    line.step != null ? "text-primary" : "text-muted-foreground",
+                  )}>
+                    {tag}
+                  </span>
+                  <span className={cn(
+                    "break-words text-foreground",
+                    line.level === "warning" && "text-amber-700 dark:text-amber-300",
+                    line.level === "error" && "text-red-700 dark:text-red-300",
+                  )}>
                     {line.message}
                   </span>
                 </div>
-              );
-            })
-          )}
+              </div>
+            );
+          })}
           <div ref={logEndRef} />
         </div>
       )}
