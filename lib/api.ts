@@ -4,7 +4,14 @@ export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'https://viscrete
 
 /** Returns Authorization header with the current Supabase JWT, or empty object. */
 export async function getAuthHeaders(): Promise<Record<string, string>> {
-  if (typeof window === 'undefined') return {};
+  // zrok's hosted free-tier frontend serves an HTML interstitial to browser
+  // user agents unless this header is present. Without it, the request never
+  // reaches FastAPI and the browser reports the HTML response as a CORS error.
+  const headers: Record<string, string> = {
+    skip_zrok_interstitial: 'true',
+  };
+
+  if (typeof window === 'undefined') return headers;
   try {
     const { getSupabase } = await import('@/lib/supabase');
     const supabase = getSupabase();
@@ -28,11 +35,11 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
         }
       });
     });
-    if (token) return { Authorization: `Bearer ${token}` };
+    if (token) return { ...headers, Authorization: `Bearer ${token}` };
   } catch {
     // supabase not configured — gracefully degrade
   }
-  return {};
+  return headers;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
