@@ -1,13 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { ClipboardList, LogOut, Plus } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { LogOut } from 'lucide-react';
 import { ModeToggle } from '@/components/ui/mode-toggle';
 import { getSupabase } from '@/lib/supabase';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
-import { BrandMark } from '@/components/app/BrandMark';
-import { cn } from '@/lib/utils';
 
 interface AppNavProps {
   /** Extra content (e.g. back button) to render between the logo and the right actions */
@@ -17,7 +15,6 @@ interface AppNavProps {
 
 export default function AppNav({ left, subtitle = '/ concrete inspection' }: AppNavProps) {
   const router = useRouter();
-  const pathname = usePathname();
   const { email } = useCurrentUser();
 
   async function handleLogout() {
@@ -26,57 +23,43 @@ export default function AppNav({ left, subtitle = '/ concrete inspection' }: App
   }
 
   return (
-    <header className="fixed inset-x-0 top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/88">
-      <div className="page-container flex h-16 items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
+    <header className="fixed top-0 left-0 right-0 z-50
+                       border-b border-gray-200 dark:border-gray-800
+                       bg-white/80 dark:bg-[#111]/80 backdrop-blur-md">
+      <div className="container max-w-7xl mx-auto px-3 sm:px-6 py-3 flex items-center justify-between gap-2 sm:gap-4">
+        {/* Left: logo + optional slot */}
+        <div className="flex items-center gap-3 min-w-0">
           {left}
-          <BrandMark />
-          {subtitle && <span className="hidden border-l pl-3 text-xs text-muted-foreground xl:block">{subtitle.replace(/^\s*\/\s*/, '')}</span>}
+          <Link href="/" className="flex items-center gap-2 select-none shrink-0">
+            <span className="text-sm font-bold font-mono tracking-tight
+                             bg-gradient-to-r from-[#2ca75d] to-[#0da6f2]
+                             bg-clip-text text-transparent">
+              viscrete
+            </span>
+            {subtitle && (
+              <span className="hidden sm:inline text-xs text-gray-400 dark:text-gray-500 font-mono">
+                {subtitle}
+              </span>
+            )}
+          </Link>
         </div>
 
-        <nav className="hidden items-center gap-1 md:flex" aria-label="Primary navigation">
-          <Link
-            href="/inspection"
-            className={cn(
-              "inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
-              (pathname === "/inspection" || pathname.startsWith("/sites/")) && "bg-muted text-foreground",
-            )}
-          >
-            <ClipboardList className="size-4" />
-            Sites
-          </Link>
-          <Link
-            href="/upload"
-            className={cn(
-              "inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
-              pathname.startsWith("/upload") && "bg-muted text-foreground",
-            )}
-          >
-            <Plus className="size-4" />
-            New inspection
-          </Link>
-        </nav>
-
-        <div className="flex shrink-0 items-center gap-1">
+        {/* Right: email + theme toggle + logout */}
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {email && (
-            <span className="mr-2 hidden max-w-44 truncate text-xs text-muted-foreground lg:block">
+            <span className="hidden md:block text-xs text-gray-400 dark:text-gray-500 font-mono truncate max-w-[160px]">
               {email}
             </span>
           )}
-          <Link
-            href="/upload"
-            className="inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:hidden"
-            aria-label="New inspection"
-          >
-            <Plus className="size-5" />
-          </Link>
           <ModeToggle />
           <button
             onClick={handleLogout}
             title="Sign out"
-            className="inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="p-2 rounded-lg text-gray-500 hover:text-gray-700 dark:text-gray-400
+                       dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800
+                       transition cursor-pointer"
           >
-            <LogOut className="size-4" />
+            <LogOut className="w-4 h-4" />
           </button>
         </div>
       </div>

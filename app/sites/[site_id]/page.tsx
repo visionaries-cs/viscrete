@@ -6,8 +6,11 @@ import Link from "next/link";
 import {
   ArrowLeft, Plus, Layers, Loader2, AlertCircle,
   MapPin, Calendar, ChevronRight, Trash2, ExternalLink, X,
-  Pencil, Users, BarChart3,
+  LogOut, Pencil, Users, BarChart3,
 } from "lucide-react";
+import { ModeToggle } from "@/components/ui/mode-toggle";
+import { getSupabase } from "@/lib/supabase";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { cn } from "@/lib/utils";
 import {
   getSite, getJobsForSite, getSiteItems, deleteSite, deleteJob, updateSite,
@@ -20,10 +23,6 @@ import { InspectorModal } from "@/components/sites/InspectorModal";
 import { CreatedModal } from "@/components/sites/CreatedModal";
 import { JobsModal } from "@/components/sites/JobsModal";
 import { DefectsModal } from "@/components/sites/DefectsModal";
-import AppNav from "@/components/AppNav";
-import { PageHeader } from "@/components/app/PageHeader";
-import { EmptyState, ErrorState } from "@/components/app/StatePanel";
-import { Button } from "@/components/ui/button";
 
 const LocationDisplayMap = dynamic(() => import("@/components/LocationDisplayMap"), { ssr: false });
 const LocationPickerMap  = dynamic(() => import("@/components/LocationPickerMap"),  { ssr: false });
@@ -50,6 +49,7 @@ type ActiveModal = "inspector" | "created" | "jobs" | "defects" | null;
 export default function SiteDetailPage() {
   const { site_id } = useParams<{ site_id: string }>();
   const router = useRouter();
+  const { email } = useCurrentUser();
 
   const [site, setSite] = useState<SiteResponse | null>(null);
   const [jobs, setJobs] = useState<JobStatusResponse[]>([]);
@@ -221,62 +221,70 @@ export default function SiteDetailPage() {
 
   if (loading) {
     return (
-      <div className="app-page">
-        <AppNav subtitle="Site overview" />
-        <div className="page-container page-main flex min-h-[70vh] items-center justify-center text-muted-foreground">
-          <Loader2 className="mr-2 size-5 animate-spin" />
-          <span className="text-sm">Loading site…</span>
-        </div>
+      <div className="min-h-screen bg-gray-50 dark:bg-[#14171e] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
       </div>
     );
   }
 
   if (error || !site) {
     return (
-      <div className="app-page">
-        <AppNav subtitle="Site overview" />
-        <div className="page-container page-main">
-          <ErrorState title="Could not open this site" description={error ?? "Site not found"} onRetry={load} />
-          <Button variant="outline" className="mt-4" asChild>
-            <Link href="/inspection"><ArrowLeft className="size-4" />Back to sites</Link>
-          </Button>
+      <div className="min-h-screen bg-gray-50 dark:bg-[#14171e] flex items-center justify-center p-6">
+        <div className="text-center">
+          <AlertCircle className="w-10 h-10 text-red-400 mx-auto mb-3" />
+          <p className="text-gray-700 dark:text-gray-300 mb-4">{error ?? "Site not found"}</p>
+          <Link href="/inspection" className="text-sm text-blue-600 underline">Back to Sites</Link>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="app-page">
-      <AppNav subtitle="Site overview" />
+    <div className="min-h-screen bg-gray-50 dark:bg-[#14171e]">
+      <header className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#111]">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 flex items-center gap-3 sm:gap-4">
+          <Link href="/inspection" className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition shrink-0">
+            <ArrowLeft className="w-5 h-5" />
+          </Link>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-base font-bold text-gray-900 dark:text-white truncate">{site.name}</h1>
+            <button
+              onClick={() => { setEditingAddress(true); }}
+              className="inline-flex items-center gap-1 mt-0.5 text-xs text-gray-400 hover:text-blue-500 transition group cursor-pointer"
+            >
+              <MapPin className="w-3 h-3 shrink-0" />
+              <span className="truncate max-w-[160px] sm:max-w-xs">{site.address || 'Add location...'}</span>
+              <Pencil className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition shrink-0" />
+            </button>
+          </div>
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <Link
+              href={`/sites/${site_id}/items`}
+              className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-xs sm:text-sm text-gray-600 dark:text-gray-300 hover:border-blue-300 dark:hover:border-blue-700 transition"
+            >
+              <Layers className="w-4 h-4 shrink-0" />
+              <span className="hidden sm:inline">View All Defects</span>
+            </Link>
+            {email && (
+              <span className="hidden md:block text-xs text-gray-400 dark:text-gray-500 font-mono truncate max-w-[160px]">
+                {email}
+              </span>
+            )}
+            <ModeToggle />
+            <button
+              onClick={async () => { await getSupabase().auth.signOut(); router.push('/login'); }}
+              title="Sign out"
+              className="p-2 rounded-lg text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </header>
 
-      <main className="page-container page-main space-y-7">
-        <PageHeader
-          eyebrow="Site overview"
-          title={site.name}
-          description={site.description || "Review inspection activity, defect distribution, and job progress for this location."}
-          meta={
-            <>
-              <button onClick={() => setEditingAddress(true)} className="group inline-flex items-center gap-1.5 hover:text-primary">
-                <MapPin className="size-3.5" />
-                <span>{site.address || "Add site location"}</span>
-                <Pencil className="size-3 opacity-50 group-hover:opacity-100" />
-              </button>
-              <span className="inline-flex items-center gap-1.5"><Calendar className="size-3.5" />Created {formatDate(site.created_at)}</span>
-            </>
-          }
-          actions={
-            <>
-              <Button variant="outline" asChild className="flex-1 sm:flex-none">
-                <Link href={`/sites/${site_id}/items`}><Layers className="size-4" />Defect register</Link>
-              </Button>
-              <Button asChild className="flex-1 sm:flex-none">
-                <Link href={`/upload?site_id=${site_id}`}><Plus className="size-4" />New inspection</Link>
-              </Button>
-            </>
-          }
-        />
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 py-6 sm:py-8 space-y-6 sm:space-y-8">
 
-        <section className="grid grid-cols-2 items-start gap-3 sm:grid-cols-4 sm:gap-4" aria-label="Site summary">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 items-start">
 
           <SiteStatCard
             label="Inspectors" icon={Users}
@@ -315,11 +323,11 @@ export default function SiteDetailPage() {
               </div>
             )}
           </SiteStatCard>
-        </section>
+        </div>
 
-        <div className="grid grid-cols-1 gap-7 lg:grid-cols-[minmax(0,1fr)_21rem]">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
 
-          <section className="min-w-0 space-y-3">
+          <div className="lg:col-span-2 space-y-3">
             {deleteError && (
               <div className="flex items-center gap-2 p-3 mb-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-600 dark:text-red-400">
                 <AlertCircle className="w-4 h-4 shrink-0" />
@@ -328,45 +336,47 @@ export default function SiteDetailPage() {
               </div>
             )}
 
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div>
-                  <h2 className="text-base font-semibold text-foreground">Inspection jobs</h2>
-                  <p className="mt-0.5 text-xs text-muted-foreground">{jobs.length} {jobs.length === 1 ? "job" : "jobs"} at this site</p>
-                </div>
+                <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Inspection Jobs
+                </h2>
                 {jobs.length > 0 && (
                   <button onClick={toggleSelectAll}
-                    className="text-xs font-semibold text-primary hover:underline">
-                    {allSelected ? "Clear selection" : "Select all"}
+                    className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition cursor-pointer">
+                    {allSelected ? "Deselect all" : "Select all"}
                   </button>
                 )}
               </div>
               <div className="flex items-center gap-2">
                 {selectedJobIds.size > 0 && (
-                  <Button
-                    variant="destructive"
-                    size="sm"
+                  <button
                     onClick={() => openDeleteModal({ type: "jobs", ids: [...selectedJobIds] })}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold transition cursor-pointer"
                   >
-                    <Trash2 className="size-4" />
-                    <span className="hidden sm:inline">Delete selected ({selectedJobIds.size})</span>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Delete Selected ({selectedJobIds.size})</span>
                     <span className="sm:hidden">{selectedJobIds.size}</span>
-                  </Button>
+                  </button>
                 )}
-                <Button size="sm" asChild>
-                  <Link href={`/upload?site_id=${site_id}`}><Plus className="size-4" />New job</Link>
-                </Button>
+                <Link
+                  href={`/upload?site_id=${site_id}`}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">New Job</span>
+                </Link>
               </div>
             </div>
 
             {jobs.length === 0 ? (
-              <EmptyState
-                icon={Layers}
-                title="No inspections at this site"
-                description="Start the first image inspection to create a baseline and begin tracking findings."
-                actionLabel="Start inspection"
-                onAction={() => router.push(`/upload?site_id=${site_id}`)}
-              />
+              <div className="flex flex-col items-center justify-center py-16 text-gray-400 bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800">
+                <AlertCircle className="w-8 h-8 mb-2 opacity-40" />
+                <p className="text-sm">No jobs yet</p>
+                <Link href={`/upload?site_id=${site_id}`} className="mt-3 text-xs text-blue-600 dark:text-blue-400 underline">
+                  Start the first inspection
+                </Link>
+              </div>
             ) : (
               <div className="space-y-2">
                 {jobs.map(job => (
@@ -381,10 +391,10 @@ export default function SiteDetailPage() {
                 ))}
               </div>
             )}
-          </section>
+          </div>
 
-          <aside className="space-y-4 lg:sticky lg:top-24 lg:self-start">
-            <h2 className="section-kicker">Location</h2>
+          <div className="space-y-3">
+            <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Location</h2>
             {site.address ? (
               <LocationDisplayMap address={site.address} />
             ) : (
@@ -397,10 +407,10 @@ export default function SiteDetailPage() {
               </button>
             )}
 
-            <h2 className="section-kicker pt-2">
-              Findings by floor
+            <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider pt-2">
+              Defects by Floor
             </h2>
-            <div className="surface-panel space-y-4 p-4">
+            <div className="bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800 p-4 space-y-3">
               {totalDefects === 0 ? (
                 <p className="text-sm text-gray-400 text-center py-4">No defects detected yet</p>
               ) : (
@@ -411,7 +421,7 @@ export default function SiteDetailPage() {
                       <span className="text-gray-500 dark:text-gray-400">{count} defect{count !== 1 ? "s" : ""}</span>
                     </div>
                     <div className="h-2 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
-                      <div className="h-full rounded-full bg-primary transition-all"
+                      <div className="h-full rounded-full bg-blue-500 transition-all"
                            style={{ width: `${(count / maxFloorCount) * 100}%` }} />
                     </div>
                   </div>
@@ -419,15 +429,14 @@ export default function SiteDetailPage() {
               )}
               {totalDefects > 0 && (
                 <Link href={`/sites/${site_id}/items`}
-                  className="flex items-center justify-center gap-1 border-t pt-3 text-xs font-semibold text-primary hover:underline">
-                  Open defect register <ChevronRight className="size-3" />
+                  className="flex items-center justify-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline pt-2 border-t border-gray-100 dark:border-gray-800">
+                  View all defects <ChevronRight className="w-3 h-3" />
                 </Link>
               )}
             </div>
 
-            <div className="rounded-2xl border border-red-200/70 bg-card p-4 dark:border-red-900/50">
-              <p className="section-kicker text-red-600 dark:text-red-300">Danger zone</p>
-              <div className="mt-3 space-y-3">
+            <div className="bg-white dark:bg-[#161616] rounded-2xl border border-red-100 dark:border-red-900/40 p-4 space-y-3">
+              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Danger Zone</p>
               {jobs.length > 0 && (
                 <button onClick={() => openDeleteModal({ type: "jobs", ids: jobs.map(j => j.job_id) })}
                   className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition cursor-pointer">
@@ -438,10 +447,9 @@ export default function SiteDetailPage() {
                 className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition cursor-pointer">
                 <Trash2 className="w-4 h-4" />Delete this site
               </button>
-              <p className="text-xs leading-5 text-muted-foreground">Deleting the site does not delete its jobs.</p>
-              </div>
+              <p className="text-xs text-gray-400">Deleting the site does not delete its jobs.</p>
             </div>
-          </aside>
+          </div>
         </div>
       </main>
 

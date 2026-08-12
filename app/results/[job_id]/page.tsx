@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef } from "react";
-import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import {
   generateReport,
@@ -42,19 +42,16 @@ import {
   Check,
   ZoomIn,
   MessageSquare,
-  PanelLeft,
-  PanelRight,
-  Clock,
   Settings,
   Calendar,
   LogOut,
+  PanelLeft,
+  PanelRight,
+  Clock,
 } from "lucide-react";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 import { getSupabase } from "@/lib/supabase";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import AppNav from "@/components/AppNav";
-import { PageHeader } from "@/components/app/PageHeader";
-import { WorkflowRail } from "@/components/app/WorkflowRail";
 
 // ─── Types / Helpers ──────────────────────────────────────────────────────────
 
@@ -825,9 +822,11 @@ export default function ResultPage() {
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div className="app-page flex min-h-screen flex-col overflow-x-hidden">
+    <div className="flex flex-col min-h-screen overflow-hidden bg-gray-50 dark:bg-[#14171e]">
       {/* HEADER */}
-      <header className="hidden">
+      <header className="fixed top-0 left-0 right-0 z-50
+                         border-b border-gray-200 dark:border-gray-800
+                         bg-white/80 dark:bg-gray-950/80 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 flex items-center justify-between gap-2 sm:gap-4">
           {/* Left — brand + back + title */}
           <div className="flex items-center gap-2 sm:gap-4 min-w-0">
@@ -883,43 +882,16 @@ export default function ResultPage() {
         </div>
       </header>
       {/* Spacer for fixed header */}
-      <AppNav
-        subtitle="Detection review"
-        left={
-          <button
-            className="flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground"
-            onClick={() => router.push('/preprocess/' + encodeURIComponent(jobId))}
-            aria-label="Back to preprocessing"
-          >
-            <ArrowLeft className="size-4" />
-          </button>
-        }
-      />
-      <div className="page-container pb-5 pt-24">
-        <PageHeader
-          eyebrow="Defect detection"
-          title="Detection review"
-          description="Tune detection sensitivity, inspect annotated evidence, record observations, and prepare the final report."
-          meta={
-            <>
-              <span>{projectName !== "—" ? projectName : `Job ${jobId.slice(0, 8)}`}</span>
-              <span>{modelName}</span>
-              <span>{projectDate}</span>
-            </>
-          }
-          actions={<WorkflowRail current="results" />}
-        />
-      </div>
+      <div className="h-12 shrink-0" />
 
       {/* Pre-detection sensitivity selector */}
       {readyToRun && !isRunning && !hasRun && (
-        <div className="page-container flex flex-1 items-start justify-center py-8">
-          <div className="surface-panel w-full max-w-3xl overflow-hidden">
+        <div className="flex flex-col items-center justify-center flex-1 bg-gray-100 dark:bg-gray-900 p-6">
+          <div className="bg-white dark:bg-gray-950 rounded-2xl border border-gray-200 dark:border-gray-800 w-full max-w-lg overflow-hidden">
             {/* Header */}
             <div className="px-6 pt-6 pb-4 border-b border-gray-100 dark:border-gray-800">
-              <p className="section-kicker mb-2">Detection setup</p>
-              <h2 className="text-xl font-semibold tracking-tight text-foreground">Set inspection sensitivity</h2>
-              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              <h2 className="text-base font-bold text-gray-900 dark:text-white">Detection Sensitivity</h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                 Set how aggressively the model flags each defect class before running inference.
               </p>
             </div>
@@ -954,7 +926,7 @@ export default function ResultPage() {
                           key={level}
                           onClick={() => setSensitivity(prev => ({ ...prev, [cls]: level }))}
                           className={cn(
-                            'min-h-11 w-full rounded-lg border px-3 py-2 text-left text-xs transition',
+                            'w-full text-left px-3 py-2 rounded-lg border text-xs transition cursor-pointer',
                             active
                               ? activeStyle[level]
                               : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-900',
@@ -976,13 +948,12 @@ export default function ResultPage() {
                   <AlertCircle className="w-4 h-4 shrink-0" />{error}
                 </div>
               )}
-              <Button
+              <button
                 onClick={() => runDetection(sensitivity)}
-                className="w-full"
-                size="lg"
+                className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold transition cursor-pointer"
               >
                 Run Detection
-              </Button>
+              </button>
             </div>
           </div>
         </div>
@@ -990,9 +961,9 @@ export default function ResultPage() {
 
       {/* Loading */}
       {isRunning && (
-        <div className="page-container flex flex-1 flex-col items-center justify-center gap-4 py-16 text-muted-foreground">
-          <Loader2 className="size-9 animate-spin text-primary" />
-          <p className="font-medium text-foreground">
+        <div className="flex flex-col items-center justify-center flex-1 gap-4 bg-gray-100 dark:bg-gray-900 text-gray-500 dark:text-gray-400">
+          <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
+          <p className="font-medium text-gray-900 dark:text-white">
             {isPolling ? "Detection in progress…" : "Running YOLOv11 inference…"}
           </p>
           <p className="text-sm">
@@ -1003,7 +974,7 @@ export default function ResultPage() {
 
       {/* Error — only shown when there are no results to display */}
       {error && !isRunning && !hasRun && (
-        <div className="page-container flex flex-1 flex-col items-center justify-center gap-4 py-12">
+        <div className="flex flex-col items-center justify-center flex-1 gap-4 bg-gray-100 dark:bg-gray-900 p-8">
           <div className="bg-red-50 border border-red-200 dark:bg-red-950/30 dark:border-red-800 rounded-2xl p-6 max-w-md w-full">
             <div className="flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 shrink-0" />
@@ -1022,14 +993,14 @@ export default function ResultPage() {
 
       {/* CONTENT */}
       {hasRun && detectData && (
-        <div className={cn("page-container flex flex-1 flex-col gap-5 pb-8 lg:flex-row", sidebarSide === 'left' && "lg:flex-row-reverse")}>
+        <div className={cn("flex flex-1 flex-col lg:flex-row", sidebarSide === 'left' && "lg:flex-row-reverse")}>
           {/* Main Image Viewer */}
-          <div className="surface-panel flex min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="flex-1 min-w-0 bg-gray-100 dark:bg-gray-900 flex flex-col">
             {/* Controls — two boxes side by side above the carousel */}
             <div className="flex flex-col sm:flex-row gap-3 pt-3 px-4 md:px-6">
 
               {/* Box 1 — Sensitivity */}
-              <div className="rounded-xl border border-border bg-muted/25 px-4 py-3 flex flex-col gap-2.5 flex-1 min-w-0">
+              <div className="bg-white/90 backdrop-blur-sm border border-gray-200 dark:bg-gray-950/90 dark:border-gray-700 rounded-lg px-4 py-3 flex flex-col gap-2.5 flex-1 min-w-0">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Sensitivity</span>
                   {isRunning && <Loader2 className="w-3 h-3 animate-spin text-blue-500" />}
@@ -1090,7 +1061,7 @@ export default function ResultPage() {
               </div>
 
               {/* Box 2 — View / Overlays / Classes / Timing (open card, no wrapper close yet) */}
-              <div className="rounded-xl border border-border bg-muted/25 px-4 py-3 flex flex-col gap-3 flex-1 min-w-0">
+              <div className="bg-white/90 backdrop-blur-sm border border-gray-200 dark:bg-gray-950/90 dark:border-gray-700 rounded-lg px-4 py-3 flex flex-col gap-3 flex-1 min-w-0">
                 {/* View mode segmented control */}
                 <div className="flex items-center gap-3">
                   <span className="text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider shrink-0">View</span>
@@ -1461,7 +1432,10 @@ export default function ResultPage() {
           </div>
 
           {/* Sidebar — left or right based on sidebarSide */}
-          <div className="surface-panel flex flex-col gap-4 overflow-y-auto p-4 sm:p-5 lg:w-96 lg:shrink-0 xl:w-[28rem]">
+          <div className={cn(
+            "lg:w-96 xl:w-[28rem] bg-white border-t lg:border-t-0 border-gray-200 dark:bg-gray-950 dark:border-gray-800 p-4 sm:p-5 overflow-y-auto flex flex-col gap-4",
+            sidebarSide === 'left' ? "lg:border-r" : "lg:border-l"
+          )}>
 
             {/* Header: layout toggle + metrics */}
             <div className="flex items-center justify-between">
@@ -1848,11 +1822,11 @@ export default function ResultPage() {
       {/* Performance Metrics Modal */}
       {metricsOpen && perfMetrics && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
           onClick={() => setMetricsOpen(false)}
         >
           <div
-            className="surface-panel w-full max-w-sm overflow-hidden shadow-xl"
+            className="w-full max-w-sm bg-white dark:bg-gray-950 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xl overflow-hidden"
             onClick={e => e.stopPropagation()}
           >
             {/* Header */}
@@ -1904,11 +1878,11 @@ export default function ResultPage() {
       {/* Image comment modal */}
       {commentModalOpen && currentFileId && (
         <div
-          className="fixed inset-0 z-[55] flex items-center justify-center bg-slate-950/65 p-4"
+          className="fixed inset-0 z-[55] flex items-center justify-center bg-black/60 backdrop-blur-sm"
           onClick={() => setCommentModalOpen(false)}
         >
           <div
-            className="surface-panel mx-4 flex w-full max-w-md flex-col overflow-hidden shadow-xl"
+            className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-md mx-4 flex flex-col overflow-hidden"
             onClick={e => e.stopPropagation()}
           >
             {/* Header */}
@@ -1972,7 +1946,7 @@ export default function ResultPage() {
       {/* Lightbox */}
       {lightboxSrc && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/95"
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-sm"
           onClick={() => setLightboxSrc(null)}
         >
           <button

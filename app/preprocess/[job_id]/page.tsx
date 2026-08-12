@@ -17,9 +17,6 @@ import {
   Clock,
 } from "lucide-react";
 import AppNav from "@/components/AppNav";
-import { PageHeader } from "@/components/app/PageHeader";
-import { WorkflowRail } from "@/components/app/WorkflowRail";
-import { Button } from "@/components/ui/button";
 
 // â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -774,31 +771,20 @@ export default function PreprocessPage() {
   // â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   return (
-    <div className="app-page">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#14171e]">
       <AppNav
-        subtitle="Image enhancement"
         left={
           <button
             onClick={() => router.push('/upload')}
-            className="flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground"
+            className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition cursor-pointer shrink-0"
             aria-label="Back to upload"
           >
-            <ArrowLeft className="size-4" />
+            <ArrowLeft className="w-5 h-5" />
           </button>
         }
       />
 
-      <main className="page-container page-main space-y-7">
-        <PageHeader
-          eyebrow="Image enhancement"
-          title={isComplete ? "Preprocessing complete" : "Preprocessing inspection images"}
-          description={isComplete
-            ? "The enhanced files and quality metrics are ready for defect review."
-            : "VISCRETE is optimizing local contrast while preserving the visual characteristics used for defect detection."
-          }
-          meta={<span className="font-mono">{job_id}</span>}
-          actions={<WorkflowRail current="preprocess" />}
-        />
+      <main className="max-w-5xl mx-auto px-3 sm:px-6 py-8 pt-20 space-y-6">
         {/* Meta fetch error */}
         {metaError && (
           <div className="flex items-center gap-2 p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl text-sm text-amber-700 dark:text-amber-300">
@@ -808,13 +794,11 @@ export default function PreprocessPage() {
         )}
 
         {/* â”€â”€ Section 1: Pipeline progress + stepper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(22rem,0.85fr)]">
-        <div className="surface-panel p-5 sm:p-6">
+        <div className="bg-white dark:bg-gray-950 rounded-2xl border border-gray-200 dark:border-gray-800 p-6">
           <div className="flex items-center justify-between mb-6">
-            <div>
-              <p className="section-kicker">Pipeline status</p>
-              <h2 className="mt-2 text-base font-semibold text-foreground">Enhancement progress</h2>
-            </div>
+            <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              Pipeline Progress
+            </h2>
             {result && (
               <span className="text-xs text-gray-400 dark:text-gray-500">
                 {result.total_processed} file
@@ -848,14 +832,13 @@ export default function PreprocessPage() {
 
         {/* â”€â”€ Section 2: Terminal log â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <PreprocessingTerminal lines={terminalLines} />
-        </div>
 
         {/* â”€â”€ Section 3: Results (shown after completion) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         {isComplete && (
           <>
             {/* Cluster summary + step timing â€” always expanded */}
             {result && (result.cluster_info?.length > 0 || result.pipeline_steps?.length > 0) && (
-              <div className="surface-panel overflow-hidden">
+              <div className="bg-white dark:bg-gray-950 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
                 <div className="flex items-center gap-3 px-4 sm:px-6 py-4 border-b border-gray-100 dark:border-gray-800">
                   <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Cluster Summary
@@ -925,11 +908,12 @@ export default function PreprocessPage() {
             {/* Before / After image comparisons */}
             {imageFiles.length > 0 && (
               <div>
-                <p className="section-kicker">Quality review</p>
-                <div className="mb-4 mt-2 flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
-                  <h2 className="text-base font-semibold text-foreground">Before and after</h2>
-                  <span className="text-xs text-muted-foreground">Toggle each image to compare the enhancement.</span>
-                </div>
+                <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">
+                  Before / After Comparison
+                  <span className="ml-2 text-gray-400 font-normal normal-case text-xs">
+                    Toggle to compare original vs processed
+                  </span>
+                </h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {imageFiles.map(
                     ({
@@ -962,8 +946,12 @@ export default function PreprocessPage() {
 
       {/* Floating proceed bar â€” fixed at bottom once pipeline is complete */}
       {isComplete && (
-        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center border-t bg-background/95 px-4 py-3 backdrop-blur sm:bottom-5 sm:border-0 sm:bg-transparent sm:py-0">
-          <div className="surface-panel pointer-events-auto flex w-full max-w-2xl items-center gap-4 px-4 py-3 sm:px-5">
+        <div className="fixed bottom-6 left-0 right-0 z-50 flex justify-center px-4 pointer-events-none">
+          <div className="pointer-events-auto flex items-center gap-4 px-5 py-3 rounded-2xl
+                          bg-white/90 dark:bg-gray-950/90 backdrop-blur-md
+                          border border-emerald-200 dark:border-emerald-800
+                          shadow-xl shadow-emerald-500/10
+                          w-full max-w-lg sm:max-w-2xl">
             <div className="flex-1 min-w-0">
               <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
                 Preprocessing complete
@@ -972,14 +960,17 @@ export default function PreprocessPage() {
                 Ready to run defect detection
               </p>
             </div>
-            <Button
+            <button
               id="btn-proceed-detection"
               onClick={() => router.push(`/results/${encodeURIComponent(job_id)}`)}
-              className="shrink-0"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl
+                         bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-500
+                         dark:bg-emerald-950/40 dark:hover:bg-emerald-950/60 dark:text-emerald-400 dark:border-emerald-600
+                         text-sm font-semibold transition-all shadow-sm active:scale-95 shrink-0 cursor-pointer"
             >
-              Review detections
+              Proceed
               <ArrowRight className="w-4 h-4" />
-            </Button>
+            </button>
           </div>
         </div>
       )}
