@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Building2, Plus, Search, Loader2, AlertCircle, MapPin, User, Calendar, ChevronRight, LogOut, Trash2, X } from "lucide-react";
+import { Building2, Plus, Search, Loader2, MapPin, User, Calendar, ChevronRight, LogOut, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,8 @@ import { getSupabase } from "@/lib/supabase";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { listSites, createSite, deleteSite, type SiteResponse } from "@/lib/api";
 import LocationPicker from "@/components/LocationPicker";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { CardGridSkeleton } from "@/components/ui/skeleton";
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-PH", {
@@ -272,12 +274,7 @@ export default function InspectionPage() {
                     />
                   </div>
 
-                  {createError && (
-                    <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
-                      <AlertCircle className="w-4 h-4 shrink-0" />
-                      {createError}
-                    </div>
-                  )}
+                  <ErrorAlert variant="inline" error={createError} />
 
                   <div className="flex gap-3 pt-2 border-t border-gray-100 dark:border-gray-800">
                     <Button
@@ -333,28 +330,11 @@ export default function InspectionPage() {
               </div>
             </div>
 
-            {deleteError && (
-              <div className="flex items-center gap-2 p-3 mb-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-600 dark:text-red-400">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                {deleteError}
-                <button onClick={() => setDeleteError(null)} className="ml-auto shrink-0"><X className="w-3.5 h-3.5" /></button>
-              </div>
-            )}
+            <ErrorAlert error={deleteError} title="Couldn't delete" onDismiss={() => setDeleteError(null)} className="mb-3" />
 
-            {loading && (
-              <div className="flex items-center justify-center py-20 text-gray-400">
-                <Loader2 className="w-6 h-6 animate-spin mr-2" />
-                <span className="text-sm">Loading sites…</span>
-              </div>
-            )}
+            {loading && <CardGridSkeleton label="Loading sites…" />}
 
-            {error && !loading && (
-              <div className="flex items-center gap-2 p-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-600 dark:text-red-400">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                {error}
-                <button onClick={loadSites} className="ml-auto underline text-xs">Retry</button>
-              </div>
-            )}
+            {error && !loading && <ErrorAlert error={error} title="Couldn't load your sites" onRetry={loadSites} />}
 
             {!loading && !error && filteredSites.length === 0 && (
               <div className="flex flex-col items-center justify-center py-20 text-gray-400">

@@ -14,6 +14,8 @@ import {
   type Detection,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { Skeleton, PipelineSkeleton } from "@/components/ui/skeleton";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -945,11 +947,7 @@ export default function ResultPage() {
             </div>
             {/* Footer */}
             <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-800">
-              {error && (
-                <div className="flex items-center gap-2 mb-3 p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-600 dark:text-red-400">
-                  <AlertCircle className="w-4 h-4 shrink-0" />{error}
-                </div>
-              )}
+              <ErrorAlert error={error} title="Detection didn't finish" className="mb-3" />
               <button
                 onClick={() => runDetection(sensitivity)}
                 className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold transition cursor-pointer"
@@ -963,32 +961,34 @@ export default function ResultPage() {
 
       {/* Loading */}
       {isRunning && (
-        <div className="flex flex-col items-center justify-center flex-1 gap-4 bg-gray-100 dark:bg-gray-900 text-gray-500 dark:text-gray-400">
-          <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
-          <p className="font-medium text-gray-900 dark:text-white">
-            {isPolling ? "Detection in progress…" : "Running YOLOv11 inference…"}
-          </p>
-          <p className="text-sm">
-            {isPolling ? "Waiting for the backend to finish" : "This may take a moment"}
-          </p>
+        <div className="flex-1 bg-gray-100 dark:bg-gray-900 p-4 sm:p-6 space-y-5">
+          <div className="flex items-center gap-3 text-sm">
+            <Loader2 className="w-4 h-4 animate-spin text-blue-500 shrink-0" />
+            <p className="font-medium text-gray-900 dark:text-white">
+              {isPolling ? "Detection in progress…" : "Running YOLOv11 inference…"}
+              <span className="ml-2 font-normal text-gray-500 dark:text-gray-400">
+                {isPolling ? "Waiting for the backend to finish" : "This may take a moment"}
+              </span>
+            </p>
+          </div>
+          <PipelineSkeleton label="Running defect detection…" />
         </div>
       )}
 
       {/* Error — only shown when there are no results to display */}
       {error && !isRunning && !hasRun && (
         <div className="flex flex-col items-center justify-center flex-1 gap-4 bg-gray-100 dark:bg-gray-900 p-8">
-          <div className="bg-red-50 border border-red-200 dark:bg-red-950/30 dark:border-red-800 rounded-2xl p-6 max-w-md w-full">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 shrink-0" />
-              <div>
-                <p className="text-red-700 dark:text-red-300 font-medium mb-2">{error}</p>
-                {error.includes("not found") && (
-                  <button onClick={() => router.push("/upload")} className="text-sm text-red-400 underline">
-                    ← Back to Upload
-                  </button>
-                )}
-              </div>
-            </div>
+          <div className="max-w-md w-full space-y-3">
+            <ErrorAlert
+              error={error}
+              title={error.includes("not found") ? "Job not found" : "Couldn't load the results"}
+              onRetry={error.includes("not found") ? undefined : fetchCachedResults}
+            />
+            {error.includes("not found") && (
+              <button onClick={() => router.push("/upload")} className="text-sm text-blue-600 dark:text-blue-400 underline cursor-pointer">
+                ← Back to Upload
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -1203,11 +1203,7 @@ export default function ResultPage() {
                 ) : (
                   <div className="relative w-full h-full">
                     {/* Loading spinner */}
-                    {imageLoading && (
-                      <div className="absolute inset-0 flex items-center justify-center z-10">
-                        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-                      </div>
-                    )}
+                    {imageLoading && <Skeleton className="absolute inset-0 z-10 rounded-none" />}
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       ref={imageRef}
@@ -1811,12 +1807,7 @@ export default function ResultPage() {
             )}
 
             {/* Report error */}
-            {reportError && (
-              <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 dark:bg-red-950/30 dark:border-red-800 rounded-xl text-xs text-red-600 dark:text-red-400">
-                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                {reportError}
-              </div>
-            )}
+            <ErrorAlert error={reportError} title="Report problem" onDismiss={() => setReportError(null)} className="text-xs" />
           </div>
         </div>
       )}

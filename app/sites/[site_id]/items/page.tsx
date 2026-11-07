@@ -5,11 +5,13 @@ import { useSignedUrl } from "@/hooks/useSignedUrl";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  ArrowLeft, Loader2, AlertCircle, Filter, CheckCircle2,
+  ArrowLeft, Filter, CheckCircle2,
   Clock, Circle, ImageIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getSiteItems, updateDefectStatus, type DefectItem } from "@/lib/api";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { ListSkeleton } from "@/components/ui/skeleton";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -248,19 +250,9 @@ export default function SiteItemsPage() {
       </header>
 
       <main className="max-w-6xl mx-auto px-6 py-6 space-y-8">
-        {loading && (
-          <div className="flex items-center justify-center py-20 text-gray-400">
-            <Loader2 className="w-6 h-6 animate-spin mr-2" />
-            <span className="text-sm">Loading defects…</span>
-          </div>
-        )}
+        {loading && <ListSkeleton rows={6} label="Loading defects…" />}
 
-        {error && !loading && (
-          <div className="flex items-center gap-2 p-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-600 dark:text-red-400">
-            <AlertCircle className="w-4 h-4 shrink-0" />{error}
-            <button onClick={load} className="ml-auto underline text-xs">Retry</button>
-          </div>
-        )}
+        {error && !loading && <ErrorAlert error={error} title="Couldn't load defects" onRetry={load} />}
 
         {!loading && !error && defects.length === 0 && (
           <div className="flex flex-col items-center justify-center py-24 text-gray-400">

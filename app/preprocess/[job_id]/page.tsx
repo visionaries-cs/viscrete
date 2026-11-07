@@ -13,10 +13,10 @@ import {
   XCircle,
   ArrowLeft,
   ArrowRight,
-  AlertCircle,
   Clock,
 } from "lucide-react";
 import AppNav from "@/components/AppNav";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
 
 // â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -790,12 +790,7 @@ export default function PreprocessPage() {
 
       <main className="max-w-5xl mx-auto px-3 sm:px-6 py-8 pt-20 space-y-6">
         {/* Meta fetch error */}
-        {metaError && (
-          <div className="flex items-center gap-2 p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl text-sm text-amber-700 dark:text-amber-300">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            Could not load job info: {metaError}
-          </div>
-        )}
+        <ErrorAlert error={metaError} title="Couldn't load job info" />
 
         {/* â”€â”€ Section 1: Pipeline progress + stepper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <div className="bg-white dark:bg-gray-950 rounded-2xl border border-gray-200 dark:border-gray-800 p-6">
@@ -819,18 +814,7 @@ export default function PreprocessPage() {
           />
 
           {/* Fatal error with retry */}
-          {globalError && (
-            <div className="mt-5 flex items-center gap-2 p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-600 dark:text-red-400">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span className="flex-1">{globalError}</span>
-              <button
-                onClick={handleRetry}
-                className="text-xs underline hover:no-underline shrink-0 cursor-pointer"
-              >
-                Retry
-              </button>
-            </div>
-          )}
+          <ErrorAlert error={globalError} title="Preprocessing stopped" onRetry={handleRetry} className="mt-5" />
 
         </div>
 

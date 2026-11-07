@@ -5,6 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import AppNav from "@/components/AppNav";
 import { cn } from "@/lib/utils";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { Skeleton, SkeletonRegion } from "@/components/ui/skeleton";
+import { friendlyMessage } from "@/lib/errors";
 import ImagePreviewModal from "@/components/upload/ImagePreviewModal";
 import FileResultCard from "@/components/upload/FileResultCard";
 import CarouselResultView from "@/components/upload/CarouselResultView";
@@ -30,7 +33,6 @@ import {
   Upload,
   Loader2,
   CheckCircle2,
-  XCircle,
   MapPin,
   MapPinOff,
   ChevronLeft,
@@ -178,10 +180,7 @@ function SitePickerModal({
               Select an existing site
             </label>
             {sitesLoading ? (
-              <div className="flex items-center gap-2 text-xs text-gray-400 py-2">
-                <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-                Loading sites…
-              </div>
+              <SkeletonRegion label="Loading sites…"><Skeleton className="h-9 w-full rounded-lg" /></SkeletonRegion>
             ) : (
               <select
                 value={selectedId}
@@ -232,11 +231,7 @@ function SitePickerModal({
             </button>
           </div>
 
-          {error && (
-            <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1">
-              <AlertCircle className="w-3.5 h-3.5 shrink-0" />{error}
-            </p>
-          )}
+          <ErrorAlert variant="inline" error={error} className="text-xs" />
         </div>
 
         {/* Footer */}
@@ -399,7 +394,7 @@ function UploadPageInner() {
         return Math.min(prev, maxPage);
       });
     } catch (e: unknown) {
-      showToast(e instanceof Error ? e.message : "Failed to delete job");
+      showToast(friendlyMessage(e, "Failed to delete job"));
     } finally {
       setDeletingJobId(null);
     }
@@ -504,12 +499,8 @@ function UploadPageInner() {
       const hasValid = results.some(r => r.is_valid);
       if (!hasValid) setUploadError("All files failed validation. Use 'Proceed Anyway' on individual files or replace them.");
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Unknown error";
-      if (msg.toLowerCase().includes("unavailable") || msg.toLowerCase().includes("fetch")) {
-        showToast("Backend unavailable — is the server running?");
-      } else {
-        setUploadError(msg);
-      }
+      // ErrorAlert turns network failures into "Can't reach the VISCRETE server".
+      setUploadError(e instanceof Error ? e.message : "Unknown error");
     } finally {
       setIsUploading(false);
     }
@@ -528,7 +519,7 @@ function UploadPageInner() {
         r.file_id === fileId ? { ...r, is_valid: true, blur_override: true } : r
       ) : prev);
     } catch (e: unknown) {
-      showToast(e instanceof Error ? e.message : 'Failed to override file');
+      showToast(friendlyMessage(e, 'Failed to override file'));
     } finally {
       setFileActionLoading(prev => { const n = { ...prev }; delete n[fileId]; return n; });
     }
@@ -543,7 +534,7 @@ function UploadPageInner() {
         r.file_id === fileId ? { ...result, file_id: fileId } : r
       ) : prev);
     } catch (e: unknown) {
-      showToast(e instanceof Error ? e.message : 'Failed to replace file');
+      showToast(friendlyMessage(e, 'Failed to replace file'));
     } finally {
       setFileActionLoading(prev => { const n = { ...prev }; delete n[fileId]; return n; });
     }
@@ -909,12 +900,7 @@ function UploadPageInner() {
               )}
 
               {/* Upload error */}
-              {uploadError && (
-                <div className="mt-4 flex items-start gap-2 p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300">
-                  <XCircle className="w-4 h-4 mt-0.5 shrink-0" />
-                  {uploadError}
-                </div>
-              )}
+              <ErrorAlert error={uploadError} title="Upload failed" onDismiss={() => setUploadError(null)} className="mt-4" />
 
               {/* Upload + Proceed buttons */}
               <div className="mt-4 flex gap-3">
@@ -1096,13 +1082,7 @@ function UploadPageInner() {
                 )}
 
                 {/* Save error */}
-                {saveError && (
-                  <div className="flex items-center gap-2 px-3 py-2.5 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-700 dark:text-red-300">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    {saveError}
-                    <button onClick={() => setSaveError(null)} className="ml-auto text-xs text-red-400 hover:text-red-600 cursor-pointer">Dismiss</button>
-                  </div>
-                )}
+                <ErrorAlert error={saveError} title="Couldn't save the location" onDismiss={() => setSaveError(null)} />
 
                 {/* File cards — list or carousel */}
                 {filteredResults.length === 0 ? (

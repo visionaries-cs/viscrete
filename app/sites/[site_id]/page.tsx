@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  ArrowLeft, Plus, Layers, Loader2, AlertCircle,
+  ArrowLeft, Plus, Layers, AlertCircle,
   MapPin, Calendar, ChevronRight, Trash2, ExternalLink, X,
   LogOut, Pencil, Users, BarChart3,
 } from "lucide-react";
@@ -23,6 +23,24 @@ import { InspectorModal } from "@/components/sites/InspectorModal";
 import { CreatedModal } from "@/components/sites/CreatedModal";
 import { JobsModal } from "@/components/sites/JobsModal";
 import { DefectsModal } from "@/components/sites/DefectsModal";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { Skeleton, SkeletonRegion, ListSkeleton } from "@/components/ui/skeleton";
+
+// Job filter pills, grouped by pipeline stage. Colors follow the JobCard status badges.
+const JOB_STAGES: { key: string; label: string; statuses: string[]; dot: string; active: string }[] = [
+  { key: "upload",     label: "Upload",     statuses: ["created", "validating", "validated"], dot: "bg-blue-500",
+    active: "bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800" },
+  { key: "preprocess", label: "Preprocess", statuses: ["preprocessing", "preprocessed"],      dot: "bg-yellow-500",
+    active: "bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-950/60 dark:text-yellow-300 dark:border-yellow-800" },
+  { key: "detect",     label: "Detect",     statuses: ["detecting", "detected"],              dot: "bg-orange-500",
+    active: "bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-950/60 dark:text-orange-300 dark:border-orange-800" },
+  { key: "report",     label: "Report",     statuses: ["reporting"],                          dot: "bg-purple-500",
+    active: "bg-purple-100 text-purple-700 border-purple-300 dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-800" },
+  { key: "completed",  label: "Completed",  statuses: ["completed"],                          dot: "bg-emerald-500",
+    active: "bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800" },
+  { key: "failed",     label: "Failed",     statuses: ["failed"],                             dot: "bg-red-500",
+    active: "bg-red-100 text-red-700 border-red-300 dark:bg-red-950/60 dark:text-red-300 dark:border-red-800" },
+];
 
 const LocationDisplayMap = dynamic(() => import("@/components/LocationDisplayMap"), { ssr: false });
 const LocationPickerMap  = dynamic(() => import("@/components/LocationPickerMap"),  { ssr: false });
@@ -60,6 +78,7 @@ export default function SiteDetailPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
+  const [stageFilter, setStageFilter] = useState<string>("all");
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -114,9 +133,15 @@ export default function SiteDetailPage() {
   }
 
   function toggleSelectAll() {
+    // Acts on the jobs visible under the current filter only.
     setSelectedJobIds(prev =>
-      prev.size === jobs.length ? new Set() : new Set(jobs.map(j => j.job_id))
+      visibleJobs.every(j => prev.has(j.job_id)) ? new Set() : new Set(visibleJobs.map(j => j.job_id))
     );
+  }
+
+  function changeStageFilter(key: string) {
+    setStageFilter(key);
+    setSelectedJobIds(new Set()); // never keep hidden jobs selected for "Delete Selected"
   }
 
   function openDeleteModal(pending: PendingDelete) {
@@ -217,12 +242,29 @@ export default function SiteDetailPage() {
   const allInspectors = [...new Set([...Object.keys(jobInspectorMap), ...siteInspectorNames])];
   const totalDefects  = Object.values(floorSummary).reduce((a, b) => a + b, 0);
   const maxFloorCount = Math.max(...Object.values(floorSummary), 1);
-  const allSelected   = jobs.length > 0 && selectedJobIds.size === jobs.length;
+  const activeStage   = JOB_STAGES.find(st => st.key === stageFilter);
+  const visibleJobs   = activeStage ? jobs.filter(j => activeStage.statuses.includes(j.status)) : jobs;
+  const stageCounts   = JOB_STAGES.map(st => ({ ...st, count: jobs.filter(j => st.statuses.includes(j.status)).length }));
+  const allSelected   = visibleJobs.length > 0 && visibleJobs.every(j => selectedJobIds.has(j.job_id));
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-[#14171e] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+      <div className="min-h-screen bg-gray-50 dark:bg-[#14171e]">
+        <header className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#111]">
+          <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 flex items-center gap-4">
+            <Skeleton className="w-8 h-8 rounded-lg" />
+            <Skeleton className="h-5 w-48" />
+          </div>
+        </header>
+        <SkeletonRegion label="Loading site…" className="max-w-7xl mx-auto px-3 sm:px-6 py-6 sm:py-8 grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
+          <div className="lg:col-span-2 space-y-3">
+            <Skeleton className="h-5 w-32 mb-2" />
+            <ListSkeleton rows={4} />
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-1 gap-3 content-start">
+            {Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-24 rounded-2xl" />)}
+          </div>
+        </SkeletonRegion>
       </div>
     );
   }
@@ -230,10 +272,9 @@ export default function SiteDetailPage() {
   if (error || !site) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-[#14171e] flex items-center justify-center p-6">
-        <div className="text-center">
-          <AlertCircle className="w-10 h-10 text-red-400 mx-auto mb-3" />
-          <p className="text-gray-700 dark:text-gray-300 mb-4">{error ?? "Site not found"}</p>
-          <Link href="/inspection" className="text-sm text-blue-600 underline">Back to Sites</Link>
+        <div className="w-full max-w-md space-y-4">
+          <ErrorAlert error={error ?? "HTTP 404"} title={error ? "Couldn't load this site" : "Site not found"} onRetry={error ? load : undefined} />
+          <Link href="/inspection" className="inline-block text-sm text-blue-600 dark:text-blue-400 underline">Back to Sites</Link>
         </div>
       </div>
     );
@@ -328,20 +369,14 @@ export default function SiteDetailPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
 
           <div className="lg:col-span-2 space-y-3">
-            {deleteError && (
-              <div className="flex items-center gap-2 p-3 mb-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-600 dark:text-red-400">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                {deleteError}
-                <button onClick={() => setDeleteError(null)} className="ml-auto shrink-0"><X className="w-3.5 h-3.5" /></button>
-              </div>
-            )}
+            <ErrorAlert error={deleteError} title="Couldn't delete" onDismiss={() => setDeleteError(null)} className="mb-3" />
 
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Inspection Jobs
                 </h2>
-                {jobs.length > 0 && (
+                {visibleJobs.length > 0 && (
                   <button onClick={toggleSelectAll}
                     className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition cursor-pointer">
                     {allSelected ? "Deselect all" : "Select all"}
@@ -369,6 +404,41 @@ export default function SiteDetailPage() {
               </div>
             </div>
 
+            {jobs.length > 0 && (
+              <div role="group" aria-label="Filter jobs by stage" className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => changeStageFilter("all")}
+                  aria-pressed={stageFilter === "all"}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-semibold transition cursor-pointer",
+                    stageFilter === "all"
+                      ? "bg-gray-900 text-white border-gray-900 dark:bg-white dark:text-gray-900 dark:border-white"
+                      : "bg-white text-gray-600 border-gray-200 hover:border-gray-300 dark:bg-[#161616] dark:text-gray-300 dark:border-gray-800 dark:hover:border-gray-700",
+                  )}
+                >
+                  All <span className="opacity-70">{jobs.length}</span>
+                </button>
+                {stageCounts.filter(st => st.count > 0).map(st => (
+                  <button
+                    key={st.key}
+                    type="button"
+                    onClick={() => changeStageFilter(stageFilter === st.key ? "all" : st.key)}
+                    aria-pressed={stageFilter === st.key}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-semibold transition cursor-pointer",
+                      stageFilter === st.key
+                        ? st.active
+                        : "bg-white text-gray-600 border-gray-200 hover:border-gray-300 dark:bg-[#161616] dark:text-gray-300 dark:border-gray-800 dark:hover:border-gray-700",
+                    )}
+                  >
+                    <span className={cn("w-2 h-2 rounded-full shrink-0", st.dot)} aria-hidden="true" />
+                    {st.label} <span className="opacity-70">{st.count}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
             {jobs.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-gray-400 bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800">
                 <AlertCircle className="w-8 h-8 mb-2 opacity-40" />
@@ -377,9 +447,16 @@ export default function SiteDetailPage() {
                   Start the first inspection
                 </Link>
               </div>
+            ) : visibleJobs.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-gray-400 bg-white dark:bg-[#161616] rounded-2xl border border-gray-200 dark:border-gray-800">
+                <p className="text-sm">No {activeStage?.label.toLowerCase()} jobs</p>
+                <button onClick={() => changeStageFilter("all")} className="mt-2 text-xs text-blue-600 dark:text-blue-400 underline cursor-pointer">
+                  Show all jobs
+                </button>
+              </div>
             ) : (
               <div className="space-y-2">
-                {jobs.map(job => (
+                {visibleJobs.map(job => (
                   <JobCard
                     key={job.job_id}
                     job={job}

@@ -13,6 +13,8 @@ import LocationPickerModal, {
   type LocationPickerResult,
 } from "@/components/LocationPickerModal";
 import { Button } from "@/components/ui/button";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { ListSkeleton } from "@/components/ui/skeleton";
 import {
   ArrowLeft,
   ArrowRight,
@@ -22,7 +24,6 @@ import {
   Image as ImageIcon,
   Layers,
   Loader2,
-  AlertCircle,
   CheckSquare,
   Square,
   Map,
@@ -299,30 +300,13 @@ export default function UploadReviewPage() {
             )}
 
             {/* Error from save */}
-            {saveError && (
-              <div className="flex items-center gap-2 px-4 py-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-700 dark:text-red-300">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                {saveError}
-                <button onClick={() => setSaveError(null)} className="ml-auto text-red-400 hover:text-red-600 cursor-pointer">
-                  <span className="text-xs">Dismiss</span>
-                </button>
-              </div>
-            )}
+            <ErrorAlert error={saveError} title="Couldn't save the location" onDismiss={() => setSaveError(null)} />
 
             {/* File rows */}
             {isLoading ? (
-              <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-                <Loader2 className="w-8 h-8 animate-spin text-blue-500 mb-3" />
-                <p className="text-sm">Loading files…</p>
-              </div>
+              <ListSkeleton rows={5} label="Loading files…" />
             ) : fetchError ? (
-              <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-2xl p-6 text-center">
-                <AlertCircle className="w-6 h-6 text-red-500 mx-auto mb-2" />
-                <p className="text-sm text-red-700 dark:text-red-300 font-medium mb-3">{fetchError}</p>
-                <button onClick={loadFiles} className="text-sm text-red-600 dark:text-red-400 underline cursor-pointer">
-                  Retry
-                </button>
-              </div>
+              <ErrorAlert error={fetchError} title="Couldn't load the files" onRetry={loadFiles} />
             ) : visibleFiles.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 text-gray-400">
                 <ImageIcon className="w-10 h-10 mb-3 opacity-50" />

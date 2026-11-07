@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ModeToggle } from '@/components/ui/mode-toggle';
 import { cn } from '@/lib/utils';
 import { getSupabase } from '@/lib/supabase';
+import { ErrorAlert } from '@/components/ui/ErrorAlert';
 
 const inputCls = `w-full px-4 py-3 rounded-xl text-sm
   border border-gray-200 dark:border-gray-700
@@ -288,9 +289,7 @@ function LoginContent() {
                       </div>
                     </div>
 
-                    {error && mode === 'login' && (
-                      <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-xl text-sm">{error}</div>
-                    )}
+                    {mode === 'login' && <ErrorAlert variant="inline" error={error} title="Couldn't sign in" />}
 
                     <div className="flex items-center justify-between">
                       <label className="flex items-center gap-2 cursor-pointer select-none group">
@@ -423,9 +422,7 @@ function LoginContent() {
                       </div>
                     </div>
 
-                    {error && mode === 'signup' && (
-                      <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-xl text-sm">{error}</div>
-                    )}
+                    {mode === 'signup' && <ErrorAlert variant="inline" error={error} title="Couldn't create your account" />}
 
                     <div className="pt-2">
                       <button type="submit" disabled={isLoading}

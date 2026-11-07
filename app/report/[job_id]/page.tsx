@@ -3,7 +3,9 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { getJob, generateReport, getReportUrl } from "@/lib/api";
-import { Loader2, AlertCircle, FileText } from "lucide-react";
+import { Loader2, FileText } from "lucide-react";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { Skeleton, SkeletonRegion } from "@/components/ui/skeleton";
 
 type PageState = "checking" | "detected" | "generating" | "loading-pdf" | "completed" | "error";
 
@@ -68,18 +70,36 @@ export default function ReportPage() {
       <main className="flex-1 flex flex-col">
         {/* Checking job status */}
         {state === "checking" && (
-          <div className="flex-1 flex flex-col items-center justify-center gap-4 text-gray-400">
-            <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
-            <p className="font-medium">Loading…</p>
-          </div>
+          <SkeletonRegion label="Loading report…" className="flex-1 flex justify-center p-6">
+            <div className="w-full max-w-3xl rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 p-8 space-y-5">
+              <div className="flex items-center gap-4">
+                <Skeleton className="w-12 h-12 rounded-lg" />
+                <div className="flex-1 space-y-2"><Skeleton className="h-5 w-1/2" /><Skeleton className="h-3 w-1/3" /></div>
+              </div>
+              <Skeleton className="h-px w-full" />
+              <div className="grid grid-cols-3 gap-3">{[0, 1, 2].map(i => <Skeleton key={i} className="h-16 rounded-xl" />)}</div>
+              <Skeleton className="h-48 w-full rounded-xl" />
+              {[0, 1, 2, 3].map(i => <Skeleton key={i} className="h-3 w-full" />)}
+              <Skeleton className="h-3 w-2/3" />
+            </div>
+          </SkeletonRegion>
         )}
 
         {/* Fetching PDF blob */}
         {state === "loading-pdf" && (
-          <div className="flex-1 flex flex-col items-center justify-center gap-4 text-gray-400">
-            <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
-            <p className="font-medium text-gray-700 dark:text-gray-300">Loading PDF…</p>
-          </div>
+          <SkeletonRegion label="Loading PDF…" className="flex-1 flex justify-center p-6">
+            <div className="w-full max-w-3xl rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 p-8 space-y-5">
+              <div className="flex items-center gap-4">
+                <Skeleton className="w-12 h-12 rounded-lg" />
+                <div className="flex-1 space-y-2"><Skeleton className="h-5 w-1/2" /><Skeleton className="h-3 w-1/3" /></div>
+              </div>
+              <Skeleton className="h-px w-full" />
+              <div className="grid grid-cols-3 gap-3">{[0, 1, 2].map(i => <Skeleton key={i} className="h-16 rounded-xl" />)}</div>
+              <Skeleton className="h-48 w-full rounded-xl" />
+              {[0, 1, 2, 3].map(i => <Skeleton key={i} className="h-3 w-full" />)}
+              <Skeleton className="h-3 w-2/3" />
+            </div>
+          </SkeletonRegion>
         )}
 
         {/* Generating PDF */}
@@ -115,19 +135,14 @@ export default function ReportPage() {
         {/* Error */}
         {state === "error" && (
           <div className="flex-1 flex flex-col items-center justify-center p-6">
-            <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-2xl p-6 max-w-md w-full">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-red-700 dark:text-red-300 font-medium mb-3">{error}</p>
-                  <button
-                    onClick={() => router.push("/upload")}
-                    className="text-sm text-red-600 dark:text-red-400 underline"
-                  >
-                    ← Back to Upload
-                  </button>
-                </div>
-              </div>
+            <div className="max-w-md w-full space-y-3">
+              <ErrorAlert error={error} title="Couldn't open the report" onRetry={checkJobStatus} />
+              <button
+                onClick={() => router.push("/upload")}
+                className="text-sm text-blue-600 dark:text-blue-400 underline cursor-pointer"
+              >
+                ← Back to Upload
+              </button>
             </div>
           </div>
         )}

@@ -19,7 +19,6 @@ import {
 import {
   ArrowLeft,
   Loader2,
-  AlertCircle,
   FileText,
   AlertTriangle,
   ImageIcon,
@@ -30,6 +29,8 @@ import {
   CheckCircle2,
   LogOut,
 } from "lucide-react";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { Skeleton, PipelineSkeleton } from "@/components/ui/skeleton";
 
 // Actual API shape (api.ts DetectResponse is outdated — flat, not per-file array)
 interface DetectResponse {
@@ -239,45 +240,37 @@ export default function DetectPage() {
 
         {/* Loading state */}
         {isRunning && (
-          <div className="flex flex-col items-center justify-center py-24 gap-4 text-gray-400">
-            <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
-            <p className="font-medium text-gray-700 dark:text-gray-300">
-              Running YOLOv11 inference…{" "}
-              <span className="font-mono text-blue-500">({formatElapsed(elapsed)})</span>
-            </p>
-            <p className="text-sm text-gray-400">This may take a moment</p>
+          <div className="space-y-6">
+            <div className="flex items-center gap-3 text-sm">
+              <Loader2 className="w-4 h-4 animate-spin text-blue-500 shrink-0" />
+              <p className="font-medium text-gray-700 dark:text-gray-300">
+                Running YOLOv11 inference…{" "}
+                <span className="font-mono text-blue-500">({formatElapsed(elapsed)})</span>
+                <span className="ml-2 font-normal text-gray-400">This may take a moment</span>
+              </p>
+            </div>
+            <PipelineSkeleton label="Running defect detection…" />
           </div>
         )}
 
         {/* Error state */}
         {error && !isRunning && (
-          <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-2xl p-6">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 shrink-0" />
-              <div>
-                <p className="text-red-700 dark:text-red-300 font-medium mb-2">{error}</p>
-                {error.includes("not found") && (
-                  <button onClick={() => router.push("/upload")} className="text-sm text-red-600 underline">
-                    ← Back to Upload
-                  </button>
-                )}
-                {!error.includes("completed") && !error.includes("not found") && (
-                  <button onClick={runDetection} className="text-sm text-red-600 underline">
-                    Retry Detection
-                  </button>
-                )}
-              </div>
-            </div>
+          <div className="space-y-3">
+            <ErrorAlert
+              error={error}
+              title={error.includes("not found") ? "Job not found" : "Detection didn't finish"}
+              onRetry={!error.includes("completed") && !error.includes("not found") ? runDetection : undefined}
+            />
+            {error.includes("not found") && (
+              <button onClick={() => router.push("/upload")} className="text-sm text-blue-600 dark:text-blue-400 underline cursor-pointer">
+                ← Back to Upload
+              </button>
+            )}
           </div>
         )}
 
         {/* Report error */}
-        {reportError && (
-          <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-600 dark:text-red-400">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            {reportError}
-          </div>
-        )}
+        <ErrorAlert error={reportError} title="Couldn't generate the report" onDismiss={() => setReportError(null)} />
 
         {/* Results */}
         {hasRun && result && (
@@ -483,11 +476,7 @@ function LocationAssignPanel({
             </div>
           ))}
 
-          {saveError && (
-            <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1">
-              <AlertCircle className="w-3 h-3" />{saveError}
-            </p>
-          )}
+          <ErrorAlert variant="inline" error={saveError} className="text-xs" />
 
           <div className="flex justify-end pt-2">
             <button
@@ -517,7 +506,7 @@ function AnnotatedImageCard({ jobId, path }: { jobId: string; path: string }) {
           // eslint-disable-next-line @next/next/no-img-element
           <img src={src} alt={label} className="w-full h-full object-cover" />
         ) : (
-          <div className="w-6 h-6 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+          <Skeleton className="absolute inset-0 rounded-none" />
         )}
       </div>
       <div className="px-3 py-2.5">

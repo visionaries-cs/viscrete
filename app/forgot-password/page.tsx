@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getSupabase } from '@/lib/supabase';
+import { ErrorAlert } from '@/components/ui/ErrorAlert';
 
 const inputCls = `w-full px-4 py-3 rounded-xl text-sm
   border border-gray-200 dark:border-gray-700
@@ -74,9 +75,7 @@ function ForgotPasswordContent() {
               className={inputCls}
             />
 
-            {error && (
-              <p className="text-sm text-red-500">{error}</p>
-            )}
+            <ErrorAlert variant="inline" error={error} title="Couldn't send the reset email" />
 
             <button
               type="submit"
