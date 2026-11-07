@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { ChevronRight, ImageIcon, AlertTriangle, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { JobStatusResponse } from "@/lib/api";
+import { routeForJob, type JobStatusResponse } from "@/lib/api";
 
 const STATUS_COLORS: Record<string, string> = {
   created:       "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
@@ -28,14 +28,6 @@ const CLASS_CONFIG: { key: string; label: string; bg: string; border: string; te
 function formatDate(iso?: string): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
-}
-
-function routeForJob(job: JobStatusResponse): string {
-  const s = job.status;
-  if (["preprocessing", "preprocessed"].includes(s)) return `/preprocess/${job.job_id}`;
-  if (["detecting", "detected"].includes(s))          return `/detect/${job.job_id}`;
-  if (["reporting", "completed"].includes(s))          return `/results/${job.job_id}`;
-  return `/upload`;
 }
 
 export function JobCard({

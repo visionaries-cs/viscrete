@@ -18,7 +18,7 @@ import {
 import AppNav from "@/components/AppNav";
 import { ErrorAlert } from "@/components/ui/ErrorAlert";
 
-// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type StepStatus = "pending" | "in_progress" | "completed" | "failed";
 type LogLevel = "info" | "warning" | "error";
@@ -101,7 +101,7 @@ interface PreprocessResult {
   cii_scores?: CiiScoreEntry[];
 }
 
-// â”€â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "https://viscrete-core.shares.zrok.io";
@@ -122,7 +122,7 @@ const IMAGE_STEPS = [
   "CLAHE Enhancement",
 ];
 
-// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function getTimestamp(iso?: string): string {
   const d = iso ? new Date(iso) : new Date();
@@ -150,10 +150,10 @@ function makePendingSteps(names: string[]): StepState[] {
   }));
 }
 
-// â”€â”€â”€ BeforeAfterToggle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── BeforeAfterToggle ────────────────────────────────────────────────────────
 
 
-// â”€â”€â”€ Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PreprocessPage() {
   const { job_id } = useParams<{ job_id: string }>();
@@ -175,7 +175,7 @@ export default function PreprocessPage() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Elapsed timer â€” driven by isRunning
+  // Elapsed timer — driven by isRunning
   useEffect(() => {
     if (!isRunning) {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -208,14 +208,14 @@ export default function PreprocessPage() {
     setRetryCount((c) => c + 1);
   }
 
-  // â”€â”€ Master effect: fetch job + WebSocket + polling fallback â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Master effect: fetch job + WebSocket + polling fallback ──────────────────
   useEffect(() => {
     let cancelled = false;
     let ws: WebSocket | null = null;
     let pollInterval: ReturnType<typeof setInterval> | null = null;
     let receivedCompleted = false;
 
-    // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Helpers ──────────────────────────────────────────────────────────────
 
     function addLine(line: TerminalLine) {
       if (cancelled) return;
@@ -235,7 +235,7 @@ export default function PreprocessPage() {
       });
     }
 
-    // â”€â”€ Result fetch (called after completed event) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Result fetch (called after completed event) ───────────────────────────
 
     async function fetchResults() {
       const delays = [0, 1000, 2000, 4000];
@@ -250,8 +250,8 @@ export default function PreprocessPage() {
             { headers: await getAuthHeaders() }
           );
           if (cancelled) return;
-          if (res.status === 404) continue; // not persisted yet â€” retry
-          if (!res.ok) break;              // unexpected error â€” stop
+          if (res.status === 404) continue; // not persisted yet — retry
+          if (!res.ok) break;              // unexpected error — stop
           const r: PreprocessResult = await res.json();
           if (cancelled) return;
           setResult(r);
@@ -275,7 +275,7 @@ export default function PreprocessPage() {
       } catch { /* corrupt cache */ }
     }
 
-    // â”€â”€ Polling fallback â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Polling fallback ──────────────────────────────────────────────────────
 
     function startPolling() {
       if (pollInterval) return; // already polling
@@ -293,52 +293,8 @@ export default function PreprocessPage() {
           if (data.status === "preprocessed") {
             clearInterval(pollInterval!);
             pollInterval = null;
-            const r = data.preprocessing_result ?? null;
-            if (r?.pipeline_steps?.length) {
-              const mapped = r.pipeline_steps.map(
-                (s): StepState => ({
-                  step: s.step,
-                  name: s.name,
-                  status: s.status === "completed" ? "completed" : "failed",
-                  duration_sec: s.duration_sec,
-                  detail: s.detail,
-                  progress: null,
-                  error: null,
-                })
-              );
-              setStepStates(mapped);
-              const totalDuration = r.pipeline_steps.reduce(
-                (acc, s) => acc + s.duration_sec,
-                0
-              );
-              setCompletedSummary({
-                total_processed: r.total_processed,
-                pipeline_type: r.pipeline_type,
-                duration_sec: totalDuration,
-              });
-              setResult(r);
-              try {
-                localStorage.setItem(
-                  `preprocess_result_${job_id}`,
-                  JSON.stringify(r)
-                );
-              } catch { /* quota */ }
-            } else {
-              // No step details â€” mark all completed
-              setStepStates((prev) =>
-                prev.map((s) => ({ ...s, status: "completed" }))
-              );
-              if (r) {
-                setResult(r);
-                setCompletedSummary({
-                  total_processed: r.total_processed,
-                  pipeline_type: r.pipeline_type,
-                  duration_sec: 0,
-                });
-              }
-            }
             setIsRunning(false);
-            setIsComplete(true);
+            await loadCompletedJob(data);
           } else if (data.status === "failed") {
             clearInterval(pollInterval!);
             pollInterval = null;
@@ -359,12 +315,12 @@ export default function PreprocessPage() {
             setGlobalError("Preprocessing failed on the server.");
             setIsRunning(false);
           }
-        } catch { /* transient network error â€” keep polling */ }
+        } catch { /* transient network error — keep polling */ }
       }, 3000);
       pollRef.current = pollInterval;
     }
 
-    // â”€â”€ WebSocket message handler â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── WebSocket message handler ─────────────────────────────────────────────
 
     function handleMsg(msg: Record<string, unknown>, isReconnect = false) {
       if (cancelled) return;
@@ -386,7 +342,7 @@ export default function PreprocessPage() {
             })
           );
           if (isReconnect) {
-            // Preserve steps already completed/failed â€” only reset still-pending ones
+            // Preserve steps already completed/failed — only reset still-pending ones
             setStepStates((prev) => {
               if (prev.length === 0) return initSteps;
               return initSteps.map((s, i) => {
@@ -420,7 +376,7 @@ export default function PreprocessPage() {
             step,
             name,
             level: "info",
-            message: `â–¶ ${name} started`,
+            message: `▶ ${name} started`,
           });
           break;
         }
@@ -442,13 +398,13 @@ export default function PreprocessPage() {
             step,
             name,
             level: "info",
-            message: `âœ“ ${name} completed in ${duration_sec}s${detail ? ` â€” ${detail}` : ""}`,
+            message: `✓ ${name} completed in ${duration_sec}s${detail ? ` — ${detail}` : ""}`,
           });
           break;
         }
 
         case "step_progress": {
-          // No terminal output â€” only update progress bar
+          // No terminal output — only update progress bar
           const step = msg.step as number;
           const percent = msg.percent as number;
           const detail = (msg.detail as string | null) ?? null;
@@ -505,7 +461,7 @@ export default function PreprocessPage() {
               step,
               name,
               level: "error",
-              message: `âœ— ${message}`,
+              message: `✗ ${message}`,
             });
             setIsRunning(false);
             ws?.close();
@@ -515,7 +471,7 @@ export default function PreprocessPage() {
               step,
               name,
               level: "warning",
-              message: `âš  ${message}`,
+              message: `⚠ ${message}`,
             });
           }
           break;
@@ -541,11 +497,11 @@ export default function PreprocessPage() {
         }
 
         case "ping":
-          break; // keepalive from backend â€” no action needed
+          break; // keepalive from backend — no action needed
       }
     }
 
-    // â”€â”€ Start WebSocket connection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Start WebSocket connection ─────────────────────────────────────────────
 
     function startWS(inputType: string) {
       // Pre-populate with fallback step names (overwritten once pipeline_init fires)
@@ -561,6 +517,30 @@ export default function PreprocessPage() {
 
       let reconnectAttempts = 0;
       let pipelineStarted = false;
+      let opened = false;
+
+      // POST /preprocess; false if the job can't start
+      async function startPipeline(): Promise<boolean> {
+        setIsRunning(true);
+        try {
+          const res = await fetch(
+            `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(job_id)}/preprocess`,
+            { method: "POST", headers: await getAuthHeaders() }
+          );
+          if (cancelled) return false;
+          if (res.ok) return true;
+          const msg = res.status === 409 ? "Job is not ready for preprocessing." : `Couldn't start preprocessing (HTTP ${res.status}).`;
+          setGlobalError(msg);
+          addPipelineLine(`Error: ${msg}`, "error");
+        } catch (e) {
+          if (cancelled) return false;
+          const errMsg = e instanceof Error ? e.message : "Failed to start preprocessing";
+          setGlobalError(errMsg);
+          addPipelineLine(`Error: ${errMsg}`, "error");
+        }
+        setIsRunning(false);
+        return false;
+      }
 
       async function connect(isReconnect: boolean) {
         // Browsers can't set headers on WebSockets — the backend reads the JWT from ?token=
@@ -570,35 +550,11 @@ export default function PreprocessPage() {
         ws = new WebSocket(`${wsUrl}?token=${encodeURIComponent(token)}`);
 
         ws.onopen = async () => {
+          opened = true;
           if (cancelled) { ws?.close(); return; }
-          if (isReconnect) return; // server replays buffered events â€” no POST needed
-          setIsRunning(true);
-          try {
-            const res = await fetch(
-              `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(
-                job_id
-              )}/preprocess`,
-              { method: "POST", headers: await getAuthHeaders() }
-            );
-            if (cancelled) return;
-            if (res.status === 409) {
-              setGlobalError("Job is not ready for preprocessing.");
-              addPipelineLine("Error: job not ready for preprocessing", "error");
-              setIsRunning(false);
-              ws?.close();
-              return;
-            }
-            pipelineStarted = true;
-            // 202 â†’ pipeline streams events via WS
-          } catch (e) {
-            if (cancelled) return;
-            const errMsg =
-              e instanceof Error ? e.message : "Failed to start preprocessing";
-            setGlobalError(errMsg);
-            addPipelineLine(`Error: ${errMsg}`, "error");
-            setIsRunning(false);
-            ws?.close();
-          }
+          if (isReconnect) return; // server replays buffered events — no POST needed
+          if (await startPipeline()) pipelineStarted = true; // 202 -> events stream over WS
+          else ws?.close();
         };
 
         ws.onmessage = (event) => {
@@ -607,25 +563,31 @@ export default function PreprocessPage() {
               JSON.parse(event.data) as Record<string, unknown>,
               isReconnect
             );
-          } catch { /* malformed JSON â€” ignore */ }
+          } catch { /* malformed JSON — ignore */ }
         };
 
         ws.onerror = () => {
-          // onclose fires after onerror â€” handled there
+          // onclose fires after onerror — handled there
         };
 
         ws.onclose = () => {
           if (receivedCompleted || cancelled) return;
-          if (!pipelineStarted) return; // POST failed or never sent â€” do not reconnect
+          // WS never opened (e.g. the zrok interstitial blocks browser WebSockets): start over HTTP and poll
+          if (!opened && !isReconnect) {
+            addPipelineLine("Live progress unavailable — checking status every 3 s", "warning");
+            startPipeline().then((ok) => { if (ok) { pipelineStarted = true; startPolling(); } });
+            return;
+          }
+          if (!pipelineStarted) return; // POST failed or never sent — do not reconnect
           if (reconnectAttempts < 2) {
             reconnectAttempts++;
             const delay = reconnectAttempts * 1500;
             addPipelineLine(
-              `WebSocket closed â€” reconnecting in ${delay / 1000}sâ€¦`
+              `WebSocket closed — reconnecting in ${delay / 1000}s…`
             );
             setTimeout(() => connect(true), delay);
           } else {
-            addPipelineLine("WebSocket unavailable â€” switched to polling");
+            addPipelineLine("WebSocket unavailable — switched to polling");
             startPolling();
           }
         };
@@ -634,7 +596,7 @@ export default function PreprocessPage() {
       connect(false);
     }
 
-    // â”€â”€ Load already-complete job â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Load already-complete job ─────────────────────────────────────────────
 
     async function loadCompletedJob(data: JobStatus) {
       // Fetch from the dedicated endpoint (always authoritative)
@@ -679,7 +641,7 @@ export default function PreprocessPage() {
             return;
           }
         }
-      } catch { /* network error â€” fall through to fallback */ }
+      } catch { /* network error — fall through to fallback */ }
 
       if (cancelled) return;
 
@@ -710,7 +672,7 @@ export default function PreprocessPage() {
       setIsComplete(true);
     }
 
-    // â”€â”€ Fetch job metadata and branch â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Fetch job metadata and branch ─────────────────────────────────────────
 
     async function fetchJob() {
       try {
@@ -748,7 +710,7 @@ export default function PreprocessPage() {
     };
   }, [job_id, retryCount]); // retryCount forces re-run on manual retry
 
-  // â”€â”€ Derived: before/after image list â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Derived: before/after image list ─────────────────────────────────────────
 
   const ciiByFileId = new Map(
     (result?.cii_scores ?? []).map((e) => [e.file_id, e])
@@ -772,7 +734,7 @@ export default function PreprocessPage() {
         };
       }) ?? [];
 
-  // â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#14171e]">
@@ -792,7 +754,7 @@ export default function PreprocessPage() {
         {/* Meta fetch error */}
         <ErrorAlert error={metaError} title="Couldn't load job info" />
 
-        {/* â”€â”€ Section 1: Pipeline progress + stepper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        {/* ── Section 1: Pipeline progress + stepper ──────────────────── */}
         <div className="bg-white dark:bg-gray-950 rounded-2xl border border-gray-200 dark:border-gray-800 p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -818,13 +780,13 @@ export default function PreprocessPage() {
 
         </div>
 
-        {/* â”€â”€ Section 2: Terminal log â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        {/* ── Section 2: Terminal log ──────────────────────────────────── */}
         <PreprocessingTerminal lines={terminalLines} />
 
-        {/* â”€â”€ Section 3: Results (shown after completion) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        {/* ── Section 3: Results (shown after completion) ─────────────── */}
         {isComplete && (
           <>
-            {/* Cluster summary + step timing â€” always expanded */}
+            {/* Cluster summary + step timing — always expanded */}
             {result && (result.cluster_info?.length > 0 || result.pipeline_steps?.length > 0) && (
               <div className="bg-white dark:bg-gray-950 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
                 <div className="flex items-center gap-3 px-4 sm:px-6 py-4 border-b border-gray-100 dark:border-gray-800">
@@ -932,7 +894,7 @@ export default function PreprocessPage() {
         )}
       </main>
 
-      {/* Floating proceed bar â€” fixed at bottom once pipeline is complete */}
+      {/* Floating proceed bar — fixed at bottom once pipeline is complete */}
       {isComplete && (
         <div className="fixed bottom-6 left-0 right-0 z-50 flex justify-center px-4 pointer-events-none">
           <div className="pointer-events-auto flex items-center gap-4 px-5 py-3 rounded-2xl

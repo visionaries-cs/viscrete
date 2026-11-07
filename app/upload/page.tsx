@@ -85,15 +85,6 @@ function formatDate(iso?: string): string {
   });
 }
 
-function routeForJob(job: JobStatusResponse): string {
-  const s = job.status;
-  if (["preprocessing", "preprocessed"].includes(s))
-    return `/preprocess/${job.job_id}`;
-  if (["detecting", "detected", "reporting", "completed"].includes(s))
-    return `/results/${job.job_id}`;
-  return `/upload`; // created / validating / validated / failed
-}
-
 const STATUS_COLORS: Record<string, string> = {
   created: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
   validating: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",

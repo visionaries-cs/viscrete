@@ -5,7 +5,7 @@ import { ExternalLink, Building2, ImageIcon, AlertTriangle, ChevronRight, Plus }
 import { cn } from "@/lib/utils";
 import { ModalShell } from "./ModalShell";
 import { ModalHeader } from "./ModalHeader";
-import type { JobStatusResponse } from "@/lib/api";
+import { routeForJob, type JobStatusResponse } from "@/lib/api";
 
 const STATUS_COLORS: Record<string, string> = {
   created:       "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
@@ -23,14 +23,6 @@ const STATUS_COLORS: Record<string, string> = {
 function formatDate(iso?: string): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
-}
-
-function routeForJob(job: JobStatusResponse): string {
-  const s = job.status;
-  if (["preprocessing", "preprocessed"].includes(s)) return `/preprocess/${job.job_id}`;
-  if (["detecting", "detected"].includes(s))          return `/detect/${job.job_id}`;
-  if (["reporting", "completed"].includes(s))          return `/results/${job.job_id}`;
-  return `/upload`;
 }
 
 export function JobsModal({

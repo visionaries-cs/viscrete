@@ -4,7 +4,10 @@ import { useState, useCallback, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
-  getJobFiles,
+  API_BASE_URL,
+  getAuthHeaders,
+  getJob,
+  overrideFile,
   updateLocation,
   type FileStatusItem,
   type LocationUpdateRequest,
@@ -27,6 +30,7 @@ import {
   CheckSquare,
   Square,
   Map,
+  RotateCcw,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -65,12 +69,21 @@ export default function UploadReviewPage() {
   const [files,      setFiles]      = useState<FileRow[]>([]);
   const [isLoading,  setIsLoading]  = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [jobStatus,  setJobStatus]  = useState<string | null>(null);
+  // For failed jobs: true when preprocessing already finished, so the retry goes to detection
+  const [preprocessDone, setPreprocessDone] = useState(false);
 
   const loadFiles = useCallback(async () => {
     setIsLoading(true);
     setFetchError(null);
     try {
-      const items = await getJobFiles(jobId);
+      const job = await getJob(jobId) as Awaited<ReturnType<typeof getJob>> & { files?: FileStatusItem[] };
+      const items = job.files ?? [];
+      setJobStatus(job.status);
+      if (job.status === "failed") {
+        const res = await fetch(`${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/preprocess`, { headers: await getAuthHeaders() });
+        setPreprocessDone(res.ok);
+      }
       setFiles(items.map(f => ({
         ...f,
         hasGps: (f.gps_data?.latitude != null && f.gps_data?.longitude != null) || !!f.location_label,
@@ -83,6 +96,21 @@ export default function UploadReviewPage() {
   }, [jobId]);
 
   useEffect(() => { loadFiles(); }, [loadFiles]);
+
+  // "Use anyway" on a file that failed the blur check
+  const [overridingId, setOverridingId] = useState<string | null>(null);
+  async function handleOverride(fileId: string) {
+    setOverridingId(fileId);
+    setSaveError(null);
+    try {
+      await overrideFile(jobId, fileId);
+      await loadFiles(); // job status is re-evaluated server-side
+    } catch (e: unknown) {
+      setSaveError(e instanceof Error ? e.message : "Couldn't accept the file");
+    } finally {
+      setOverridingId(null);
+    }
+  }
 
   // ── Filter + selection ──────────────────────────────────────────────────────
   const [filterType,  setFilterType]  = useState<FilterType>("all");
@@ -182,6 +210,14 @@ export default function UploadReviewPage() {
   const withoutGps    = totalImages - withGps;
   const completionPct = totalImages > 0 ? Math.round((withGps / totalImages) * 100) : 0;
 
+  const validCount = files.filter(f => f.status !== "invalid").length;
+  const isFailed   = jobStatus === "failed";
+  const nextAction =
+    isFailed && preprocessDone ? { label: "Retry detection",     href: `/detect/${jobId}` } :
+    isFailed                   ? { label: "Retry preprocessing", href: `/preprocess/${jobId}` } :
+                                 { label: "Proceed",             href: `/preprocess/${jobId}` };
+  const canProceed = !isLoading && !fetchError && validCount > 0 && jobStatus !== "validating";
+
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#14171e]">
@@ -228,15 +264,34 @@ export default function UploadReviewPage() {
           </div>
           <Button
             className="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-400 dark:bg-blue-950/40 dark:hover:bg-blue-950/60 dark:text-blue-400 dark:border-blue-600 font-semibold cursor-pointer"
-            onClick={() => router.push(`/preprocess/${jobId}`)}
+            disabled={!canProceed}
+            onClick={() => router.push(nextAction.href)}
           >
-            Proceed
-            <ArrowRight className="w-4 h-4 ml-2" />
+            {nextAction.label}
+            {isFailed ? <RotateCcw className="w-4 h-4 ml-2" /> : <ArrowRight className="w-4 h-4 ml-2" />}
           </Button>
         </div>
       </header>
 
       <div className="max-w-7xl mx-auto px-6 py-8">
+        {!isLoading && !fetchError && (isFailed || validCount === 0) && (
+          <div className={cn(
+            "mb-6 rounded-xl border px-4 py-3 text-sm",
+            isFailed
+              ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300"
+              : "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300",
+          )}>
+            {files.length === 0 ? (
+              <>No files were uploaded for this job. <a href="/upload" className="underline font-semibold">Start a new upload</a>.</>
+            ) : validCount === 0 ? (
+              <>Every file failed the blur check. Press <b>Use anyway</b> on a file to continue with it.</>
+            ) : preprocessDone ? (
+              <>Detection failed for this job. Press <b>Retry detection</b> to run it again.</>
+            ) : (
+              <>This job failed. Press <b>Retry preprocessing</b> to run it again with the {validCount} usable file{validCount !== 1 ? "s" : ""}.</>
+            )}
+          </div>
+        )}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
           {/* ── Left: file list ──────────────────────────────────────────── */}
@@ -360,6 +415,16 @@ export default function UploadReviewPage() {
 
                       {/* Badge + single-edit button */}
                       <div className="shrink-0 flex items-center gap-2">
+                        {file.status === "invalid" && (
+                          <button
+                            onClick={e => { e.stopPropagation(); handleOverride(file.file_id); }}
+                            disabled={overridingId !== null}
+                            className="px-2 py-0.5 rounded-full text-[11px] font-bold border border-red-300 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950/30 transition cursor-pointer disabled:opacity-50"
+                            title="This image failed the blur check. Use it anyway?"
+                          >
+                            {overridingId === file.file_id ? "Saving…" : "Blurry · Use anyway"}
+                          </button>
+                        )}
                         <span className={cn(
                           "px-2 py-0.5 rounded-full text-[11px] font-bold",
                           file.hasGps

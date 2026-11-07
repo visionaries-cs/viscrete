@@ -68,6 +68,15 @@ export interface JobStatusResponse {
   updated_at?: string;
 }
 
+/** Where a job card should open. Pre-preprocessing and failed jobs open the review page, which offers continue / retry. */
+export function routeForJob(job: Pick<JobStatusResponse, "job_id" | "status">): string {
+  const id = encodeURIComponent(job.job_id);
+  if (["preprocessing", "preprocessed"].includes(job.status)) return `/preprocess/${id}`;
+  if (["detecting", "detected"].includes(job.status))        return `/detect/${id}`;
+  if (["reporting", "completed"].includes(job.status))       return `/results/${id}`;
+  return `/upload-review/${id}`; // created / validating / validated / failed
+}
+
 export interface ValidationResult {
   file_id?: string;
   filename: string;
