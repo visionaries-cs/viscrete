@@ -9,6 +9,7 @@ import {
   patchRemarks,
   getJobStorageUrl,
   getAuthHeaders,
+  getReportUrl,
   type DetectResponse,
   type Detection,
 } from "@/lib/api";
@@ -511,7 +512,8 @@ export default function ResultPage() {
   async function handleDownloadPdf() {
     setIsDownloading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/report`);
+      // GET /report returns JSON; the PDF itself lives in Supabase Storage behind a signed URL.
+      const res = await fetch(await getReportUrl(jobId));
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);

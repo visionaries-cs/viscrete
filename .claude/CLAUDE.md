@@ -55,7 +55,7 @@ All backend calls go through `lib/api.ts`. Base URL is `http://localhost:8000` (
 | `DELETE` | `/api/v1/jobs/{job_id}` | — | Soft-delete + remove files from disk |
 | `POST` | `/api/v1/jobs/{job_id}/validate` | `created` | Upload files, blur check, extract GPS |
 | `PATCH` | `/api/v1/jobs/{job_id}/location` | any | Assign GPS to files missing EXIF data |
-| `POST` | `/api/v1/jobs/{job_id}/preprocess` | `validated` | Run IMOCS → CLAHE → Bilateral Filter |
+| `POST` | `/api/v1/jobs/{job_id}/preprocess` | `validated` | Run Feature Extraction → Clustering → IMOCS → CLAHE |
 | `POST` | `/api/v1/jobs/{job_id}/detect` | `preprocessed` | Run YOLOv11 inference |
 | `GET` | `/api/v1/jobs/{job_id}/detect` | `detected`/`completed` | Retrieve cached detections |
 | `POST` | `/api/v1/jobs/{job_id}/report` | `detected` | Generate report |

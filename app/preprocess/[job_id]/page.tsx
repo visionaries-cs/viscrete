@@ -562,8 +562,12 @@ export default function PreprocessPage() {
       let reconnectAttempts = 0;
       let pipelineStarted = false;
 
-      function connect(isReconnect: boolean) {
-        ws = new WebSocket(wsUrl);
+      async function connect(isReconnect: boolean) {
+        // Browsers can't set headers on WebSockets — the backend reads the JWT from ?token=
+        const auth = await getAuthHeaders();
+        if (cancelled) return;
+        const token = (auth.Authorization ?? "").replace(/^Bearer /, "");
+        ws = new WebSocket(`${wsUrl}?token=${encodeURIComponent(token)}`);
 
         ws.onopen = async () => {
           if (cancelled) { ws?.close(); return; }
