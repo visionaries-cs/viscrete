@@ -103,6 +103,10 @@ export interface FileStatusItem {
   laplacian_score?: number;
   blur_override?: boolean;
   gps_data?: { latitude: number | null; longitude: number | null; altitude?: number | null } | null;
+  // GET /jobs/{id} returns GPS flat, not as gps_data
+  gps_latitude?: number | null;
+  gps_longitude?: number | null;
+  gps_altitude?: number | null;
   location_label?: string | null;
 }
 

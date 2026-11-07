@@ -15,6 +15,8 @@ import {
 import LocationPickerModal, {
   type LocationPickerResult,
 } from "@/components/LocationPickerModal";
+import ImagePreviewModal from "@/components/upload/ImagePreviewModal";
+import { useFileUrl } from "@/hooks/useSignedUrl";
 import { Button } from "@/components/ui/button";
 import { ErrorAlert } from "@/components/ui/ErrorAlert";
 import { ListSkeleton } from "@/components/ui/skeleton";
@@ -58,6 +60,26 @@ function toPayload(result: LocationPickerResult): LocationUpdateRequest {
   return p;
 }
 
+// Mirrors BLUR_THRESHOLD in backend/app/services/input/validate.py (file records don't carry it)
+const BLUR_THRESHOLD = 20;
+
+function Thumbnail({ fileId, alt, onOpen }: { fileId: string; alt: string; onOpen: () => void }) {
+  const url = useFileUrl(fileId);
+  return (
+    <button
+      onClick={e => { e.stopPropagation(); onOpen(); }}
+      className="shrink-0 w-12 h-12 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-800 bg-gray-100 dark:bg-gray-900 flex items-center justify-center hover:ring-2 hover:ring-blue-500 transition cursor-pointer"
+      title="View image"
+      aria-label={`View ${alt}`}
+    >
+      {url
+        // eslint-disable-next-line @next/next/no-img-element
+        ? <img src={url} alt={alt} loading="lazy" className="w-full h-full object-cover" />
+        : <ImageIcon className="w-4 h-4 text-gray-400" />}
+    </button>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function UploadReviewPage() {
@@ -84,10 +106,12 @@ export default function UploadReviewPage() {
         const res = await fetch(`${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/preprocess`, { headers: await getAuthHeaders() });
         setPreprocessDone(res.ok);
       }
-      setFiles(items.map(f => ({
-        ...f,
-        hasGps: (f.gps_data?.latitude != null && f.gps_data?.longitude != null) || !!f.location_label,
-      })));
+      setFiles(items.map(f => {
+        const gps_data = f.gps_data ?? (f.gps_latitude != null && f.gps_longitude != null
+          ? { latitude: f.gps_latitude, longitude: f.gps_longitude, altitude: f.gps_altitude ?? null }
+          : null);
+        return { ...f, gps_data, hasGps: gps_data != null || !!f.location_label };
+      }));
     } catch (e: unknown) {
       setFetchError(e instanceof Error ? e.message : "Failed to load files");
     } finally {
@@ -138,6 +162,9 @@ export default function UploadReviewPage() {
   const selectAllEligible = () =>
     setSelectedIds(new Set(eligibleFiles.map(f => f.file_id)));
   const clearSelection = () => setSelectedIds(new Set());
+
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  const previewFile = files.find(f => f.file_id === previewId) ?? null;
 
   // ── Modal state ─────────────────────────────────────────────────────────────
   const [modalCtx,    setModalCtx]    = useState<ModalContext>(null);
@@ -232,6 +259,22 @@ export default function UploadReviewPage() {
           }
           onConfirm={handleConfirm}
           onClose={() => { setModalCtx(null); setSaveError(null); }}
+        />
+      )}
+
+      {previewFile && (
+        <ImagePreviewModal
+          result={{
+            file_id:         previewFile.file_id,
+            filename:        previewFile.filename,
+            is_valid:        previewFile.status !== "invalid",
+            laplacian_score: previewFile.laplacian_score ?? 0,
+            blur_threshold:  BLUR_THRESHOLD,
+            is_blurry:       (previewFile.laplacian_score ?? 0) < BLUR_THRESHOLD,
+            gps_data:        previewFile.gps_data,
+            location_label:  previewFile.location_label,
+          }}
+          onClose={() => setPreviewId(null)}
         />
       )}
 
@@ -393,6 +436,8 @@ export default function UploadReviewPage() {
                           : <MapPin className="w-4 h-4 text-emerald-500" />
                         }
                       </div>
+
+                      <Thumbnail fileId={file.file_id} alt={file.filename} onOpen={() => setPreviewId(file.file_id)} />
 
                       {/* Filename + coords */}
                       <div className="flex-1 min-w-0">
