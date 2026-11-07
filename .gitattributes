@@ -1,0 +1,3 @@
+# Store all text files with LF line endings in git, on every OS.
+# Stops Windows editors (CRLF) from showing every file as modified.
+* text=auto eol=lf
