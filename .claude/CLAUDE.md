@@ -32,14 +32,9 @@ Each inspection is a **job** identified by a `job_id` (UUID from the backend). T
 /report/[job_id]          → final structured inspection report
 ```
 
-Status-to-route mapping for resuming jobs from Previous Jobs list:
+Which page a job opens on is decided by `routeForJob(job)` in `lib/api.ts`. Use it; don't write another status → route map.
 
-| Job Status | Route |
-|---|---|
-| `created` / `validating` / `validated` / `failed` | `/upload` |
-| `preprocessing` / `preprocessed` | `/preprocess/[job_id]` |
-| `detecting` / `detected` | `/detect/[job_id]` |
-| `reporting` / `completed` | `/report/[job_id]` |
+Every page except `/` uses `components/AppNav.tsx` as its header. Button colors: see "Buttons" in `.claude/rules/FRONTEND.md`.
 
 ### API Layer (`lib/api.ts`)
 
@@ -70,14 +65,7 @@ All backend calls go through `lib/api.ts`. Base URL is `http://localhost:8000` (
 - **Detection** (`DetectionResponse`): flat structure — `job_id`, `file_id`, `total_defects`, `detections[]`, `annotated_paths[]`. Not a per-file array.
 - **Report** (`ReportResponse`): `gps_data[]` (one entry per file with nullable lat/lng/alt), `detections[]` (all defects flat), `summary: { total_defects, severity_counts, dominant_severity, defect_types }`, `annotated_paths[]`.
 
-**Building static image URLs**
-
-Do not use the old helper functions `getOriginalImageUrl` / `getProcessedImageUrl` / `getAnnotatedImageUrl` — the API now returns relative paths directly in `original_path` and `annotated_paths`. Prefix them with the base URL:
-
-```ts
-const url = `${API_BASE_URL}/static/${path}`;
-// e.g. http://localhost:8000/static/jobs/{job_id}/annotated/file_annotated.jpg
-```
+**Image / PDF URLs**: `original_path` / `annotated_path(s)` are Supabase Storage keys. Resolve them with `useSignedUrl(jobId, key)` (`hooks/useSignedUrl.ts`). There is no `/static` mount.
 
 **Error codes**: `400` bad file, `404` not found, `409` wrong pipeline status or report exists, `413` file too large, `415` unsupported type, `422` missing field, `500` internal pipeline error.
 

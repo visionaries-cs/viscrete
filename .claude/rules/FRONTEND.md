@@ -351,12 +351,19 @@ Defect colors are semantic and consistent across light and dark.
                text-gray-500 dark:text-gray-400">
 ```
 
-### Primary Button
+### Buttons
 
-```jsx
-<button className="bg-blue-600 hover:bg-blue-700 text-white
-                   text-sm font-semibold px-4 py-2.5 rounded-lg transition">
-```
+Colored buttons are **solid in both light and dark mode**: the fill and the border are the same color, so no `dark:` variants are needed. Text contrast must be at least 4.5:1.
+
+| Color | Classes |
+|---|---|
+| Primary (blue) | `bg-blue-600 hover:bg-blue-700 border-blue-600 text-white` |
+| CTA yellow | `bg-yellow-500 hover:bg-yellow-400 border-yellow-500 text-gray-950` |
+| Brand blue | `bg-[#0da6f2] hover:bg-[#3bb8f5] border-[#0da6f2] text-gray-950` |
+| Success | `bg-emerald-700 hover:bg-emerald-800 border-emerald-700 text-white` (green: `-700` / `-800`) |
+| Danger | `bg-red-600 hover:bg-red-700 border-red-600 text-white` |
+
+Base: `text-sm font-semibold px-4 py-2.5 rounded-lg transition`. Selected toggles and pills use the same solid fills. Only neutral buttons (Cancel, Previous / Next) stay gray or outlined.
 
 ### Input Field
 
@@ -389,14 +396,17 @@ Defect colors are semantic and consistent across light and dark.
 </div>
 ```
 
-### Header (App / Pipeline)
+### Header
 
-```jsx
-<header className="border-b border-gray-200 dark:border-gray-800
-                   bg-white dark:bg-[#111]">         {/* App */}
-<header className="border-b border-gray-200 dark:border-gray-800
-                   bg-white dark:bg-gray-950">       {/* Pipeline */}
+Every page except the landing page uses `components/AppNav.tsx`: a sticky 56px bar with Back, brand / section, title, page actions, and the account controls. Don't write a page-level `<header>`.
+
+```tsx
+<AppNav back="/inspection" section="sites" title={site.name} actions={<button …/>}>
+  {/* optional extra row, e.g. a filter bar */}
+</AppNav>
 ```
+
+`back` is where Back goes when there is no in-app history. Sign-in pages pass `guest`.
 
 ---
 
