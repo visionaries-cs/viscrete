@@ -190,6 +190,7 @@ export default function ResultPage() {
     crack: 'balanced', spalling: 'balanced', peeling: 'balanced', algae: 'balanced',
   });
   const [readyToRun, setReadyToRun] = useState(false);
+  const [loadingSaved, setLoadingSaved] = useState(false);
   const [sensitivityOpen, setSensitivityOpen] = useState(false);
 
   // Extract detection duration from detection response
@@ -335,6 +336,7 @@ export default function ResultPage() {
 
   async function fetchCachedResults() {
     setIsRunning(true);
+    setLoadingSaved(true);
     setError(null);
     try {
       const { getDetectResults } = await import("@/lib/api");
@@ -345,6 +347,7 @@ export default function ResultPage() {
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load detection results");
     } finally {
+      setLoadingSaved(false);
       setIsRunning(false);
     }
   }
@@ -918,13 +921,13 @@ export default function ResultPage() {
           <div className="flex items-center gap-3 text-sm">
             <Loader2 className="w-4 h-4 animate-spin text-blue-500 shrink-0" />
             <p className="font-medium text-gray-900 dark:text-white">
-              {isPolling ? "Detection in progress…" : "Running YOLOv11 inference…"}
+              {loadingSaved ? "Loading saved results…" : isPolling ? "Detection in progress…" : "Running YOLOv11 inference…"}
               <span className="ml-2 font-normal text-gray-500 dark:text-gray-400">
-                {isPolling ? "Waiting for the backend to finish" : "This may take a moment"}
+                {loadingSaved ? "From the last detection run" : isPolling ? "Waiting for the backend to finish" : "This may take a moment"}
               </span>
             </p>
           </div>
-          <PipelineSkeleton label="Running defect detection…" />
+          <PipelineSkeleton label={loadingSaved ? "Loading saved results…" : "Running defect detection…"} />
         </div>
       )}
 
