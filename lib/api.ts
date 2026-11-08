@@ -296,8 +296,44 @@ export async function createJob(
 
 // ─── Validate ─────────────────────────────────────────────────────────────────
 
-/** POST /api/v1/jobs/{job_id}/validate — upload multiple files & receive per-file validation */
+/**
+ * Upload files straight to Supabase Storage (skips the zrok tunnel), then validate them.
+ * Falls back to the multipart route if the direct upload fails before validation starts.
+ */
 export async function validateFiles(jobId: string, files: File[]): Promise<ValidationResult[]> {
+  const id = encodeURIComponent(jobId);
+  let uploaded: { file_id: string; filename: string; content_type: string }[];
+  try {
+    const auth = await getAuthHeaders();
+    const urlsRes = await fetch(`${API_BASE_URL}/api/v1/jobs/${id}/upload-urls`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...auth },
+      body: JSON.stringify({
+        files: files.map(f => ({ filename: f.name, content_type: f.type, size_bytes: f.size })),
+      }),
+    });
+    const urls = await handleResponse<{ file_id: string; path: string; token: string }[]>(urlsRes);
+    const { getSupabase } = await import('@/lib/supabase');
+    const bucket = getSupabase().storage.from('originals');
+    await Promise.all(files.map(async (f, i) => {
+      const { error } = await bucket.uploadToSignedUrl(urls[i].path, urls[i].token, f, { contentType: f.type });
+      if (error) throw error;
+    }));
+    uploaded = files.map((f, i) => ({ file_id: urls[i].file_id, filename: f.name, content_type: f.type }));
+  } catch (e) {
+    console.warn('[UPLOAD] Direct upload failed, sending through the backend instead', e);
+    return validateFilesMultipart(jobId, files);
+  }
+  const res = await fetch(`${API_BASE_URL}/api/v1/jobs/${id}/validate-uploaded`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) },
+    body: JSON.stringify({ files: uploaded }),
+  });
+  return handleResponse<ValidationResult[]>(res);
+}
+
+/** POST /api/v1/jobs/{job_id}/validate — upload multiple files & receive per-file validation */
+export async function validateFilesMultipart(jobId: string, files: File[]): Promise<ValidationResult[]> {
   const formData = new FormData();
   for (const file of files) {
     formData.append('files', file);
