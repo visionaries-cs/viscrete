@@ -234,7 +234,7 @@ export default function ResultPage() {
 
   // Project info from job status
   const [projectName, setProjectName] = useState("—");
-  const [modelName] = useState("YOLOv11-STRUCTURAL.pt");
+  const modelName = "YOLOv11-VISCRETE.pt";
   const [projectDate, setProjectDate] = useState("—");
   const [siteLocation, setSiteLocation] = useState<string | null>(null);
 
