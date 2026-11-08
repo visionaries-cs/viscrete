@@ -580,6 +580,13 @@ export default function PreprocessPage() {
       async function connect(isReconnect: boolean) {
         // Browsers can't set headers on WebSockets — the backend reads the JWT from ?token=
         const auth = await getAuthHeaders();
+        // Through the zrok tunnel the handshake needs zrok's cookie; the backend sets it here.
+        if (/^https:/i.test(API_BASE_URL)) {
+          await fetch(`${API_BASE_URL}/ws-cookie`, {
+            credentials: "include",
+            headers: { skip_zrok_interstitial: "true" },
+          }).catch(() => { /* no cookie: the 1 s fallback still shows progress */ });
+        }
         if (cancelled) return;
         const token = (auth.Authorization ?? "").replace(/^Bearer /, "");
         ws = new WebSocket(`${wsUrl}?token=${encodeURIComponent(token)}`);
