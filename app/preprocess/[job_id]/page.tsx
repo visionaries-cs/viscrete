@@ -11,7 +11,6 @@ import { PreprocessingTerminal } from "@/components/preprocess/PreprocessingTerm
 import {
   CheckCircle2,
   XCircle,
-  ArrowLeft,
   ArrowRight,
   Clock,
 } from "lucide-react";
@@ -689,6 +688,12 @@ export default function PreprocessPage() {
 
         if (ALREADY_PREPROCESSED.has(data.status)) {
           await loadCompletedJob(data);
+        } else if (data.status === "preprocessing") {
+          // Already running (reopened page, second tab): watch it instead of POSTing again (409)
+          setStepStates(makePendingSteps(IMAGE_STEPS));
+          setIsRunning(true);
+          addPipelineLine("Preprocessing is already running — checking status every 3 s");
+          startPolling();
         } else {
           startWS(data.input_type);
         }
@@ -739,18 +744,13 @@ export default function PreprocessPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#14171e]">
       <AppNav
-        left={
-          <button
-            onClick={() => router.push('/upload')}
-            className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition cursor-pointer shrink-0"
-            aria-label="Back to upload"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-        }
+        back={`/upload-review/${encodeURIComponent(job_id)}`}
+        section="preprocessing"
+        title="Preprocessing"
+        subtitle={<span className="font-mono">Job {job_id.slice(0, 8)}…</span>}
       />
 
-      <main className="max-w-5xl mx-auto px-3 sm:px-6 py-8 pt-20 space-y-6">
+      <main className="max-w-5xl mx-auto px-3 sm:px-6 py-8 space-y-6">
         {/* Meta fetch error */}
         <ErrorAlert error={metaError} title="Couldn't load job info" />
 
@@ -914,8 +914,7 @@ export default function PreprocessPage() {
               id="btn-proceed-detection"
               onClick={() => router.push(`/results/${encodeURIComponent(job_id)}`)}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl
-                         bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-500
-                         dark:bg-emerald-950/40 dark:hover:bg-emerald-950/60 dark:text-emerald-400 dark:border-emerald-600
+                         bg-emerald-700 hover:bg-emerald-800 text-white border border-emerald-700
                          text-sm font-semibold transition-all shadow-sm active:scale-95 shrink-0 cursor-pointer"
             >
               Proceed

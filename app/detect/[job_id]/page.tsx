@@ -2,8 +2,6 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useSignedUrl } from "@/hooks/useSignedUrl";
-import { getSupabase } from "@/lib/supabase";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useParams, useRouter } from "next/navigation";
 import {
   detectJob,
@@ -17,7 +15,6 @@ import {
   type FileStatusItem,
 } from "@/lib/api";
 import {
-  ArrowLeft,
   Loader2,
   FileText,
   AlertTriangle,
@@ -27,8 +24,8 @@ import {
   ChevronUp,
   Save,
   CheckCircle2,
-  LogOut,
-} from "lucide-react";
+  } from "lucide-react";
+import AppNav from "@/components/AppNav";
 import { ErrorAlert } from "@/components/ui/ErrorAlert";
 import { Skeleton, PipelineSkeleton } from "@/components/ui/skeleton";
 
@@ -56,7 +53,6 @@ function formatElapsed(seconds: number): string {
 export default function DetectPage() {
   const { job_id } = useParams<{ job_id: string }>();
   const router = useRouter();
-  const { email } = useCurrentUser();
 
   const [isRunning, setIsRunning] = useState(false);
   const [hasRun, setHasRun] = useState(false);
@@ -194,26 +190,19 @@ export default function DetectPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#14171e]">
-      {/* Header */}
-      <header className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#111]">
-        <div className="max-w-6xl mx-auto px-3 sm:px-6 py-3 sm:py-4 flex items-center gap-2 sm:gap-4">
-          <button
-            onClick={() => router.back()}
-            className="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 transition shrink-0"
-            aria-label="Go back"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-sm sm:text-base font-bold text-gray-900 dark:text-white truncate">Detection Results</h1>
-            <p className="text-xs text-gray-400 font-mono truncate">Job: {job_id.slice(0, 8)}…</p>
-          </div>
+      <AppNav
+        back="/inspection"
+        section="detection"
+        title="Detection Results"
+        subtitle={<span className="font-mono">Job {job_id.slice(0, 8)}…</span>}
+        actions={
+          <>
           {hasRun && (
             <button
               id="btn-generate-report"
               onClick={handleGenerateReport}
               disabled={isGenerating}
-              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-400 dark:bg-blue-950/40 dark:hover:bg-blue-950/60 dark:text-blue-400 dark:border-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm font-semibold transition shrink-0"
+              className="bg-blue-600 hover:bg-blue-700 text-white border-blue-600 flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg border disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm font-semibold transition shrink-0"
             >
               {isGenerating
                 ? <><Loader2 className="w-4 h-4 animate-spin" /> <span className="hidden sm:inline">Generating…</span></>
@@ -221,20 +210,9 @@ export default function DetectPage() {
               }
             </button>
           )}
-          {email && (
-            <span className="hidden lg:block text-xs text-gray-400 dark:text-gray-500 font-mono truncate max-w-[160px]">
-              {email}
-            </span>
-          )}
-          <button
-            onClick={async () => { await getSupabase().auth.signOut(); router.push('/login'); }}
-            title="Sign out"
-            className="p-2 rounded-lg text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer shrink-0"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
-        </div>
-      </header>
+          </>
+        }
+      />
 
       <main className="max-w-6xl mx-auto px-3 sm:px-6 py-8 space-y-8">
 
@@ -363,7 +341,7 @@ export default function DetectPage() {
                 id="btn-generate-report-bottom"
                 onClick={handleGenerateReport}
                 disabled={isGenerating}
-                className="flex items-center gap-2 px-6 py-3 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-400 dark:bg-blue-950/40 dark:hover:bg-blue-950/60 dark:text-blue-400 dark:border-blue-600 disabled:opacity-50 font-semibold transition shadow-sm"
+                className="bg-blue-600 hover:bg-blue-700 text-white border-blue-600 flex items-center gap-2 px-6 py-3 rounded-xl border disabled:opacity-50 font-semibold transition shadow-sm"
               >
                 {isGenerating
                   ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating Report…</>
@@ -482,7 +460,7 @@ function LocationAssignPanel({
             <button
               onClick={handleSave}
               disabled={saving}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-400 dark:bg-blue-950/40 dark:hover:bg-blue-950/60 dark:text-blue-400 dark:border-blue-600 disabled:opacity-50 text-sm font-semibold transition"
+              className="bg-blue-600 hover:bg-blue-700 text-white border-blue-600 flex items-center gap-2 px-4 py-2 rounded-lg border disabled:opacity-50 text-sm font-semibold transition"
             >
               {saving ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Saving…</> : <><Save className="w-3.5 h-3.5" />Save Locations</>}
             </button>

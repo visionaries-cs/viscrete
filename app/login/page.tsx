@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useState, Suspense } from 'react';
 import { Eye, EyeOff, Mail, CheckCircle2 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ModeToggle } from '@/components/ui/mode-toggle';
+import AppNav from '@/components/AppNav';
 import { cn } from '@/lib/utils';
 import { getSupabase } from '@/lib/supabase';
 import { ErrorAlert } from '@/components/ui/ErrorAlert';
@@ -95,30 +95,7 @@ function LoginContent() {
     <div className="min-h-screen flex flex-col">
 
       {/* ── NAVBAR — spans full width above both columns ─────── */}
-      <header className="shrink-0 z-10
-                         border-b border-emerald-100 dark:border-[#2ca75d]/10
-                         bg-white/80 dark:bg-[#14171e]/80 backdrop-blur-md">
-        <div className="max-w-none px-6 py-3 flex items-center justify-between gap-4">
-          <Link href="/" className="flex items-center gap-2 select-none">
-            <span className="text-sm font-bold font-mono tracking-tight
-                             bg-gradient-to-r from-[#2ca75d] to-[#0da6f2]
-                             bg-clip-text text-transparent">
-              viscrete
-            </span>
-            <span className="hidden sm:inline text-xs text-gray-400 dark:text-gray-500 font-mono">
-              / concrete inspection
-            </span>
-          </Link>
-          <div className="flex items-center gap-4">
-            <Link href="/instructions"
-                  className="text-xs font-medium text-gray-500 dark:text-gray-400
-                             hover:text-gray-900 dark:hover:text-white transition-colors">
-              How to Use
-            </Link>
-            <ModeToggle />
-          </div>
-        </div>
-      </header>
+      <AppNav back="/" guest />
 
       {/* ── TWO-COLUMN BODY ──────────────────────────────────── */}
       <div className="flex flex-1 min-h-0">
@@ -312,7 +289,7 @@ function LoginContent() {
                     <div className="pt-2">
                       <button type="submit" disabled={isLoading}
                               className={cn('w-full py-3 rounded-xl text-sm font-semibold transition-all border',
-                                isLoading ? 'bg-yellow-50 dark:bg-yellow-950/40 text-yellow-700 dark:text-yellow-400 border-yellow-400 dark:border-yellow-600 cursor-not-allowed opacity-50' : 'bg-yellow-50 hover:bg-yellow-100 text-yellow-700 border-yellow-400 dark:bg-yellow-950/40 dark:hover:bg-yellow-950/60 dark:text-yellow-400 dark:border-yellow-600 active:scale-[0.99] cursor-pointer')}>
+                                isLoading ? 'bg-yellow-500 text-gray-950 border-yellow-500 cursor-not-allowed opacity-50' : 'bg-yellow-500 hover:bg-yellow-400 text-gray-950 border-yellow-500 active:scale-[0.99] cursor-pointer')}>
                         {isLoading ? (
                           <span className="flex items-center justify-center gap-2">
                             <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -427,7 +404,7 @@ function LoginContent() {
                     <div className="pt-2">
                       <button type="submit" disabled={isLoading}
                               className={cn('w-full py-3 rounded-xl text-sm font-semibold transition-all border',
-                                isLoading ? 'bg-yellow-50 dark:bg-yellow-950/40 text-yellow-700 dark:text-yellow-400 border-yellow-400 dark:border-yellow-600 cursor-not-allowed opacity-50' : 'bg-yellow-50 hover:bg-yellow-100 text-yellow-700 border-yellow-400 dark:bg-yellow-950/40 dark:hover:bg-yellow-950/60 dark:text-yellow-400 dark:border-yellow-600 active:scale-[0.99] cursor-pointer')}>
+                                isLoading ? 'bg-yellow-500 text-gray-950 border-yellow-500 cursor-not-allowed opacity-50' : 'bg-yellow-500 hover:bg-yellow-400 text-gray-950 border-yellow-500 active:scale-[0.99] cursor-pointer')}>
                         {isLoading ? (
                           <span className="flex items-center justify-center gap-2">
                             <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">

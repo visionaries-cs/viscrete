@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { getJob, generateReport, getReportUrl } from "@/lib/api";
 import { Loader2, FileText } from "lucide-react";
 import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import AppNav from "@/components/AppNav";
 import { Skeleton, SkeletonRegion } from "@/components/ui/skeleton";
 
 type PageState = "checking" | "detected" | "generating" | "loading-pdf" | "completed" | "error";
@@ -67,6 +68,12 @@ export default function ReportPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#14171e] flex flex-col">
+      <AppNav
+        back={`/results/${encodeURIComponent(job_id)}`}
+        section="report"
+        title="Inspection Report"
+        subtitle={<span className="font-mono">Job {job_id.slice(0, 8)}…</span>}
+      />
       <main className="flex-1 flex flex-col">
         {/* Checking job status */}
         {state === "checking" && (
@@ -124,7 +131,7 @@ export default function ReportPage() {
               </p>
               <button
                 onClick={() => handleGenerateReport()}
-                className="w-full bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-400 dark:bg-blue-950/40 dark:hover:bg-blue-950/60 dark:text-blue-400 dark:border-blue-600 text-sm font-semibold px-4 py-2.5 rounded-lg transition"
+                className="bg-blue-600 hover:bg-blue-700 text-white border-blue-600 w-full border text-sm font-semibold px-4 py-2.5 rounded-lg transition"
               >
                 Generate Report
               </button>

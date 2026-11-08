@@ -215,7 +215,7 @@ function SitePickerModal({
               type="button"
               onClick={handleCreate}
               disabled={!createName.trim() || creating}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-400 dark:bg-blue-950/40 dark:hover:bg-blue-950/60 dark:text-blue-400 dark:border-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-semibold transition"
+              className="bg-blue-600 hover:bg-blue-700 text-white border-blue-600 w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg border disabled:opacity-50 disabled:cursor-not-allowed text-xs font-semibold transition"
             >
               {creating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
               {creating ? "Creating…" : "Create & Select"}
@@ -241,7 +241,7 @@ function SitePickerModal({
               const site = sites.find(s => s.site_id === selectedId) ?? null;
               if (site) onConfirm(site);
             }}
-            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-400 dark:bg-blue-950/40 dark:hover:bg-blue-950/60 dark:text-blue-400 dark:border-blue-600 disabled:opacity-40 disabled:cursor-not-allowed transition"
+            className="bg-blue-600 hover:bg-blue-700 text-white border-blue-600 px-3 py-1.5 rounded-lg text-xs font-semibold border disabled:opacity-40 disabled:cursor-not-allowed transition"
           >
             Confirm
           </button>
@@ -732,9 +732,9 @@ function UploadPageInner() {
         </div>
       )}
 
-      <AppNav />
+      <AppNav back={siteId ? `/sites/${siteId}` : "/inspection"} section="new job" />
 
-      <main className="max-w-7xl mx-auto px-3 sm:px-6 pt-16 pb-6">
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 py-6">
         <div className="mb-4">
           <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">New Inspection Job</h2>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Complete each step below to start the inspection pipeline.</p>
@@ -902,7 +902,7 @@ function UploadPageInner() {
                   className={cn(
                     "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition",
                     canUpload
-                      ? "bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-400 dark:bg-blue-950/40 dark:hover:bg-blue-950/60 dark:text-blue-400 dark:border-blue-600"
+                      ? "bg-blue-600 hover:bg-blue-700 text-white border-blue-600 border"
                       : "bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed"
                   )}
                 >
@@ -917,7 +917,7 @@ function UploadPageInner() {
                   <button
                     id="btn-proceed-preprocessing"
                     onClick={handleProceed}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-500 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/60 dark:text-emerald-400 dark:border-emerald-600 transition"
+                    className="bg-emerald-700 hover:bg-emerald-800 text-white border-emerald-700 flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold border transition"
                   >
                     Proceed
                     <ArrowRight className="w-4 h-4" />
@@ -1047,7 +1047,7 @@ function UploadPageInner() {
                         <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">{selectedFilenames.size} selected</span>
                         <button
                           onClick={() => { setModalCtx("select"); setSaveError(null); setSaveSuccess(null); }}
-                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-400 dark:bg-blue-950/40 dark:hover:bg-blue-950/60 dark:text-blue-400 dark:border-blue-600 transition cursor-pointer"
+                          className="bg-blue-600 hover:bg-blue-700 text-white border-blue-600 flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border transition cursor-pointer"
                         >
                           <Map className="w-3.5 h-3.5" /> Set Location for Selected
                         </button>

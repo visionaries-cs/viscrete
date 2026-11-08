@@ -18,10 +18,10 @@ import LocationPickerModal, {
 import ImagePreviewModal from "@/components/upload/ImagePreviewModal";
 import { useFileUrl } from "@/hooks/useSignedUrl";
 import { Button } from "@/components/ui/button";
+import AppNav from "@/components/AppNav";
 import { ErrorAlert } from "@/components/ui/ErrorAlert";
 import { ListSkeleton } from "@/components/ui/skeleton";
 import {
-  ArrowLeft,
   ArrowRight,
   Filter,
   MapPin,
@@ -289,32 +289,22 @@ export default function UploadReviewPage() {
       )}
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <header className="bg-white dark:bg-[#111] border-b border-gray-200 dark:border-gray-800">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              className="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 transition cursor-pointer"
-              onClick={() => router.push("/upload")}
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <div>
-              <h1 className="text-base font-bold text-gray-900 dark:text-white">Upload Review</h1>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Verify GPS data and assign missing locations
-              </p>
-            </div>
-          </div>
+      <AppNav
+        back="/inspection"
+        section="upload review"
+        title="Upload Review"
+        subtitle="Verify GPS data and assign missing locations"
+        actions={
           <Button
-            className="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-400 dark:bg-blue-950/40 dark:hover:bg-blue-950/60 dark:text-blue-400 dark:border-blue-600 font-semibold cursor-pointer"
-            disabled={!canProceed}
-            onClick={() => router.push(nextAction.href)}
-          >
-            {nextAction.label}
-            {isFailed ? <RotateCcw className="w-4 h-4 ml-2" /> : <ArrowRight className="w-4 h-4 ml-2" />}
-          </Button>
-        </div>
-      </header>
+          className="bg-blue-600 hover:bg-blue-700 text-white border-blue-600 border font-semibold cursor-pointer"
+          disabled={!canProceed}
+          onClick={() => router.push(nextAction.href)}
+        >
+          {nextAction.label}
+          {isFailed ? <RotateCcw className="w-4 h-4 ml-2" /> : <ArrowRight className="w-4 h-4 ml-2" />}
+        </Button>
+        }
+      />
 
       <div className="max-w-7xl mx-auto px-6 py-8">
         {!isLoading && !fetchError && (isFailed || validCount === 0) && (
@@ -464,7 +454,7 @@ export default function UploadReviewPage() {
                           <button
                             onClick={e => { e.stopPropagation(); handleOverride(file.file_id); }}
                             disabled={overridingId !== null}
-                            className="px-2 py-0.5 rounded-full text-[11px] font-bold border border-red-300 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950/30 transition cursor-pointer disabled:opacity-50"
+                            className="bg-red-600 hover:bg-red-700 text-white border-red-600 px-2 py-0.5 rounded-full text-[11px] font-bold border transition cursor-pointer disabled:opacity-50"
                             title="This image failed the blur check. Use it anyway?"
                           >
                             {overridingId === file.file_id ? "Saving…" : "Blurry · Use anyway"}
@@ -553,7 +543,7 @@ export default function UploadReviewPage() {
                   </p>
                 )}
                 <Button
-                  className="w-full bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-400 dark:bg-blue-950/40 dark:hover:bg-blue-950/60 dark:text-blue-400 dark:border-blue-600 font-semibold cursor-pointer"
+                  className="bg-blue-600 hover:bg-blue-700 text-white border-blue-600 w-full border font-semibold cursor-pointer"
                   onClick={() => { setModalCtx("select"); setSaveError(null); setSaveSuccess(null); }}
                 >
                   <Map className="w-4 h-4 mr-2" />

@@ -83,7 +83,7 @@ export function ErrorAlert({
               {info.kind === "auth" && (
                 <Link
                   href="/login"
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 dark:border-red-700 px-3 py-1.5 text-xs font-semibold text-red-700 dark:text-red-300 transition hover:bg-red-100 dark:hover:bg-red-900/40"
+                  className="bg-red-600 hover:bg-red-700 text-white border-red-600 inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition"
                 >
                   <LogIn className="w-3.5 h-3.5" /> Sign in
                 </Link>

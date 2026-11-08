@@ -77,7 +77,7 @@ const HeroSection = () => {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
             <Button
               size="lg"
-              className="cursor-pointer gap-2 text-base bg-yellow-50 hover:bg-yellow-100 text-yellow-700 border border-yellow-400 dark:bg-yellow-950/40 dark:hover:bg-yellow-950/60 dark:text-yellow-400 dark:border-yellow-600 font-semibold"
+              className="bg-yellow-500 hover:bg-yellow-400 text-gray-950 border-yellow-500 cursor-pointer gap-2 text-base border font-semibold"
               onClick={handleStart}
             >
               Start Inspection
@@ -85,7 +85,7 @@ const HeroSection = () => {
             </Button>
             <Button
               size="lg"
-              className="cursor-pointer gap-2 text-base border border-[#0da6f2] bg-transparent text-[#0da6f2] hover:bg-[#0da6f2]/10"
+              className="cursor-pointer gap-2 text-base border border-[#0da6f2] bg-[#0da6f2] text-gray-950 hover:bg-[#3bb8f5]"
               onClick={() => scrollToSection("technology")}
             >
               <Play className="w-4 h-4" />

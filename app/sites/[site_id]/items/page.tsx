@@ -3,13 +3,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSignedUrl } from "@/hooks/useSignedUrl";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
-import Link from "next/link";
 import {
-  ArrowLeft, Filter, CheckCircle2,
+  Filter, CheckCircle2,
   Clock, Circle, ImageIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getSiteItems, updateDefectStatus, type DefectItem } from "@/lib/api";
+import AppNav from "@/components/AppNav";
 import { ErrorAlert } from "@/components/ui/ErrorAlert";
 import { ListSkeleton } from "@/components/ui/skeleton";
 
@@ -192,21 +192,17 @@ export default function SiteItemsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#14171e]">
-      {/* Header */}
-      <header className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center gap-4">
-          <Link href={`/sites/${site_id}`} className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition">
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <div className="flex-1">
-            <h1 className="text-base font-bold text-gray-900 dark:text-white">All Defects</h1>
-            <p className="text-xs text-gray-400 font-mono">{site_id}</p>
-          </div>
-          <span className="text-sm text-gray-500 dark:text-gray-400">
+      <AppNav
+        back={`/sites/${site_id}`}
+        section="defects"
+        title="All Defects"
+        subtitle={<span className="font-mono">{site_id}</span>}
+        actions={
+          <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
             {loading ? "…" : `${defects.length} defect${defects.length !== 1 ? "s" : ""}`}
           </span>
-        </div>
-
+        }
+      >
         {/* Filter bar */}
         <div className="border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-950">
           <div className="max-w-6xl mx-auto px-6 py-3 flex items-center gap-3 flex-wrap">
@@ -247,7 +243,7 @@ export default function SiteItemsPage() {
             )}
           </div>
         </div>
-      </header>
+      </AppNav>
 
       <main className="max-w-6xl mx-auto px-6 py-6 space-y-8">
         {loading && <ListSkeleton rows={6} label="Loading defects…" />}

@@ -4,7 +4,7 @@ import { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { CheckCircle2, XCircle, Loader2, Mail } from 'lucide-react';
-import { ModeToggle } from '@/components/ui/mode-toggle';
+import AppNav from '@/components/AppNav';
 import { getSupabase } from '@/lib/supabase';
 
 export default function ConfirmPage() {
@@ -63,22 +63,7 @@ function ConfirmContent() {
     <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-[#14171e]">
 
       {/* Navbar */}
-      <header className="shrink-0 border-b border-emerald-100 dark:border-[#2ca75d]/10
-                         bg-white/80 dark:bg-[#14171e]/80 backdrop-blur-md">
-        <div className="max-w-none px-6 py-3 flex items-center justify-between gap-4">
-          <Link href="/" className="flex items-center gap-2 select-none">
-            <span className="text-sm font-bold font-mono tracking-tight
-                             bg-gradient-to-r from-[#2ca75d] to-[#0da6f2]
-                             bg-clip-text text-transparent">
-              viscrete
-            </span>
-            <span className="hidden sm:inline text-xs text-gray-400 dark:text-gray-500 font-mono">
-              / concrete inspection
-            </span>
-          </Link>
-          <ModeToggle />
-        </div>
-      </header>
+      <AppNav back="/login" guest />
 
       {/* Body */}
       <div className="flex-1 flex items-center justify-center px-4 py-12">
@@ -165,8 +150,7 @@ function ConfirmContent() {
                 <Link
                   href="/login"
                   className="w-full py-3 rounded-xl text-sm font-semibold text-center transition border
-                             bg-green-50 hover:bg-green-100 text-green-700 border-green-500
-                             dark:bg-green-950/40 dark:hover:bg-green-950/60 dark:text-green-400 dark:border-green-600
+                             bg-green-700 hover:bg-green-800 text-white border-green-700
                              active:scale-[0.98]"
                 >
                   Back to sign in

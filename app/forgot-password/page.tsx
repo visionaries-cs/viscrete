@@ -1,11 +1,10 @@
 'use client';
 
 import { useState, Suspense } from 'react';
-import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getSupabase } from '@/lib/supabase';
 import { ErrorAlert } from '@/components/ui/ErrorAlert';
+import AppNav from '@/components/AppNav';
 
 const inputCls = `w-full px-4 py-3 rounded-xl text-sm
   border border-gray-200 dark:border-gray-700
@@ -45,14 +44,10 @@ function ForgotPasswordContent() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-[#14171e] px-4">
+    <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-[#14171e]">
+      <AppNav back="/login" guest />
+      <div className="flex-1 flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        <Link
-          href="/login"
-          className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 mb-8 transition"
-        >
-          <ArrowLeft className="w-4 h-4" /> Back to login
-        </Link>
 
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">Reset password</h1>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-8">
@@ -83,14 +78,15 @@ function ForgotPasswordContent() {
               className={cn(
                 'w-full py-3 rounded-xl text-sm font-semibold transition border',
                 isLoading
-                  ? 'bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-400 border-green-500 dark:border-green-600 cursor-not-allowed opacity-50'
-                  : 'bg-green-50 hover:bg-green-100 text-green-700 border-green-500 dark:bg-green-950/40 dark:hover:bg-green-950/60 dark:text-green-400 dark:border-green-600 active:scale-[0.98] cursor-pointer',
+                  ? 'bg-green-700 text-white border-green-700 cursor-not-allowed opacity-50'
+                  : 'bg-green-700 hover:bg-green-800 text-white border-green-700 active:scale-[0.98] cursor-pointer',
               )}
             >
               {isLoading ? 'Sending…' : 'Send reset link'}
             </button>
           </form>
         )}
+      </div>
       </div>
     </div>
   );

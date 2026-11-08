@@ -3,14 +3,12 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Building2, Plus, Search, Loader2, MapPin, User, Calendar, ChevronRight, LogOut, Trash2, X } from "lucide-react";
+import { Building2, Plus, Search, Loader2, MapPin, User, Calendar, ChevronRight, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ModeToggle } from "@/components/ui/mode-toggle";
-import { getSupabase } from "@/lib/supabase";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
+import AppNav from "@/components/AppNav";
 import { listSites, createSite, deleteSite, type SiteResponse } from "@/lib/api";
 import LocationPicker from "@/components/LocationPicker";
 import { ErrorAlert } from "@/components/ui/ErrorAlert";
@@ -103,7 +101,6 @@ function SiteCard({
 
 export default function InspectionPage() {
   const router = useRouter();
-  const { email } = useCurrentUser();
 
   // ── Site list
   const [sites, setSites] = useState<SiteResponse[]>([]);
@@ -194,40 +191,9 @@ export default function InspectionPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#14171e]">
-      {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50
-                         border-b border-emerald-100 dark:border-[#2ca75d]/10
-                         bg-white/80 dark:bg-[#14171e]/80 backdrop-blur-md">
-        <div className="container max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
-          <Link href="/" className="flex items-center gap-2 select-none">
-            <span className="text-sm font-bold font-mono tracking-tight
-                             bg-gradient-to-r from-[#2ca75d] to-[#0da6f2]
-                             bg-clip-text text-transparent">
-              viscrete
-            </span>
-            <span className="hidden sm:inline text-xs text-gray-400 dark:text-gray-500 font-mono">
-              / concrete inspection
-            </span>
-          </Link>
-          <div className="flex items-center gap-2">
-            {email && (
-              <span className="hidden sm:block text-xs text-gray-400 dark:text-gray-500 font-mono truncate max-w-[180px]">
-                {email}
-              </span>
-            )}
-            <ModeToggle />
-            <button
-              onClick={async () => { await getSupabase().auth.signOut(); router.push('/login'); }}
-              title="Sign out"
-              className="p-2 rounded-lg text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      </header>
+      <AppNav back="/" section="sites" title="Inspection Sites" />
 
-      <main className="max-w-7xl mx-auto px-6 pt-16 pb-8">
+      <main className="max-w-7xl mx-auto px-6 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
           {/* Left — Create Site */}

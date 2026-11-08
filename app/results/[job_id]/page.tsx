@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
 import { cn } from "@/lib/utils";
 import {
   generateReport,
@@ -47,14 +46,11 @@ import {
   MessageSquare,
   Settings,
   Calendar,
-  LogOut,
   PanelLeft,
   PanelRight,
   Clock,
 } from "lucide-react";
-import { ModeToggle } from "@/components/ui/mode-toggle";
-import { getSupabase } from "@/lib/supabase";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
+import AppNav from "@/components/AppNav";
 
 // ─── Types / Helpers ──────────────────────────────────────────────────────────
 
@@ -89,7 +85,6 @@ export default function ResultPage() {
   const params = useParams();
   const jobId = params.job_id as string;
   const router = useRouter();
-  const { email } = useCurrentUser();
 
   // Detection state
   const [isRunning, setIsRunning] = useState(false);
@@ -826,67 +821,25 @@ export default function ResultPage() {
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col min-h-screen overflow-hidden bg-gray-50 dark:bg-[#14171e]">
-      {/* HEADER */}
-      <header className="fixed top-0 left-0 right-0 z-50
-                         border-b border-gray-200 dark:border-gray-800
-                         bg-white/80 dark:bg-gray-950/80 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 flex items-center justify-between gap-2 sm:gap-4">
-          {/* Left — brand + back + title */}
-          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
-            <Link href="/" className="flex items-center gap-2 select-none shrink-0">
-              <span className="text-sm font-bold font-mono tracking-tight
-                               bg-gradient-to-r from-[#2ca75d] to-[#0da6f2]
-                               bg-clip-text text-transparent">
-                viscrete
-              </span>
-            </Link>
-            <div className="border-l border-gray-200 dark:border-gray-800 pl-2 sm:pl-4 flex items-center gap-2 sm:gap-3 min-w-0">
-              <button
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer shrink-0"
-                onClick={() => router.push('/upload')}
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <div className="min-w-0">
-                <h1 className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white tracking-wide truncate">
-                  <span className="hidden sm:inline">DETECTION </span>RESULTS
-                </h1>
-                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                  {projectName !== "—" ? projectName : `Job: ${jobId.slice(0, 8)}`}
-                </p>
-              </div>
-            </div>
-          </div>
-          {/* Right — export controls + model + date + toggle */}
-          <div className="flex items-center gap-1.5 sm:gap-2 text-xs text-gray-500 dark:text-gray-400 shrink-0">
-            <span className="hidden lg:flex items-center gap-1">
+    <div className="flex flex-col min-h-screen overflow-x-clip bg-gray-50 dark:bg-[#14171e]">
+      <AppNav
+        back={`/upload-review/${jobId}`}
+        section="results"
+        title="Detection Results"
+        subtitle={projectName !== "—" ? projectName : <span className="font-mono">Job {jobId.slice(0, 8)}</span>}
+        actions={
+          <>
+            <span className="hidden xl:flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
               <Settings className="w-4 h-4" />
               {modelName}
             </span>
-            <span className="hidden md:flex items-center gap-1">
+            <span className="hidden md:flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
               <Calendar className="w-4 h-4" />
               {projectDate}
             </span>
-            {email && (
-              <span className="hidden lg:block text-xs text-gray-400 dark:text-gray-500 font-mono truncate max-w-[160px]">
-                {email}
-              </span>
-            )}
-
-            <ModeToggle />
-            <button
-              onClick={async () => { await getSupabase().auth.signOut(); router.push('/login'); }}
-              title="Sign out"
-              className="p-2 rounded-lg text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      </header>
-      {/* Spacer for fixed header */}
-      <div className="h-12 shrink-0" />
+          </>
+        }
+      />
 
       {/* Pre-detection sensitivity selector */}
       {readyToRun && !isRunning && !hasRun && (
@@ -916,9 +869,9 @@ export default function ResultPage() {
                     {(['conservative','balanced','aggressive'] as const).map(level => {
                       const active = sensitivity[cls] === level;
                       const activeStyle: Record<string,string> = {
-                        conservative: 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-950/40 dark:border-blue-400 dark:text-blue-300',
-                        balanced:     'bg-emerald-50 border-emerald-500 text-emerald-700 dark:bg-emerald-950/40 dark:border-emerald-400 dark:text-emerald-300',
-                        aggressive:   'bg-orange-50 border-orange-500 text-orange-700 dark:bg-orange-950/40 dark:border-orange-400 dark:text-orange-300',
+                        conservative: 'bg-blue-600 text-white border-blue-600',
+                        balanced:     'bg-emerald-700 text-white border-emerald-700',
+                        aggressive:   'bg-orange-700 text-white border-orange-700',
                       };
                       const levelDesc: Record<string,string> = {
                         conservative: 'High confidence only',
@@ -937,7 +890,7 @@ export default function ResultPage() {
                           )}
                         >
                           <span className="font-semibold capitalize">{level}</span>
-                          {active && <span className="ml-2 opacity-70">— {levelDesc[level]}</span>}
+                          {active && <span className="ml-2 opacity-90">— {levelDesc[level]}</span>}
                         </button>
                       );
                     })}
@@ -1023,9 +976,9 @@ export default function ResultPage() {
                         {(['conservative','balanced','aggressive'] as const).map(level => {
                           const active = sensitivity[cls] === level;
                           const activeStyle: Record<string,string> = {
-                            conservative: 'bg-green-50 border-green-500 text-green-700 dark:bg-green-950/40 dark:border-green-600 dark:text-green-400',
-                            balanced:     'bg-green-50 border-green-500 text-green-700 dark:bg-green-950/40 dark:border-green-600 dark:text-green-400',
-                            aggressive:   'bg-green-50 border-green-500 text-green-700 dark:bg-green-950/40 dark:border-green-600 dark:text-green-400',
+                            conservative: 'bg-green-700 text-white border-green-700',
+                            balanced:     'bg-green-700 text-white border-green-700',
+                            aggressive:   'bg-green-700 text-white border-green-700',
                           };
                           return (
                             <button
@@ -1050,7 +1003,7 @@ export default function ResultPage() {
                 <button
                   disabled={isRunning}
                   onClick={() => runDetection(sensitivity)}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-400 dark:bg-blue-950/40 dark:hover:bg-blue-950/60 dark:text-blue-400 dark:border-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-semibold transition cursor-pointer"
+                  className="bg-blue-600 hover:bg-blue-700 text-white border-blue-600 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border disabled:opacity-50 disabled:cursor-not-allowed text-xs font-semibold transition cursor-pointer"
                 >
                   {isRunning ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
                   Re-run Detection
@@ -1697,7 +1650,7 @@ export default function ResultPage() {
                   onClick={reportGenerated ? handleDownloadPdf : needsRegenerate ? handleRegenerateReport : handleGenerateReport}
                   disabled={isGenerating || isDownloading}
                   className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold
-                             bg-yellow-50 hover:bg-yellow-100 text-yellow-700 border border-yellow-400 dark:bg-yellow-950/40 dark:hover:bg-yellow-950/60 dark:text-yellow-400 dark:border-yellow-600 transition
+                             bg-yellow-500 hover:bg-yellow-400 text-gray-950 border border-yellow-500 transition
                              disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                 >
                   {(isGenerating || isDownloading) ? (

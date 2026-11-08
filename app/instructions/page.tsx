@@ -3,9 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { ModeToggle } from "@/components/ui/mode-toggle";
+import AppNav from "@/components/AppNav";
 import {
-  ArrowLeft,
   ArrowRight,
   Upload,
   SlidersHorizontal,
@@ -312,27 +311,7 @@ export default function InstructionsPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#14171e]">
 
-      {/* Header */}
-      <header className="sticky top-0 z-50 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#111] backdrop-blur-md">
-        <div className="max-w-4xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <Link
-              href="/"
-              className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-              aria-label="Back to home"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </Link>
-            <Link href="/" className="flex items-center gap-2 select-none">
-              <span className="text-sm font-bold font-mono tracking-tight bg-gradient-to-r from-[#2ca75d] to-[#0da6f2] bg-clip-text text-transparent">
-                viscrete
-              </span>
-              <span className="hidden sm:inline text-xs text-gray-400 dark:text-gray-500 font-mono">/ how to use</span>
-            </Link>
-          </div>
-          <ModeToggle />
-        </div>
-      </header>
+      <AppNav back="/" section="how to use" guest />
 
       <main className="max-w-4xl mx-auto px-6 py-12 space-y-14">
 
@@ -359,8 +338,7 @@ export default function InstructionsPage() {
             <Link
               href="/upload"
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg
-                         bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-400
-                         dark:bg-blue-950/40 dark:hover:bg-blue-950/60 dark:text-blue-400 dark:border-blue-600
+                         bg-blue-600 hover:bg-blue-700 text-white border border-blue-600
                          text-sm font-semibold transition"
             >
               Start Inspection
@@ -470,8 +448,7 @@ export default function InstructionsPage() {
           <Link
             href="/upload"
             className="inline-flex items-center gap-2 px-6 py-3 rounded-xl
-                       bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-400
-                       dark:bg-blue-950/40 dark:hover:bg-blue-950/60 dark:text-blue-400 dark:border-blue-600
+                       bg-blue-600 hover:bg-blue-700 text-white border border-blue-600
                        font-semibold transition shadow-sm"
           >
             Start Inspection

@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { ModeToggle } from '@/components/ui/mode-toggle';
+import AppNav from '@/components/AppNav';
 import { cn } from '@/lib/utils';
 import { getSupabase } from '@/lib/supabase';
 import { ErrorAlert } from '@/components/ui/ErrorAlert';
@@ -71,23 +71,7 @@ function ResetPasswordContent() {
     <div className="min-h-screen flex flex-col">
 
       {/* Navbar */}
-      <header className="shrink-0 z-10
-                         border-b border-emerald-100 dark:border-[#2ca75d]/10
-                         bg-white/80 dark:bg-[#14171e]/80 backdrop-blur-md">
-        <div className="max-w-none px-6 py-3 flex items-center justify-between gap-4">
-          <Link href="/" className="flex items-center gap-2 select-none">
-            <span className="text-sm font-bold font-mono tracking-tight
-                             bg-gradient-to-r from-[#2ca75d] to-[#0da6f2]
-                             bg-clip-text text-transparent">
-              viscrete
-            </span>
-            <span className="hidden sm:inline text-xs text-gray-400 dark:text-gray-500 font-mono">
-              / concrete inspection
-            </span>
-          </Link>
-          <ModeToggle />
-        </div>
-      </header>
+      <AppNav back="/login" guest />
 
       {/* Body */}
       <div className="flex-1 flex items-center justify-center bg-gray-50 dark:bg-[#14171e] px-4 py-10">
@@ -185,8 +169,8 @@ function ResetPasswordContent() {
                   className={cn(
                     'w-full py-3 rounded-xl text-sm font-semibold transition-all mt-2 border',
                     isLoading
-                      ? 'bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-400 border-green-500 dark:border-green-600 cursor-not-allowed opacity-50'
-                      : 'bg-green-50 hover:bg-green-100 text-green-700 border-green-500 dark:bg-green-950/40 dark:hover:bg-green-950/60 dark:text-green-400 dark:border-green-600 active:scale-[0.98] cursor-pointer',
+                      ? 'bg-green-700 text-white border-green-700 cursor-not-allowed opacity-50'
+                      : 'bg-green-700 hover:bg-green-800 text-white border-green-700 active:scale-[0.98] cursor-pointer',
                   )}
                 >
                   {isLoading ? (

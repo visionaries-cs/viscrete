@@ -195,7 +195,7 @@ export default function LocationPickerModal({
             <button
               onClick={useSiteLocation}
               disabled={siteGeoLoading}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 text-xs font-semibold hover:bg-blue-100 dark:hover:bg-blue-950/50 transition cursor-pointer disabled:opacity-60"
+              className="bg-blue-600 hover:bg-blue-700 text-white border-blue-600 w-full flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-semibold transition cursor-pointer disabled:opacity-60"
             >
               {siteGeoLoading
                 ? <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />

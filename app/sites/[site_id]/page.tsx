@@ -4,13 +4,11 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  ArrowLeft, Plus, Layers, AlertCircle,
+  Plus, Layers, AlertCircle,
   MapPin, Calendar, ChevronRight, Trash2, ExternalLink, X,
-  LogOut, Pencil, Users, BarChart3,
+  Pencil, Users, BarChart3,
 } from "lucide-react";
-import { ModeToggle } from "@/components/ui/mode-toggle";
-import { getSupabase } from "@/lib/supabase";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
+import AppNav from "@/components/AppNav";
 import { cn } from "@/lib/utils";
 import {
   getSite, getJobsForSite, getSiteItems, deleteSite, deleteJob, updateSite,
@@ -29,17 +27,17 @@ import { Skeleton, SkeletonRegion, ListSkeleton } from "@/components/ui/skeleton
 // Job filter pills, grouped by pipeline stage. Colors follow the JobCard status badges.
 const JOB_STAGES: { key: string; label: string; statuses: string[]; dot: string; active: string }[] = [
   { key: "upload",     label: "Upload",     statuses: ["created", "validating", "validated"], dot: "bg-blue-500",
-    active: "bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800" },
+    active: "bg-blue-600 text-white border-blue-600" },
   { key: "preprocess", label: "Preprocess", statuses: ["preprocessing", "preprocessed"],      dot: "bg-yellow-500",
-    active: "bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-950/60 dark:text-yellow-300 dark:border-yellow-800" },
+    active: "bg-yellow-500 text-gray-950 border-yellow-500" },
   { key: "detect",     label: "Detect",     statuses: ["detecting", "detected"],              dot: "bg-orange-500",
-    active: "bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-950/60 dark:text-orange-300 dark:border-orange-800" },
+    active: "bg-orange-700 text-white border-orange-700" },
   { key: "report",     label: "Report",     statuses: ["reporting"],                          dot: "bg-purple-500",
-    active: "bg-purple-100 text-purple-700 border-purple-300 dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-800" },
+    active: "bg-purple-600 text-white border-purple-600" },
   { key: "completed",  label: "Completed",  statuses: ["completed"],                          dot: "bg-emerald-500",
-    active: "bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800" },
+    active: "bg-emerald-700 text-white border-emerald-700" },
   { key: "failed",     label: "Failed",     statuses: ["failed"],                             dot: "bg-red-500",
-    active: "bg-red-100 text-red-700 border-red-300 dark:bg-red-950/60 dark:text-red-300 dark:border-red-800" },
+    active: "bg-red-600 text-white border-red-600" },
 ];
 
 const LocationDisplayMap = dynamic(() => import("@/components/LocationDisplayMap"), { ssr: false });
@@ -67,7 +65,6 @@ type ActiveModal = "inspector" | "created" | "jobs" | "defects" | null;
 export default function SiteDetailPage() {
   const { site_id } = useParams<{ site_id: string }>();
   const router = useRouter();
-  const { email } = useCurrentUser();
 
   const [site, setSite] = useState<SiteResponse | null>(null);
   const [jobs, setJobs] = useState<JobStatusResponse[]>([]);
@@ -250,12 +247,7 @@ export default function SiteDetailPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-[#14171e]">
-        <header className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#111]">
-          <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 flex items-center gap-4">
-            <Skeleton className="w-8 h-8 rounded-lg" />
-            <Skeleton className="h-5 w-48" />
-          </div>
-        </header>
+        <AppNav back="/inspection" section="site" title={<Skeleton className="h-4 w-40" />} />
         <SkeletonRegion label="Loading site…" className="max-w-7xl mx-auto px-3 sm:px-6 py-6 sm:py-8 grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
           <div className="lg:col-span-2 space-y-3">
             <Skeleton className="h-5 w-32 mb-2" />
@@ -271,8 +263,9 @@ export default function SiteDetailPage() {
 
   if (error || !site) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-[#14171e] flex items-center justify-center p-6">
-        <div className="w-full max-w-md space-y-4">
+      <div className="min-h-screen bg-gray-50 dark:bg-[#14171e]">
+        <AppNav back="/inspection" section="site" />
+        <div className="w-full max-w-md mx-auto space-y-4 p-6 pt-16">
           <ErrorAlert error={error ?? "HTTP 404"} title={error ? "Couldn't load this site" : "Site not found"} onRetry={error ? load : undefined} />
           <Link href="/inspection" className="inline-block text-sm text-blue-600 dark:text-blue-400 underline">Back to Sites</Link>
         </div>
@@ -282,46 +275,30 @@ export default function SiteDetailPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#14171e]">
-      <header className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#111]">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 flex items-center gap-3 sm:gap-4">
-          <Link href="/inspection" className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition shrink-0">
-            <ArrowLeft className="w-5 h-5" />
+      <AppNav
+        back="/inspection"
+        section="site"
+        title={site.name}
+        subtitle={
+          <button
+            onClick={() => { setEditingAddress(true); }}
+            className="inline-flex items-center gap-1 max-w-full hover:text-blue-500 transition group cursor-pointer"
+          >
+            <MapPin className="w-3 h-3 shrink-0" />
+            <span className="truncate">{site.address || 'Add location...'}</span>
+            <Pencil className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition shrink-0" />
+          </button>
+        }
+        actions={
+          <Link
+            href={`/sites/${site_id}/items`}
+            className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-xs sm:text-sm text-gray-600 dark:text-gray-300 hover:border-blue-300 dark:hover:border-blue-700 transition"
+          >
+            <Layers className="w-4 h-4 shrink-0" />
+            <span className="hidden sm:inline">View All Defects</span>
           </Link>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-base font-bold text-gray-900 dark:text-white truncate">{site.name}</h1>
-            <button
-              onClick={() => { setEditingAddress(true); }}
-              className="inline-flex items-center gap-1 mt-0.5 text-xs text-gray-400 hover:text-blue-500 transition group cursor-pointer"
-            >
-              <MapPin className="w-3 h-3 shrink-0" />
-              <span className="truncate max-w-[160px] sm:max-w-xs">{site.address || 'Add location...'}</span>
-              <Pencil className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition shrink-0" />
-            </button>
-          </div>
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            <Link
-              href={`/sites/${site_id}/items`}
-              className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-xs sm:text-sm text-gray-600 dark:text-gray-300 hover:border-blue-300 dark:hover:border-blue-700 transition"
-            >
-              <Layers className="w-4 h-4 shrink-0" />
-              <span className="hidden sm:inline">View All Defects</span>
-            </Link>
-            {email && (
-              <span className="hidden md:block text-xs text-gray-400 dark:text-gray-500 font-mono truncate max-w-[160px]">
-                {email}
-              </span>
-            )}
-            <ModeToggle />
-            <button
-              onClick={async () => { await getSupabase().auth.signOut(); router.push('/login'); }}
-              title="Sign out"
-              className="p-2 rounded-lg text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      </header>
+        }
+      />
 
       <main className="max-w-7xl mx-auto px-3 sm:px-6 py-6 sm:py-8 space-y-6 sm:space-y-8">
 
@@ -432,8 +409,8 @@ export default function SiteDetailPage() {
                         : "bg-white text-gray-600 border-gray-200 hover:border-gray-300 dark:bg-[#161616] dark:text-gray-300 dark:border-gray-800 dark:hover:border-gray-700",
                     )}
                   >
-                    <span className={cn("w-2 h-2 rounded-full shrink-0", st.dot)} aria-hidden="true" />
-                    {st.label} <span className="opacity-70">{st.count}</span>
+                    <span className={cn("w-2 h-2 rounded-full shrink-0", st.dot, stageFilter === st.key && "bg-current")} aria-hidden="true" />
+                    {st.label} <span className="opacity-90">{st.count}</span>
                   </button>
                 ))}
               </div>
