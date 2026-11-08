@@ -212,6 +212,7 @@ export default function PreprocessPage() {
     let cancelled = false;
     let ws: WebSocket | null = null;
     let pollInterval: ReturnType<typeof setInterval> | null = null;
+    let eventsInterval: ReturnType<typeof setInterval> | null = null;
     let receivedCompleted = false;
 
     // ── Helpers ──────────────────────────────────────────────────────────────
@@ -292,11 +293,13 @@ export default function PreprocessPage() {
           if (data.status === "preprocessed") {
             clearInterval(pollInterval!);
             pollInterval = null;
+            stopEvents();
             setIsRunning(false);
-            await loadCompletedJob(data);
+            if (!receivedCompleted) await loadCompletedJob(data);
           } else if (data.status === "failed") {
             clearInterval(pollInterval!);
             pollInterval = null;
+            stopEvents();
             setStepStates((prev) => {
               const next = [...prev];
               const activeIdx = next.findIndex(
@@ -317,6 +320,39 @@ export default function PreprocessPage() {
         } catch { /* transient network error — keep polling */ }
       }, 3000);
       pollRef.current = pollInterval;
+    }
+
+    // ── Progress events over HTTP (when a WebSocket can't connect) ────────────
+    // Same events the WebSocket would send, fetched every second with ?after=<last seq>.
+
+    function stopEvents() {
+      if (eventsInterval) clearInterval(eventsInterval);
+      eventsInterval = null;
+    }
+
+    function startEvents() {
+      if (eventsInterval) return;
+      let lastSeq = 0;
+      let inFlight = false;
+      eventsInterval = setInterval(async () => {
+        if (cancelled || inFlight) return;
+        inFlight = true;
+        try {
+          const res = await fetch(
+            `${API_BASE_URL}/api/v1/jobs/${encodeURIComponent(job_id)}/preprocess/events?after=${lastSeq}`,
+            { headers: await getAuthHeaders() }
+          );
+          if (!res.ok || cancelled) return;
+          const { events } = (await res.json()) as { events: Array<Record<string, unknown>> };
+          for (const msg of events) {
+            if (cancelled) return;
+            lastSeq = Math.max(lastSeq, (msg.seq as number) ?? 0);
+            handleMsg(msg);
+            if (msg.type === "completed" || (msg.type === "error" && msg.fatal)) stopEvents();
+          }
+        } catch { /* transient network error — try again next tick */ }
+        finally { inFlight = false; }
+      }, 1000);
     }
 
     // ── WebSocket message handler ─────────────────────────────────────────────
@@ -573,8 +609,8 @@ export default function PreprocessPage() {
           if (receivedCompleted || cancelled) return;
           // WS never opened (e.g. the zrok interstitial blocks browser WebSockets): start over HTTP and poll
           if (!opened && !isReconnect) {
-            addPipelineLine("Live progress unavailable — checking status every 3 s", "warning");
-            startPipeline().then((ok) => { if (ok) { pipelineStarted = true; startPolling(); } });
+            addPipelineLine("Live connection blocked — showing progress every 1 s");
+            startPipeline().then((ok) => { if (ok) { pipelineStarted = true; startEvents(); startPolling(); } });
             return;
           }
           if (!pipelineStarted) return; // POST failed or never sent — do not reconnect
@@ -586,7 +622,8 @@ export default function PreprocessPage() {
             );
             setTimeout(() => connect(true), delay);
           } else {
-            addPipelineLine("WebSocket unavailable — switched to polling");
+            addPipelineLine("WebSocket unavailable — showing progress every 1 s");
+            startEvents();
             startPolling();
           }
         };
@@ -692,7 +729,8 @@ export default function PreprocessPage() {
           // Already running (reopened page, second tab): watch it instead of POSTing again (409)
           setStepStates(makePendingSteps(IMAGE_STEPS));
           setIsRunning(true);
-          addPipelineLine("Preprocessing is already running — checking status every 3 s");
+          addPipelineLine("Preprocessing is already running — following its progress");
+          startEvents();
           startPolling();
         } else {
           startWS(data.input_type);
@@ -710,6 +748,7 @@ export default function PreprocessPage() {
     return () => {
       cancelled = true;
       ws?.close();
+      stopEvents();
       if (pollInterval) clearInterval(pollInterval);
       if (pollRef.current) clearInterval(pollRef.current);
     };
