@@ -159,6 +159,7 @@ export default function ResultPage() {
 
   const [fileIdToCarouselIndex, setFileIdToCarouselIndex] = useState<Record<string, number>>({});
   const [fileIdToProcessedPath, setFileIdToProcessedPath] = useState<Record<string, string>>({});
+  const [hideNoDefects, setHideNoDefects] = useState(false);
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [highlightedDetection, setHighlightedDetection] = useState<Detection | null>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -579,38 +580,73 @@ export default function ResultPage() {
   // ── Image carousel ──────────────────────────────────────────────────────────
 
   const annotatedPaths: string[] = flatData?.annotated_paths ?? [];
-  const totalImages = annotatedPaths.length;
 
   // Extract file_id from an annotated storage key like "{job_id}/annotated/{file_id}_annotated.jpg"
   function fileIdFromAnnotatedPath(path: string): string {
     return (path.split('/').pop() ?? '').split('_annotated')[0];
   }
 
-  // Rebuild fileIdToCarouselIndex from annotated_paths so table-row clicks navigate
-  // to the correct carousel slot (annotated_paths only contains files with detections,
-  // so positional index from job.files would be misaligned).
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  function processedKeyFor(fid: string, annotatedPath: string): string {
+    return fileIdToProcessedPath[fid]
+      ?? annotatedPath.replace('/annotated/', '/processed/').replace(/_annotated(\.[^.]+)$/, '$1');
+  }
+
+  // One slide per photo. Photos with defects show their annotated image; photos without
+  // defects (no annotated image is saved for them) show the processed image.
+  type Slide = { fileId: string; annotated: string | null; processed: string };
+  const allSlides: Slide[] = (() => {
+    const annotatedByFile: Record<string, string> = {};
+    for (const p of annotatedPaths) annotatedByFile[fileIdFromAnnotatedPath(p)] = p;
+    const oneAnnotatedPerFile = Object.keys(annotatedByFile).length === annotatedPaths.length;
+    const processedIds = Object.keys(fileIdToProcessedPath);
+    // Video jobs (several snapshots per file) or no processed paths yet: annotated images only.
+    if (flatData?.annotated_video_path || !oneAnnotatedPerFile || processedIds.length === 0) {
+      return annotatedPaths.map(p => {
+        const fid = fileIdFromAnnotatedPath(p);
+        return { fileId: fid, annotated: p, processed: processedKeyFor(fid, p) };
+      });
+    }
+    const slides: Slide[] = processedIds.map(fid => ({
+      fileId: fid, annotated: annotatedByFile[fid] ?? null, processed: fileIdToProcessedPath[fid],
+    }));
+    for (const [fid, p] of Object.entries(annotatedByFile)) {
+      if (!(fid in fileIdToProcessedPath)) slides.push({ fileId: fid, annotated: p, processed: processedKeyFor(fid, p) });
+    }
+    return slides;
+  })();
+  const noDefectCount = allSlides.filter(sl => !sl.annotated).length;
+  const slides = hideNoDefects ? allSlides.filter(sl => sl.annotated) : allSlides;
+  const slidesKey = slides.map(sl => sl.fileId).join(',');
+  const totalImages = slides.length;
+
+  // Keep the same photo on screen when the slide list changes (e.g. hiding photos without defects).
+  function toggleHideNoDefects() {
+    const fid = slides[currentImageIndex]?.fileId;
+    const next = !hideNoDefects ? allSlides.filter(sl => sl.annotated) : allSlides;
+    const idx = next.findIndex(sl => sl.fileId === fid);
+    setHideNoDefects(!hideNoDefects);
+    setCurrentImageIndex(idx >= 0 ? idx : 0);
+  }
+
+  useEffect(() => {
+    if (currentImageIndex >= totalImages && totalImages > 0) setCurrentImageIndex(0);
+  }, [currentImageIndex, totalImages]);
+
+  // Map file_id → slide index so table-row clicks open the right photo.
   useEffect(() => {
     const idxMap: Record<string, number> = {};
-    annotatedPaths.forEach((path, idx) => {
-      const fid = fileIdFromAnnotatedPath(path);
-      if (fid) idxMap[fid] = idx;
-    });
+    slides.forEach((sl, idx) => { if (sl.fileId) idxMap[sl.fileId] = idx; });
     setFileIdToCarouselIndex(idxMap);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [annotatedPaths.join(',')]);
+  }, [slidesKey]);
 
   // Fetch signed URLs for both view modes: annotated (YOLO plot) + processed (overlay)
   useEffect(() => {
-    if (!jobId || !annotatedPaths.length) return;
+    if (!jobId || !allSlides.length) return;
     const keysToFetch = new Set<string>();
-    annotatedPaths.forEach((annotatedPath) => {
-      keysToFetch.add(annotatedPath);
-      const fid = fileIdFromAnnotatedPath(annotatedPath);
-      const processedKey = (fid && fileIdToProcessedPath[fid])
-        ? fileIdToProcessedPath[fid]
-        : annotatedPath.replace('/annotated/', '/processed/').replace(/_annotated(\.[^.]+)$/, '$1');
-      keysToFetch.add(processedKey);
+    allSlides.forEach((sl) => {
+      if (sl.annotated) keysToFetch.add(sl.annotated);
+      keysToFetch.add(sl.processed);
     });
     Promise.all(
       [...keysToFetch].map(async key => {
@@ -622,7 +658,8 @@ export default function ResultPage() {
       if (valid.length) setSignedUrls(prev => ({ ...prev, ...Object.fromEntries(valid) }));
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobId, annotatedPaths, fileIdToProcessedPath]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobId, allSlides.map(sl => sl.processed).join(',')]);
 
   const goToPrevious = () => setCurrentImageIndex(prev => (prev === 0 ? totalImages - 1 : prev - 1));
   const goToNext = () => setCurrentImageIndex(prev => (prev === totalImages - 1 ? 0 : prev + 1));
@@ -645,17 +682,13 @@ export default function ResultPage() {
     });
   };
 
-  const currentAnnotatedPath = annotatedPaths[currentImageIndex];
+  const currentSlide: Slide | undefined = slides[currentImageIndex];
+  const currentAnnotatedPath = currentSlide?.annotated ?? null;
 
-  const currentImageSrc = currentAnnotatedPath
-    ? (() => {
-        if (viewMode === 'yolo') return signedUrls[currentAnnotatedPath] ?? null;
-        const fid = fileIdFromAnnotatedPath(currentAnnotatedPath);
-        const processedKey = (fid && fileIdToProcessedPath[fid])
-          ? fileIdToProcessedPath[fid]
-          : currentAnnotatedPath.replace('/annotated/', '/processed/').replace(/_annotated(\.[^.]+)$/, '$1');
-        return signedUrls[processedKey] ?? null;
-      })()
+  const currentImageSrc = currentSlide
+    ? (viewMode === 'yolo' && currentSlide.annotated
+        ? signedUrls[currentSlide.annotated] ?? null
+        : signedUrls[currentSlide.processed] ?? null)
     : null;
 
   // Reset dimensions and mark loading when the displayed image changes
@@ -672,13 +705,10 @@ export default function ResultPage() {
       (currentImageIndex - 1 + totalImages) % totalImages,
     ];
     for (const idx of indices) {
-      const path = annotatedPaths[idx];
-      if (!path) continue;
-      const fid = fileIdFromAnnotatedPath(path);
-      const processedKey = (fid && fileIdToProcessedPath[fid])
-        ? fileIdToProcessedPath[fid]
-        : path.replace('/annotated/', '/processed/').replace(/_annotated(\.[^.]+)$/, '$1');
-      for (const key of [path, processedKey]) {
+      const sl = slides[idx];
+      if (!sl) continue;
+      for (const key of [sl.annotated, sl.processed]) {
+        if (!key) continue;
         const src = signedUrls[key];
         if (src) { const img = new Image(); img.src = src; }
       }
@@ -719,8 +749,8 @@ export default function ResultPage() {
   // Resolve the file_id of whichever image is currently shown — extracted
   // directly from the annotated path so it stays correct even when only a
   // subset of files have detections.
-  const currentFileId = currentAnnotatedPath
-    ? (fileIdFromAnnotatedPath(currentAnnotatedPath) || (flatData?.file_id ?? null))
+  const currentFileId = currentSlide
+    ? (currentSlide.fileId || (flatData?.file_id ?? null))
     : (flatData?.file_id ?? null);
 
   // While a highlight is active, show only that exact detection (reference equality).
@@ -738,7 +768,7 @@ export default function ResultPage() {
       if (!visibleDefects.has(d.defect_type as DefectClass)) return false;
       // Filter by file_id
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const detFileId = (d as any).file_id ?? (annotatedPaths.length === 1 ? flatData?.file_id : undefined);
+      const detFileId = (d as any).file_id ?? (totalImages === 1 ? flatData?.file_id : undefined);
       if (currentFileId && detFileId && detFileId !== currentFileId) return false;
       return true;
     });
@@ -1149,6 +1179,17 @@ export default function ResultPage() {
               {/* ── Image carousel ───────────────────────────────────────────── */}
               {(
               <>
+              {noDefectCount > 0 && (
+                <label className="self-end mb-2 flex items-center gap-2 text-xs font-medium text-gray-600 dark:text-gray-400 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={hideNoDefects}
+                    onChange={toggleHideNoDefects}
+                    className="w-4 h-4 accent-blue-600 cursor-pointer"
+                  />
+                  Hide photos without defects ({noDefectCount})
+                </label>
+              )}
               <div className="bg-gray-200/40 border-2 border-dashed border-gray-300 dark:bg-gray-800/30 dark:border-gray-700/50 rounded-lg mb-4 p-8" style={{ height: 'clamp(280px, 50vh, 480px)' }}>
                 {!currentImageSrc ? (
                   <div className="w-full h-full flex flex-col items-center justify-center">
@@ -1173,6 +1214,11 @@ export default function ResultPage() {
                       onError={() => setImageLoading(false)}
                     />
                     {/* Corner controls — zoom button + comment indicator */}
+                    {!imageLoading && currentSlide && !currentSlide.annotated && (
+                      <div className="absolute top-2 left-2 px-2 py-1 rounded-md bg-emerald-700 text-white text-[10px] font-semibold select-none pointer-events-none">
+                        No defects
+                      </div>
+                    )}
                     {!imageLoading && (
                       <div className="absolute top-2 right-2 flex items-center gap-1.5">
                         {/* Comment indicator */}
@@ -1344,9 +1390,9 @@ export default function ResultPage() {
               </div>
 
               {/* Filename label */}
-              {currentAnnotatedPath && (
+              {currentSlide && (
                 <p className="text-center text-xs font-mono text-gray-500 dark:text-gray-400 mb-3 truncate">
-                  {(currentFileId ? fileGpsMap[currentFileId]?.filename : undefined) ?? currentAnnotatedPath.split('/').pop()}
+                  {(currentFileId ? fileGpsMap[currentFileId]?.filename : undefined) ?? (currentSlide.annotated ?? currentSlide.processed).split('/').pop()}
                 </p>
               )}
 
